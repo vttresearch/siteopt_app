@@ -1,0 +1,8 @@
+@import "tailwindcss";  /* Below 4 lines does the same */
+
+/*
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);  /* This removes all base CSS stylings */
+/*@import "tailwindcss/utilities.css" layer(utilities);
+*/

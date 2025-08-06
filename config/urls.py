@@ -1,0 +1,36 @@
+"""
+URL configuration for djangoVue project.
+
+The `urlpatterns` list routes URLs to views. For more information please see:
+    https://docs.djangoproject.com/en/5.2/topics/http/urls/
+Examples:
+Function views
+    1. Add an import:  from my_app import views
+    2. Add a URL to urlpatterns:  path('', views.home, name='home')
+Class-based views
+    1. Add an import:  from other_app.views import Home
+    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
+Including another URLconf
+    1. Import the include() function: from django.urls import include, path
+    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+"""
+
+from django.contrib import admin
+from django.urls import path, include
+from siteoptapp import views
+
+urlpatterns = [
+    path('admin/doc/', include('django.contrib.admindocs.urls')),
+    path("admin/", admin.site.urls),
+    path("", views.index, name="index"),
+    path("api/fetch_input_data/", views.fetch_input_data, name="fetch_input"),
+    path("api/fetch_data/<str:folder>/<str:fname>/", views.fetch_data, name="fetch_data"),
+    # path("debug/<str:project_name>/", views.debug_project, name="debug_project"),
+    path("debug/open_excel/<str:excel_fpath>/", views.debug_open_excel, name="debug_excel"),
+    path("debug/api/download_excel_file/", views.download_excel_file, name="dl_excel_file"),
+    path("__reload__/", include("django_browser_reload.urls")),
+]
+
+# http://127.0.0.1:8000/admin/doc/ provides docs for the custom tag libraries that can be used
+# with the load tag. For example, {% load static %}. Custom tag libraries must be added to
+# INSTALLED_APPS. Note that {% load something % } is not inherited by child templates!
