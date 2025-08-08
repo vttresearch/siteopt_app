@@ -17,11 +17,22 @@ Activate
 .venv\Scripts\activate
 ```
 
+Install Python requirements
+
+```commandline
+python install -r requirements.txt
+```
+
 Initialize server database
 
 ```commandline
 python manage.py makemigrations
 python manage.py migrate
+```
+
+Collect static files [optional]
+
+```commandline
 python manage.py collectstatic
 ```
 
@@ -41,11 +52,16 @@ Make npm environment for Vue.js frontend
 npm install
 ```
 
+cd back to folder containing manage.py
+
+```commandline
+cd ..
+cd ..
+```
+
 ## Start Vite and Django servers
 
-Open a new command prompt and cd to folder where manage.py is
-
-Activate venv
+Activate venv, if not already active
 
 ```commandline
 .venv\Scripts\activate
@@ -57,10 +73,12 @@ Start Django server
 python manage.py runserver
 ```
 
-Open a new command prompt and cd to <repo_root>/siteoptapp/frontend
+Open **a second command prompt**
+
+cd to folder containing manage.py
 
 ```commandline
-cd <repo-root>/siteoptapp/frontend
+cd siteoptapp\frontend
 ```
 
 Start Vite server
