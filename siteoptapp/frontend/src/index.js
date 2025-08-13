@@ -1,5 +1,5 @@
 import 'vite/modulepreload-polyfill'
-import * as Vue from 'vue/dist/vue.esm-bundler.js'
+import * as Vue from 'vue';
 import { createPinia } from 'pinia';
 import VueExcelEditor from 'vue3-excel-editor';
 import router from './router.js';

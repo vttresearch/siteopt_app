@@ -15,18 +15,15 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-9(_#f2mnwmohr%v$xb8d_k6xf&**os=fr2%t)9g)-#!hww=vc&"
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
+# When DEBUG is True and ALLOWED_HOSTS is empty, the host is validated against ['.localhost', '127.0.0.1', '[::1]'].
 ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -74,7 +71,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
@@ -84,7 +80,6 @@ DATABASES = {
         "NAME": BASE_DIR / "db.sqlite3",
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -104,17 +99,12 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
-
-# TIME_ZONE = "UTC"
 TIME_ZONE = "Europe/Mariehamn"
-
 USE_I18N = True
-
 USE_TZ = True
 
 
@@ -122,20 +112,24 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 # See e.g. STATIC_URL documentation in https://docs.djangoproject.com/en/5.2/ref/settings/#settings-staticfiles
-# django.contrib.staticfiles app automatically server files from the 'static' folder of installed Apps
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "siteoptapp" / "static"]
+# django.contrib.staticfiles app automatically serves files from the 'static' folder of installed Apps
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"  # where collectstatic gathers files for production
+STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist",  # Path to the Vue.js build directory
+                    ]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Set dev_mode to True for development, False for production
 DJANGO_VITE = {
-  "default": {
-    "dev_mode": True
-  }
+    "default": {
+        "dev_mode": True,
+        "static_url_prefix": "",  # Already set by STATIC_URL above to '/static/'
+        "manifest_path": BASE_DIR / "siteoptapp/frontend/dist/.vite/manifest.json",
+    }
 }
 
 INTERNAL_IPS = [

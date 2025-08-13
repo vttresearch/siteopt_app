@@ -8,7 +8,7 @@ export default defineConfig((mode) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   const INPUT_DIR = './src';
-  const OUTPUT_DIR = './frontend_output_assets';
+  const OUTPUT_DIR = './dist';
 
   return {
     plugins: [
@@ -34,8 +34,8 @@ export default defineConfig((mode) => {
       assetsDir: "vite-assets",
       rollupOptions: {
         input: {
-          test: join(INPUT_DIR, "index.js"),
-          css: join(INPUT_DIR, "style.css"),
+          index: join(INPUT_DIR, "index.js"),
+          style: join(INPUT_DIR, "style.css"),
         },
       },
     },
