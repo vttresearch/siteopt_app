@@ -36,11 +36,13 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.admindocs",
+    "corsheaders",
     "django_vite",
     "siteoptapp",
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django_browser_reload.middleware.BrowserReloadMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -122,6 +124,9 @@ STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist",  # Path to the Vue.js
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Allow all origins (for development)
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Set dev_mode to True for development, False for production
 DJANGO_VITE = {

@@ -3,4 +3,6 @@ docutils >= 0.21
 django-vite >= 3.1
 django-tailwind >=4.0
 django-browser-reload >=1.18
+django-cors-headers >= 4.7
 openpyxl >=3.1.5
+pyinstaller >= 6.15

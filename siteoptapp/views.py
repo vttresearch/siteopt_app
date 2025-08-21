@@ -3,29 +3,14 @@ import subprocess
 import json
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-from django.template import loader
 import openpyxl
 
 SITEOPTDATA = os.path.join("C:\\", "data", "GIT", "SITEOPT-DATA")
 
 
-def index(request):
-    """Returns rendered index.html page.
-
-    Args:
-        request (HttpRequest): client's request
-
-    Returns:
-        HttpResponse: response to client
-    """
-    return render(request, "index.html")
-
-
-"""
-def debug_project(request, project_name):
-    context = {"projectName": project_name}
-    return render(request, "debug.html", context=context)
-"""
+def health_check(request):
+    """For polling the backend."""
+    return JsonResponse({"status": "ok"})
 
 
 def fetch_input_data(request):

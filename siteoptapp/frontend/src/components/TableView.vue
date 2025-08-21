@@ -9,7 +9,7 @@ const juttu = useCounterStore()
   <section>
     <div class="bg-white rounded-xl shadow-md relative p-3">
       <div class="w-max flex m-auto">
-      <vue-excel-editor v-model="juttu.jsondata" page="10">
+      <vue-excel-editor v-model="juttu.jsondata" page=10>
         <vue-excel-column field="user"   label="User ID"       type="string" width="80px" />
         <vue-excel-column field="name"   label="Name"          type="string" width="150px" />
         <vue-excel-column field="phone"  label="Contact"       type="string" width="130px" />

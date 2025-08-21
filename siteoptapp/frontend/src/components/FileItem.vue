@@ -3,7 +3,9 @@ import { ref } from 'vue';
 import DownloadButton from "./DownloadButton.vue";
 import UploadButton from "./UploadButton.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
-import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+import { API_BASE } from "@/config.js";
+
 
 const store = useTableDataStore()
 
@@ -16,7 +18,7 @@ const fdata = ref({})
 
 async function fetchFileContents(fname) {
   console.log(`fname:${fname} parent:${props.parent_name}`)
-  let fpath = "api/fetch_data/"
+  let fpath = API_BASE + "api/fetch_data/"
   if (props.parent_name !== "") {
     fpath = fpath.concat(props.parent_name + "/").concat(fname)
   }

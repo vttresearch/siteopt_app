@@ -1,43 +1,64 @@
 <script setup>
-import { reactive, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import FileTree from '@/components/FileTree.vue';
 import TableView from "@/components/TableView.vue";
 import ContentPanel from "@/components/ContentPanel.vue";
+import Spinner from "@/components/Spinner.vue";
+import { API_BASE } from "@/config.js";
 
 
 defineProps({
   limit: Number,
 });
 
-const on_mounted_response = ref({})
-const input_data_title = ref("")
-const input_data = ref([])
-const status = ref("fetching")
-
-const state = reactive({
-  contents: [],
-  isLoading: false,
-});
+const input_data = ref([]);
+const input_data_title = ref('');
+const on_mounted_response = ref({});
+const loading = ref(true);
 
 onMounted(() => {
-  // async IIFE lets you use async/await syntax while still
-  // mounting the component synchronously.
-  (async () => {
-    // Update your refs to re-render the template.
-    const input_data_response = await fetch("/api/fetch_input_data")
-    if (!input_data_response.ok) {
-      status.value = "error fetching input data"
-      throw new Error("on_mounted_response not Ok");
+  const checkBackEndReady = async () => {
+    let attempts = 0;
+    const maxAttempts = 10;
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    console.log(`API BASE in HomeView: ${API_BASE}`)
+    while (attempts < maxAttempts) {
+      try {
+        const res = await fetch(API_BASE + "api/health");
+        if (res.ok) {
+          // Fetch input data files
+          await fetch_input_files();
+          loading.value = false;
+          return;
+        }
+      } catch (err) {
+        console.log(`Backend not ready (attempt ${attempts + 1})`);
+      }
+      attempts++;
+      await delay(1000);  // Wait 1s before retrying
     }
-    on_mounted_response.value = await input_data_response.text()
-    on_mounted_response.value = JSON.parse(on_mounted_response.value)
-    input_data_title.value = on_mounted_response.value.title
-    input_data.value = on_mounted_response.value.children
-    console.log(on_mounted_response.value)
-    console.log(typeof(on_mounted_response.value))
-    status.value = 'fetched'
-  })()
-})
+    console.error("Backend did not start in time");
+    // Maybe show an error message to the user
+  };
+
+  checkBackEndReady();
+});
+
+const fetch_input_files = async () => {
+  try {
+    const response = await fetch(`${API_BASE}api/fetch_input_data`);
+    if (!response.ok) throw new Error("Fetching input data files failed");
+
+    const text = await response.text();
+    const data = JSON.parse(text);
+    on_mounted_response.value = data;
+    input_data_title.value = data.title;
+    input_data.value = data.children;
+    console.log(data)
+  } catch (err) {
+    console.error("Error fetching input files:", err);
+  }
+};
 
 const content = ref(
 {
@@ -55,8 +76,13 @@ const content = ref(
       <h1 class="text-3xl text-blue-500 mb-6">Welcome to SiteOptApp</h1>
       <div class="grid grid-rows-1 md:grid-rows-2 gap-6">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <FileTree :title="input_data_title" :model="input_data" />
-          <ContentPanel v-for="cont in content.contents" />
+          <Spinner v-if="loading" message="Loading..." class="col-span-1 md:col-span-3" />
+          <template v-else>
+            <div>
+              <FileTree :title="input_data_title" :model="input_data" />
+            </div>
+          <ContentPanel v-for="(cont, index) in content.contents" :key="index" />
+          </template>
         </div>
         <div>
           <TableView />

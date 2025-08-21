@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { useTableDataStore} from "@/stores/filedatastore.js";
+import { useTableDataStore } from "@/stores/filedatastore.js";
 
 const data_store = useTableDataStore()
 const props = defineProps({

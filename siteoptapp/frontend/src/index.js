@@ -13,11 +13,10 @@ import { faFolderClosed, faFolderOpen, faFileExcel, faFile } from '@fortawesome/
 
 /* add icons to the library */
 library.add(faFileCsv, faDownload, faUpload, faFolderClosed, faFolderOpen, faFileExcel, faFile)
-const app = Vue.createApp({})
+const app = Vue.createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(VueExcelEditor)
 app.use(router)
 app.component('font-awesome-icon', FontAwesomeIcon)
-app.component('siteopt_component', App)
 app.mount('#siteopt_app')

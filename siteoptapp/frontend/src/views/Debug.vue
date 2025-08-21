@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue';
 import { saveAs } from 'file-saver';
 import FileTree from '@/components/FileTree.vue';
 import Table from '@/components/Table.vue';
+import TableWithDataProp from "@/components/TableWithDataProp.vue";
+import { API_BASE } from "@/config.js";
 
 const count = ref(0);
 const tasks = ref(["Task 1", "Task 2", "Task 3"])
@@ -27,12 +29,16 @@ defineProps({
   input_files: Array,
 })
 
+const somdata = ref(
+    [[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
 onMounted(() => {
   // async IIFE lets you use async/await syntax while still
   // mounting the component synchronously.
   (async () => {
     // Update your refs to re-render the template.
-    const input_data_response = await fetch("/api/fetch_input_data")
+    console.log(`API_BASE in Debug: ${API_BASE}`)
+    const input_data_response = await fetch(`${API_BASE}api/fetch_input_data`)
     if (!input_data_response.ok) {
       status.value = "error fetching input data"
       throw new Error("on_mounted_response not Ok");
@@ -88,16 +94,10 @@ const dl_excel_file = async () => {
   >Count is {{ count }}
   </button>
 
-  <!--
-  <vue-excel-editor v-model="jsondata">
-    <vue-excel-column field="user"   label="User ID"       type="string" width="80px" />
-    <vue-excel-column field="name"   label="Name"          type="string" width="150px" />
-    <vue-excel-column field="phone"  label="Contact"       type="string" width="130px" />
-    <vue-excel-column field="gender" label="Gender"        type="select" width="50px" :options="['F','M','U']" />
-    <vue-excel-column field="age"    label="Age"           type="number" width="70px" />
-    <vue-excel-column field="birth"  label="Date Of Birth" type="date"   width="80px" />
-  </vue-excel-editor>
-  -->
+  <div>
+    <TableWithDataProp :somedata="somdata" />
+  </div>
+  <br>
   <div>
     <Table />
   </div>

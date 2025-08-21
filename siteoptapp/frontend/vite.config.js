@@ -4,13 +4,16 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
 
-export default defineConfig((mode) => {
-  const env = loadEnv(mode, process.cwd(), '');
+export default defineConfig(({ mode }) => {
 
+  const env = loadEnv(mode, process.cwd(), '');
   const INPUT_DIR = './src';
   const OUTPUT_DIR = './dist';
 
   return {
+    define: {
+      'import.meta.env.VITE_API_BASE': JSON.stringify(env.VITE_API_BASE),  // Add variable to env vars manually
+    },
     plugins: [
         vue(),
         tailwindcss(),
@@ -22,7 +25,7 @@ export default defineConfig((mode) => {
       },
     },
     root: resolve(INPUT_DIR),
-    base: '/static/',
+    base: './',
     server: {
       host: env.DJANGO_VITE_DEV_SERVER_HOST,
       port: env.DJANGO_VITE_DEV_SERVER_PORT,
@@ -34,7 +37,7 @@ export default defineConfig((mode) => {
       assetsDir: "vite-assets",
       rollupOptions: {
         input: {
-          index: join(INPUT_DIR, "index.js"),
+          index: join(INPUT_DIR, "index.html"),
           style: join(INPUT_DIR, "style.css"),
         },
       },
