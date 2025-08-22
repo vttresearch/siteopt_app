@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 
 const props = defineProps({
-  v: Number,
+  v: String,
 })
 
 const editing = ref(false)
@@ -33,6 +33,7 @@ function update(e) {
 </template>
 
 <style>
+/*
 .cell, .cell input{
   padding-left: 1px;
   height: 1.5em;
@@ -47,5 +48,5 @@ function update(e) {
 .cell input {
   width: 100%;
   box-sizing: border-box;
-}
+}*/
 </style>

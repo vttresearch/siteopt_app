@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useTableDataStore } from "@/stores/filedatastore.js";
+import TableWithDataProp from "@/components/TableWithDataProp.vue";
 
 const data_store = useTableDataStore()
 const props = defineProps({
@@ -32,7 +33,7 @@ const truncatedDescription = computed(() => {
 
       <div class="mb-5">
         <div>
-          <p v-if="Object.keys(data_store.daata).length !== 0">{{ data_store.daata }}</p>
+          <div><TableWithDataProp /></div>
         </div>
         <button
           @click="toggleFullDescription"

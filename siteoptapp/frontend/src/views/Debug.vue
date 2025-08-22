@@ -5,6 +5,7 @@ import FileTree from '@/components/FileTree.vue';
 import Table from '@/components/Table.vue';
 import TableWithDataProp from "@/components/TableWithDataProp.vue";
 import { API_BASE } from "@/config.js";
+import TableView from "@/components/TableView.vue";
 
 const count = ref(0);
 const tasks = ref(["Task 1", "Task 2", "Task 3"])
@@ -29,16 +30,13 @@ defineProps({
   input_files: Array,
 })
 
-const somdata = ref(
-    [[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-
 onMounted(() => {
   // async IIFE lets you use async/await syntax while still
   // mounting the component synchronously.
   (async () => {
     // Update your refs to re-render the template.
     console.log(`API_BASE in Debug: ${API_BASE}`)
-    const input_data_response = await fetch(`${API_BASE}api/fetch_input_data`)
+    const input_data_response = await fetch(`${API_BASE}api/fetch_input_data/`)
     if (!input_data_response.ok) {
       status.value = "error fetching input data"
       throw new Error("on_mounted_response not Ok");
@@ -95,15 +93,14 @@ const dl_excel_file = async () => {
   </button>
 
   <div>
-    <TableWithDataProp :somedata="somdata" />
+    <TableWithDataProp />
   </div>
   <br>
-  <div>
-    <Table />
-  </div>
+  <div><Table /></div>
+  <br>
+  <div><TableView /></div>
 
   <FileTree :title="input_data_title" :model="input_data" />
-
 
   <div>
     <!--<p>[{{ status }}] on_mounted_response {{ on_mounted_response  }}</p>-->
