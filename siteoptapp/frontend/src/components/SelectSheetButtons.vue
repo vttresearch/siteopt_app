@@ -1,9 +1,9 @@
 <script setup>
-import { ref, defineEmits, watch } from 'vue';
+import { ref, watch } from 'vue';
 
 const activeIndex = ref(0)
-const basicClass = ref("align-middle whitespace-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-0.5 mr-1")
-const activeClass = ref("align-middle whitespace-nowrap text-white bg-blue-400 rounded-sm p-0.5 mr-1")
+const basicClass = ref("align-middle whitespace-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-sm pt-1 pl-1 pr-1")
+const activeClass = ref("align-middle whitespace-nowrap text-black bg-white rounded-sm pt-1 pl-1 pr-1")
 
 const props = defineProps({
   sheets: Array,
@@ -33,7 +33,7 @@ function handleClick(sheet, index) {
 </script>
 
 <template>
-  <div class="inline-block">
+  <div class="inline-block border-r-1 border-l-1 border-b-1 border-gray-300">
     <button v-for="(sheet, index) in sheets"
             :key="index"
             :class="[activeIndex === index ? activeClass : basicClass]"

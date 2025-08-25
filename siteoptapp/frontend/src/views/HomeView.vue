@@ -5,7 +5,7 @@ import TableView from "@/components/TableView.vue";
 import ContentPanel from "@/components/ContentPanel.vue";
 import Spinner from "@/components/Spinner.vue";
 import { API_BASE } from "@/config.js";
-import TableWithDataProp from "@/components/TableWithDataProp.vue";
+import Table from "@/components/Table.vue";
 
 
 defineProps({
@@ -62,30 +62,21 @@ const fetch_input_files = async () => {
   }
 };
 
-const content = ref(
-{
-  "contents": [
-    {},
-    {},
-  ]
-})
-
 </script>
 
 <template>
   <section class="bg-blue-50 px-4 py-10">
     <div class="container-xl lg:container m-auto">
       <h1 class="text-3xl text-blue-500 mb-6">Welcome to SiteOptApp</h1>
-      <div><TableWithDataProp /></div>
       <p><br/></p>
       <div class="grid grid-rows-1 md:grid-rows-2 gap-6">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Spinner v-if="loading" message="Loading..." class="col-span-1 md:col-span-3" />
           <template v-else>
             <div>
-              <FileTree :title="input_data_title" :model="input_data" />
+              <FileTree class="col-span-1" :title="input_data_title" :model="input_data" />
             </div>
-          <ContentPanel v-for="(cont, index) in content.contents" :key="index" />
+          <ContentPanel class="col-span-2"/>
           </template>
         </div>
       </div>

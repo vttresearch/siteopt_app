@@ -2,8 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { saveAs } from 'file-saver';
 import FileTree from '@/components/FileTree.vue';
-import Table from '@/components/Table.vue';
-import TableWithDataProp from "@/components/TableWithDataProp.vue";
+import Table from "@/components/Table.vue";
 import { API_BASE } from "@/config.js";
 import TableView from "@/components/TableView.vue";
 
@@ -93,10 +92,8 @@ const dl_excel_file = async () => {
   </button>
 
   <div>
-    <TableWithDataProp />
+    <Table />
   </div>
-  <br>
-  <div><Table /></div>
   <br>
   <div><TableView /></div>
 

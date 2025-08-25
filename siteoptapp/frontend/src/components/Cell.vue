@@ -1,49 +1,33 @@
 <script setup>
 import { ref } from 'vue';
-import { cells, evalCell } from '@/stores/examplestore.js';
 
 const props = defineProps({
-  c: Number,
-  r: Number,
-  arvo: Number,
+  v: String,
 })
 
 const editing = ref(false)
 
+/**
+ * Triggered by clicking a cell.
+ *
+ * @param e {FocusEvent} Attached event
+ */
 function update(e) {
-  editing.value = false
-  cells[props.c][props.r] = e.target.value.trim()
+  console.log(`updating cell e.target.value:${e.target.value}`)
+  //editing.value = false
+  //cells[props.c][props.r] = e.target.value.trim()
 }
 </script>
 
 <template>
-  <div class="cell" :title="cells[c][r]" @click="editing = true">
+  <div class="cell" @click="editing = true">
     <input
       v-if="editing"
-      :value="cells[c][r]"
+      :value="v"
       @change="update"
       @blur="update"
       @vue:mounted="({ el }) => el.focus()"
     >
-
-    <!--<span v-else>{{ evalCell(cells[c][r]) }}</span>-->
-    <span v-else>{{ arvo }}</span>
+    <span v-else>{{ v }}</span>
   </div>
 </template>
-
-<style>
-.cell, .cell input {
-  height: 1.5em;
-  line-height: 1.5;
-  font-size: 15px;
-}
-
-.cell span {
-  padding: 0 6px;
-}
-
-.cell input {
-  width: 100%;
-  box-sizing: border-box;
-}
-</style>
