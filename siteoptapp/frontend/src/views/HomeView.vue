@@ -1,11 +1,9 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import FileTree from '@/components/FileTree.vue';
-import TableView from "@/components/TableView.vue";
 import ContentPanel from "@/components/ContentPanel.vue";
 import Spinner from "@/components/Spinner.vue";
 import { API_BASE } from "@/config.js";
-import Table from "@/components/Table.vue";
 
 
 defineProps({

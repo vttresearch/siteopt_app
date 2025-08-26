@@ -1,6 +1,7 @@
 import os
 import subprocess
 import json
+import csv
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 import openpyxl
@@ -85,15 +86,18 @@ def fetch_data(request, folder, fname):
         wb = openpyxl.load_workbook(p)
         json_data = read_excel_as_json(wb)
         return HttpResponse(json_data, content_type="application/json")
+    elif p.endswith(".csv"):
+        json_data = read_csv_as_json(p)
+        return HttpResponse(json_data, content_type="application/json")
     else:
         return HttpResponse(json.dumps({"error": f"Sending file {p} not implemented"}), content_type="application/json")
 
 
 def read_excel_as_json(wb):
     """Reads all sheets, rows, and columns from an Excel workbook object and returns the data in JSON format."""
-    data = {}
+    data = {"filetype": "xlsx", "data": {}}
     for sheet in wb:
-        data[sheet.title] = []
+        data["data"][sheet.title] = []
         rows = sheet.max_row
         columns = sheet.max_column
         for i in range(1, columns+1):
@@ -102,7 +106,26 @@ def read_excel_as_json(wb):
             for j in range(1, rows):
                 row_data = sheet.cell(row=j+1, column=i)
                 column_data.append(row_data.value)
-            data[sheet.title].append({column_name.value: column_data})
+            data["data"][sheet.title].append({column_name.value: column_data})
+    return json.dumps(data)
+
+
+def read_csv_as_json(p):
+    """Reads csv data from given path and returns the data in JSON format."""
+    data = {"filetype": "csv", "data": []}
+    l = []
+    with open(p, newline="") as fp:
+        csv_reader = csv.reader(fp)
+        i = 0
+        for row in csv_reader:
+            l.append(row)
+            i += 1
+    # Pivot the table
+    pivoted_list = [[row[i] for row in l] for i in range(len(l[0]))]
+    d = {}
+    for r in pivoted_list:
+        d[r.pop(0)] = r[1:]
+    data["data"] = d
     return json.dumps(data)
 
 

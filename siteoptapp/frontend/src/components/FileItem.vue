@@ -26,6 +26,7 @@ async function fetchFileContents(fname) {
     fpath = fpath.concat("root/").concat(fname)
   }
   console.log(`Fetching from ${fpath}`)
+  store.toggleLoading()
   const response = await fetch(fpath)
   if (!response.ok) {
     console.log("Failed")
@@ -37,6 +38,7 @@ async function fetchFileContents(fname) {
     console.log(fdata.value)
     store.addData(fname, fdata.value)
   }
+  store.toggleLoading()
 }
 
 function isExcel(fname) {

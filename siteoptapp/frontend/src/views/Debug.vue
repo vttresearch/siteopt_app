@@ -4,7 +4,6 @@ import { saveAs } from 'file-saver';
 import FileTree from '@/components/FileTree.vue';
 import Table from "@/components/Table.vue";
 import { API_BASE } from "@/config.js";
-import TableView from "@/components/TableView.vue";
 
 const count = ref(0);
 const tasks = ref(["Task 1", "Task 2", "Task 3"])
@@ -16,14 +15,6 @@ const input_data = ref([])
 const status = ref("fetching")
 const isLoading = ref(false)
 const error = ref(null)
-
-const jsondata = ref([
-            {user: 'hc', name: 'Harry Cole',    phone: '1-415-2345678', gender: 'M', age: 25, birth: '1997-07-01'},
-            {user: 'sm', name: 'Simon Minolta', phone: '1-123-7675682', gender: 'M', age: 20, birth: '1999-11-12'},
-            {user: 'ra', name: 'Raymond Atom',  phone: '1-456-9981212', gender: 'M', age: 19, birth: '2000-06-11'},
-            {user: 'ag', name: 'Mary George',   phone: '1-556-1245684', gender: 'F', age: 22, birth: '2002-08-01'},
-            {user: 'kl', name: 'Kenny Linus',   phone: '1-891-2345685', gender: 'M', age: 29, birth: '1990-09-01'}
-        ])
 
 defineProps({
   input_files: Array,
@@ -95,12 +86,10 @@ const dl_excel_file = async () => {
     <Table />
   </div>
   <br>
-  <div><TableView /></div>
 
   <FileTree :title="input_data_title" :model="input_data" />
 
   <div>
-    <!--<p>[{{ status }}] on_mounted_response {{ on_mounted_response  }}</p>-->
     <ul>
       <li class="m-2">
         <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2"
@@ -115,14 +104,5 @@ const dl_excel_file = async () => {
                 @click="dl_excel_file">Download Excel File</button>
       </li>
     </ul>
-    <!--
-    <div>
-    <button @click="dl_excel_file" :disabled="isLoading">
-      <span v-if="isLoading">Downloading...</span>
-      <span v-else>Download Excel</span>
-    </button>
-    <p class="text-red mt-10" v-if="error">{{ error }}</p>
-    </div>
-    -->
   </div>
 </template>

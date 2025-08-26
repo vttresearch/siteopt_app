@@ -6,3 +6,43 @@
 @import "tailwindcss/preflight.css" layer(base);  /* This removes all base CSS stylings */
 /*@import "tailwindcss/utilities.css" layer(utilities);
 */
+
+@layer components {
+
+  .ag-root-wrapper {
+    @apply !border !border-gray-400
+  }
+
+  .ag-root-wrapper-body {
+    @apply !h-full
+  }
+
+  .ag-header {
+    @apply !sticky !top-0 !z-10 !bg-gray-100;
+  }
+
+  .ag-header-row {
+    @apply !bg-gray-100;
+  }
+
+  .ag-header-cell {
+    @apply !px-2 !py-1 !font-semibold !text-left !border-gray-300 !truncate;
+  }
+
+  .ag-header-cell-label {
+    @apply !truncate;
+  }
+
+  .ag-cell {
+    @apply !px-2 !py-1 !border !border-gray-300 !text-left !whitespace-nowrap;
+  }
+
+  .ag-row {
+    @apply !bg-white hover:!bg-gray-50;
+  }
+
+  .ag-row-selected {
+    @apply !bg-blue-100;
+  }
+}
+
