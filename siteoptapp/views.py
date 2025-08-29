@@ -16,7 +16,8 @@ def health_check(request):
 
 def settings(request):
     """Returns settings from previous session."""
-    return JsonResponse({"input_data_path": SITEOPTDATA})
+    p = SITEOPTDATA.replace(os.sep, "/")
+    return JsonResponse({"input_data_path": p})
 
 
 def fetch_input_data(request):

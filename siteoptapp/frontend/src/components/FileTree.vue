@@ -1,5 +1,4 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
 import FileItem from "./FileItem.vue";
 import FolderItem from "./FolderItem.vue";
 import { useSettingStore } from "@/stores/settingstore.js";

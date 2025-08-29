@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "siteopt-desktop-app",
   "version": "0.1.0",
-  "identifier": "com.mycompany.siteoptwebapp",
+  "identifier": "siteopt-app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "SiteOpt Desktop Interface",
-        "width": 800,
-        "height": 600,
+        "width": 1024,
+        "height": 768,
         "resizable": true,
         "fullscreen": false
       }

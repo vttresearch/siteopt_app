@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import DownloadButton from "./DownloadButton.vue";
 import UploadButton from "./UploadButton.vue";
+import EditButton from "@/components/EditButton.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { API_BASE } from "@/config.js";
@@ -69,8 +70,8 @@ function isCSV(fname) {
     </div>
     <div class="md:ml-auto">
       <div class="flex space-x-2">
+        <EditButton :root="parent_name" :fname="item_name"/>
         <DownloadButton :fname="item_name" />
-        <UploadButton :fname="item_name" />
       </div>
     </div>
   </div>

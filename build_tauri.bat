@@ -1,6 +1,11 @@
 @echo off
 setlocal
 
+echo Activating virtual environment
+REM Activate virtual environment
+call .venv\Scripts\activate.bat
+
+echo Building backend...
 REM == Step 1: Build Django backend using PyInstaller ==
 pyinstaller --onefile run_django.py
 

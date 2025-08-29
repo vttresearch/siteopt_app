@@ -1,9 +1,6 @@
 <script setup>
-import { defineProps } from 'vue';
 import { API_BASE } from "@/config.js";
-import { useTableDataStore } from "@/stores/filedatastore.js";
 
-//const data_store = useTableDataStore()
 const props = defineProps( {
   content: {
     type: Object,
