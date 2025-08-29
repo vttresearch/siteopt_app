@@ -32,6 +32,11 @@ watch(() => data_store.daata, (newItems) => {
   }
   else {
     console.warn(`Unsupported fileType: ${fileType}`)
+    sheetNames.value = []
+    selectedSheet.value = ""
+    fileData.value = {}
+    rowData.value = []
+    columnDefs.value = []
   }
 });
 
@@ -108,6 +113,7 @@ function newSheetSelected(event) {
 <template>
   <Spinner v-if="data_store.loading" message="Loading data..." class="col-auto"/>
   <div v-else>
+    <div class="text-gray-600 my-2 mb-6">{{ data_store.fname }}</div>
   <SelectSheetButtons
       v-if="selectedSheet.length > 0"
       :sheets="sheetNames"
@@ -124,7 +130,7 @@ function newSheetSelected(event) {
           :rowBuffer="10"
           :rowHeight="40"
           :animateRows="true"
-          :suppressRowClickSelection="true"
+          :rowSelection.enableClickSelection="false"
           :suppressColumnVirtualization="false"
           :suppressCellFocus="true"
           :suppressAnimationFrame="true"

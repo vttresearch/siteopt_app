@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "tauri-test-app",
+  "productName": "siteopt-desktop-app",
   "version": "0.1.0",
   "identifier": "com.mycompany.siteoptwebapp",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "SiteOpt Web Interface",
+        "title": "SiteOpt Desktop Interface",
         "width": 800,
         "height": 600,
         "resizable": true,
@@ -20,7 +20,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": ["default"]
     }
   },
   "bundle": {

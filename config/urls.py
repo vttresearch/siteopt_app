@@ -25,6 +25,7 @@ urlpatterns = [
     path("api/fetch_input_data/", views.fetch_input_data, name="fetch_input"),
     path("api/fetch_data/<str:folder>/<str:fname>/", views.fetch_data, name="fetch_data"),
     path("api/health/", views.health_check, name="health_check"),
+    path("api/settings/", views.settings, name="settings"),
     path("debug/open_excel/<str:excel_fpath>/", views.debug_open_excel, name="debug_excel"),
     path("debug/api/download_excel_file/", views.download_excel_file, name="dl_excel_file"),
     path("__reload__/", include("django_browser_reload.urls")),

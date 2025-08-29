@@ -14,6 +14,11 @@ def health_check(request):
     return JsonResponse({"status": "ok"})
 
 
+def settings(request):
+    """Returns settings from previous session."""
+    return JsonResponse({"input_data_path": SITEOPTDATA})
+
+
 def fetch_input_data(request):
     data = {
         "title": "Input Files",

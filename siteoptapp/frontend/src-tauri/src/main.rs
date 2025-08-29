@@ -3,9 +3,10 @@
 
 use std::process::{Command, Stdio};
 
-
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|_app| {
             Command::new("backend/run_django.exe")
                 .stdout(Stdio::inherit())
