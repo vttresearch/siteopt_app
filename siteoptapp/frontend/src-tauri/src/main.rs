@@ -2,9 +2,9 @@
 
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
-use std::process::{Command, Stdio, Child};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use tauri::{generate_context, is_dev, RunEvent, Manager};
+use tauri::{generate_context, is_dev, Manager, RunEvent};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -14,18 +14,18 @@ use std::os::windows::io::AsRawHandle;
 
 #[cfg(target_os = "windows")]
 use windows::Win32::System::JobObjects::{
-    CreateJobObjectW, AssignProcessToJobObject, SetInformationJobObject,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    JobObjectExtendedLimitInformation,
+    AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+    SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{HANDLE, CloseHandle};
-#[cfg(target_os = "windows")]
 use windows::core::PCWSTR;
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 
 fn main() {
     let backend_process = Arc::new(Mutex::new(None::<Child>));
@@ -37,6 +37,7 @@ fn main() {
     let job_handle_clone = job_handle.clone();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .setup(move |_app| {
@@ -63,7 +64,8 @@ fn main() {
                 #[cfg(target_os = "windows")]
                 {
                     unsafe {
-                        let job = CreateJobObjectW(None, PCWSTR::null()).expect("Failed to create Job Object");
+                        let job = CreateJobObjectW(None, PCWSTR::null())
+                            .expect("Failed to create Job Object");
                         let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
                         info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
                         let result = SetInformationJobObject(

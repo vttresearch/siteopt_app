@@ -1,74 +1,77 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions including opener plugin",
-  "windows": ["main"],
+  "description": "Default permissions and custom permissions for windows, opener, fs, and dialog",
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "opener:allow-open-url",
     {
-        "identifier": "opener:allow-open-path",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-mkdir",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-remove",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-size",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
+      "identifier": "fs:allow-size",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
     },
     {
-        "identifier": "fs:write-files",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
+      "identifier": "fs:write-files",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-copy-file",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
+      "identifier": "fs:allow-copy-file",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-read-dir",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
     },
     {
-        "identifier": "fs:allow-exists",
-        "allow": [
-            {
-                "path": "**"
-            }
-        ]
-    }
-]
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    "dialog:default"
+  ]
 }

@@ -4,15 +4,15 @@ import FileTree from '@/components/FileTree.vue';
 import ContentPanel from "@/components/ContentPanel.vue";
 import Spinner from "@/components/Spinner.vue";
 import Notification from "@/components/Notification.vue";
+import Table from "@/components/Table.vue";
 import { API_BASE } from "@/config.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import Table from "@/components/Table.vue";
+import { fetchSettings } from "@/utils/functions.js";
 
 
-const input_data = ref([]);
-const input_data_title = ref('');
-const inputDataPath = ref("")
+const inputFiles = ref([]);
+const inputDataTitle = ref('');
 const loading = ref(true);
 const backendUnavailable = ref(true);
 const settingStore = useSettingStore()
@@ -31,7 +31,7 @@ onMounted(() => {
     const controller = new AbortController()
     const id = setTimeout(() => controller.abort(), timeout)
     try {
-      const response = await fetch(url, { signal: controller.signal })
+      const response = await fetch(url, {credentials: "include", signal: controller.signal })
       clearTimeout(id)
       return response
     } catch (error) {
@@ -51,11 +51,14 @@ onMounted(() => {
       try {
         const res = await fetchWithTimeout(url, 4000)
         if (res.ok) {
-          await fetch_settings()
+          const result = await fetchSettings()
+          if (result.success) {
+            backendUnavailable.value = false
+          }
           return
         }
       } catch (err) {
-        console.log(`Backend not responding (attempt ${attempts + 1})`)
+        console.error(`Backend not responding (attempt ${attempts + 1})`)
         notify.show(`URL: ${url} not responding [attempt ${attempts + 1}/${maxAttempts}]`, 4000, "info")
       }
       attempts++
@@ -68,46 +71,36 @@ onMounted(() => {
   checkBackEndReady()
 })
 
-const fetch_settings = async () => {
-  try {
-    const url = `${API_BASE}api/settings/`
-    const response = await fetch(url)
-    if (!response.ok) {
-      notify.show(`Fetching settings from ${url} failed. status: [${response.status}]`, 5000, "error")
-      throw new Error("Fetching settings failed");
-    }
-    const r = await response.text();
-    const parsed = JSON.parse(r)
-    settingStore.setSettings(JSON.parse(r))
-    inputDataPath.value = parsed["input_data_path"]
-    console.log(`Settings fetched ${inputDataPath.value}`)
-    backendUnavailable.value = false
-  }
-  catch (err) {
-    notify.show(`[${err}] in fetching url: ${url}`, "5000", "error")
-    console.error("Error in fetching Settings")
-  }
-};
-
-watch(() => inputDataPath.value, (newInputDataPath) => {
+watch(() => settingStore.inputDataPath, (newInputDataPath) => {
   loading.value = true;
-  console.log(`watching settingStore: ${newInputDataPath}`)
-  fetch_input_files();
+  console.log(`inputDataPath changed: ${newInputDataPath}`)
+  fetchInputFiles();
   loading.value = false;
 });
 
-const fetch_input_files = async () => {
+const fetchInputFiles = async () => {
+  const url = `${API_BASE}api/fetch_input_data/`
   try {
-    const url = `${API_BASE}api/fetch_input_data/`
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
     if (!response.ok) {
-      notify.show(`Fetching input files from ${url} failed. status: [${response.status}]`, 5000, "error")
-      throw new Error("Fetching input files failed");
+      const errorText = await response.text()
+      console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`)
+      notify.show(`Server ${url} responded with error: ${errorText}`, 10000, "error")
+      return
     }
-    const text = await response.text();
-    const data = JSON.parse(text);
-    input_data_title.value = data.title;
-    input_data.value = data.children;
+    const r = await response.json();
+    if (!r.success) {
+        inputDataTitle.value = ""
+        inputFiles.value = {}
+      if (settingStore.inputDataPath === "") {
+        return
+      }
+    }
+    inputDataTitle.value = r.title;
+    inputFiles.value = r.children;
   } catch (err) {
     notify.show(`[${err}] in fetching url: ${url}`, "5000", "error")
     console.error("Error fetching input files:", err);
@@ -127,7 +120,7 @@ const fetch_input_files = async () => {
           <template v-else>
             <template v-if="!backendUnavailable">
             <div>
-              <FileTree class="col-span-1" :title="input_data_title" :model="input_data" :inputPath="inputDataPath" />
+              <FileTree class="col-span-1" :title="inputDataTitle" :model="inputFiles" />
             </div>
               <ContentPanel class="col-span-2" :content="Table" />
             </template>

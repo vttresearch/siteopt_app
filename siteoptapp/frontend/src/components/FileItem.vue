@@ -1,7 +1,5 @@
 <script setup>
 import { ref } from 'vue';
-import DownloadButton from "./DownloadButton.vue";
-import UploadButton from "./UploadButton.vue";
 import EditButton from "@/components/EditButton.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
@@ -52,7 +50,7 @@ function isCSV(fname) {
 </script>
 
 <template>
-  <div class="flex justify-between py-0.5">
+  <div class="flex justify-between py-0.5 pl-2">
     <div class="overflow-hidden overflow-ellipsis hover:bg-indigo-300 cursor-pointer" v-if="isExcel(item_name)">
       <span class="text-nowrap" @click="fetchFileContents(item_name)">
         <font-awesome-icon class="pr-1" icon="fa-regular fa-file-excel" fixed-width />{{ item_name }}
@@ -69,10 +67,7 @@ function isCSV(fname) {
       </span>
     </div>
     <div class="md:ml-auto">
-      <div class="flex space-x-2">
-        <EditButton :root="parent_name" :fname="item_name"/>
-        <DownloadButton :fname="item_name" />
-      </div>
+      <EditButton :root="parent_name" :fname="item_name"/>
     </div>
   </div>
 </template>

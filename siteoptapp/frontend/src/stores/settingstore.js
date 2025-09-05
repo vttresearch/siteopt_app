@@ -2,9 +2,9 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia'
 
 export const useSettingStore = defineStore('settingsData', () => {
-  const inputDataPath = ref("");
-  const projectPath = ref("");
-  const workFolderPath = ref("");
+  const inputDataPath = ref(null);  // Initial value must be something else than the default value in config file
+  const projectPath = ref(null);
+  const workFolderPath = ref(null);
 
   function setSettings(settings) {
     inputDataPath.value = settings["input_data_path"];
@@ -13,5 +13,9 @@ export const useSettingStore = defineStore('settingsData', () => {
     console.log(inputDataPath.value)
   }
 
-  return { inputDataPath, projectPath, workFolderPath, setSettings}
+  function setInputDataPath(p) {
+    inputDataPath.value = p;
+  }
+
+  return { inputDataPath, projectPath, workFolderPath, setSettings, setInputDataPath}
 })

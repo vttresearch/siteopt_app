@@ -117,8 +117,7 @@ USE_TZ = True
 # django.contrib.staticfiles app automatically serves files from the 'static' folder of installed Apps
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # where collectstatic gathers files for production
-STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist",  # Path to the Vue.js build directory
-                    ]
+STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist"]  # Path to the Vue.js build directory
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -126,7 +125,16 @@ STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist",  # Path to the Vue.js
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Allow all origins (for development)
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+CORS_ALLOW_CREDENTIALS = True
+# Enable receiving POSTs from frontend
+CSRF_TRUSTED_ORIGINS = ["http://localhost:5173"]
+CSRF_COOKIE_NAME = "csrftoken"
+CSRF_COOKIE_HTTPONLY = False  # False enables the frontend to read it
+CSRF_COOKIE_SAMESITE = "Lax"  # "None for cross-origin but then you must do SECURE=True
+CSRF_COOKIE_SECURE = False  # Only True if using HTTPS
+
 
 # Set dev_mode to True for development, False for production
 DJANGO_VITE = {

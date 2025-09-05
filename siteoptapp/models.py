@@ -1,4 +1,15 @@
+import uuid
 from django.db import models
+
+
+class ClientConfig(models.Model):
+    client_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    config_path = models.TextField()
+    last_seen = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.client_id}] path:{self.config_path} last_seen:{self.last_seen}"
 
 
 class Project(models.Model):

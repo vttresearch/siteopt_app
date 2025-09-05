@@ -1,84 +1,130 @@
 import os
-import subprocess
 import json
 import csv
+import uuid
+import openpyxl
+import platformdirs
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-import openpyxl
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from django.utils.timezone import now
+from siteoptapp.models import ClientConfig
 
 SITEOPTDATA = os.path.join("C:\\", "data", "GIT", "SITEOPT-DATA")
+APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
+SETTINGS_DIR = "settings"
+CONFIG_FILE = "config.json"
 
 
+@ensure_csrf_cookie
 def health_check(request):
     """For polling the backend."""
     return JsonResponse({"status": "ok"})
 
 
 def settings(request):
-    """Returns settings from previous session."""
-    p = SITEOPTDATA.replace(os.sep, "/")
-    return JsonResponse({"input_data_path": p})
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    print(f"Client {client_id} retrieving settings")
+    new_client = False
+    if not client_id:
+        client_id = uuid.uuid4()
+        new_client = True
+    client_config = get_client_config(client_id)
+    config_dict = read_config_file(client_config.config_path)
+    print(f"[{new_client}] Responding with configs: {config_dict}")
+    response = JsonResponse({"client_id": str(client_config.client_id), "configs": config_dict})
+    if new_client:
+        # httponly=False makes sure that we can access it from JavaScript
+        response.set_cookie("client_id", client_id, httponly=False, samesite="Lax", max_age=31536000)  # 1 year
+    return response
+
+
+def get_client_config(client_id):
+    """Returns ClientConfig model for given client id if available or a fresh one for new clients."""
+    try:
+        config = ClientConfig.objects.get(client_id=client_id)
+        config.last_seen = now()
+        config.save()
+    except ClientConfig.DoesNotExist:
+        base = platformdirs.user_data_dir()  # Win: %APPDATA%/Local
+        config_file_dir = os.path.abspath(os.path.join(base, APP_DATA_DIR, SETTINGS_DIR, str(client_id)[0:6]))
+        config_file_path = os.path.join(config_file_dir, CONFIG_FILE)
+        # Create config dir and default config file if it doesn't exist
+        make_dir(config_file_dir)
+        make_config_file(config_file_path)
+        config = ClientConfig.objects.create(
+            client_id=client_id,
+            config_path=config_file_path,
+            last_seen=now()
+        )
+    return config
+
+
+@csrf_protect
+def post(request, action):
+    """Handles data posted by the frontend.
+    Requires that the POST from frontend includes csrftoken cookie and
+    'credentials: 'include'.
+    Note: @csrf_protect decorator is needed for views that modify data (POST, PUT, DELETE)
+    """
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    print(f"Client {client_id} updating settings {action}")
+    if action == "input_data_path":
+        js = json.loads(request.body.decode("utf-8"))  # dict
+        print(f"New input_data_path: {js[action]}")
+        # Check if input_data_path is valid
+        json_response = validate_input_data_path(js[action])
+        if json_response["success"]:
+            config = get_client_config(client_id)
+            edit_config_file(config.config_path, {action: js[action]})
+        return JsonResponse(json_response)
+    else:
+        print(f"Unknown action: {action}")
+        return JsonResponse({"error", f"No handler for action {action}"})
+
+
+def validate_input_data_path(p):
+    if not os.path.exists(p):
+        return {"success": False, "error": "Path does not exist"}
+    if "modelspec.xlsx" in os.listdir(p):
+        return {"success": True}
+    else:
+        return {"success": False, "error": "Path is not a valid SiteOpt Data path."}
+
+
+def build_tree(path, exclude_dirs=None):
+    exclude_dirs = set(os.path.abspath(d) for d in (exclude_dirs or []))
+    tree = {"children": []}
+    entries = os.listdir(path)
+    # Sort: files first, then directories
+    entries.sort(key=lambda e: os.path.isdir(os.path.join(path, e)))
+    for entry in entries:
+        full_path = os.path.join(path, entry)
+        abs_path = os.path.abspath(full_path)
+        # Skip excluded directories
+        if abs_path in exclude_dirs:
+            continue
+        if os.path.isdir(full_path):
+            tree["children"].append({
+                "name": entry,
+                "children": build_tree(full_path, exclude_dirs)["children"]
+            })
+        else:
+            tree["children"].append({"name": entry})
+    return tree
 
 
 def fetch_input_data(request):
-    data = {
-        "title": "Input Files",
-        "children": [
-            {"name": "modelspec.xlsx"},
-            {"name": "output_recipe.json"},
-            {"name": "scenarios.xlsx"},
-            {"name": "connections",
-             "children": [
-                 {"name": "connections-input.xlsx"},
-                 {"name": "ts_price_dayahead.csv"},
-                 {"name": "ts_price_dheat.csv"},
-             ]
-             },
-            {"name": "demand",
-             "children": [
-                 {"name": "tscr_cooldemand.csv"},
-                 {"name": "tscr_elecdemand.csv"},
-                 {"name": "tscr_heatdemand.csv"},
-             ]
-             },
-            {"name": "nodes",
-             "children": [
-                 {"name": "nodes.xlsx"},
-                 {"name": "ts_load_oldtrafo.csv"},
-                 {"name": "ts_load_shore.csv"},
-             ]
-             },
-            {"name": "other_units",
-             "children": [
-                 {"name": "divertingunits.xlsx"},
-             ]
-             },
-            {"name": "production",
-             "children": [
-                 {"name": "hp-input.xlsx"},
-                 {"name": "pv-input.xlsx"},
-                 {"name": "ts_cop1.csv"},
-                 {"name": "ts_pvroof.csv"},
-                 {"name": "ts_pvwall.csv"},
-                 {"name": "ts_tubecollector.csv"},
-             ]
-             },
-            {"name": "representative_periods",
-             "children": [
-                 {"name": "repr_settings_elexia.json"},
-                 {"name": "representative_periods_template.json"},
-             ]
-             },
-            {"name": "storages",
-             "children": [
-                 {"name": "storages-input.xlsx"},
-                 {"name": "ts_demand_carpark.csv"},
-                 {"name": "ts_nodestatecap_carpark.csv"},
-             ]
-             }
-        ]
-    }
-    return HttpResponse(json.dumps(data), content_type="application/json")
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    print(f"Client {client_id} requesting input files")
+    config = get_client_config(client_id)
+    config_d = read_config_file(config.config_path)
+    p = config_d["input_data_path"]
+    if not validate_input_data_path(p)["success"]:
+        return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
+    excluded_dirs = [os.path.join(p, ".git")]
+    tree = build_tree(p, excluded_dirs)
+    return JsonResponse(tree)
 
 
 def fetch_data(request, folder, fname):
@@ -135,17 +181,6 @@ def read_csv_as_json(p):
     return json.dumps(data)
 
 
-def debug_open_excel(request, excel_fpath):
-    print(f"Got request to open {excel_fpath}")
-    fpath = os.path.join("C:\\", "Users", "ttepsa", "temp", "ms-excel-command-test.xlsx")
-    # C:\Users\ttepsa\temp\ms-excel-command-test.xlsx
-    args = ("cmd.exe", "/C", "start excel", fpath)
-    completed = subprocess.run(args)
-    print(f"completed:{completed}")
-    context = {"openFileStatus": "Allrighty_then"}
-    return render(request, "debug.html", context=context)
-
-
 def download_excel_file(request):
     fpath = os.path.join("C:\\", "Users", "ttepsa", "temp", "ms-excel-command-test.xlsx")
     wb = openpyxl.load_workbook(fpath)
@@ -154,3 +189,53 @@ def download_excel_file(request):
     # Save the workbook to the response
     wb.save(response)
     return response
+
+
+def make_dir(p):
+    """Create directory if it doesn't exist.
+
+    Args:
+        p: Absolute path to wanted dir
+
+    Raises:
+        OSError if operation failed.
+    """
+    os.makedirs(p, exist_ok=True)
+
+
+def make_config_file(p):
+    """Creates a dummy config file.
+
+    Args:
+        p (str): Full path to config file
+    """
+    d = {"input_data_path": "",
+         "project_data_path": ""}
+    with open(p, "w") as fp:
+        json.dump(d, fp, indent=4)
+
+
+def edit_config_file(p, new_key_value):
+    config_d = read_config_file(p)
+    config_d.update(new_key_value)
+    with open(p, "w") as fp:
+        json.dump(config_d, fp, indent=4)
+
+
+def read_config_file(p):
+    """Reads a file from given path and returns the contents as a dict.
+
+    Args:
+        p (str): Full path to config file
+    """
+    try:
+        with open(p, "r") as fh:
+            try:
+                config_dict = json.load(fh)
+            except json.decoder.JSONDecodeError:
+                print(f"[JSONDecodeError] in config file {p}. Invalid JSON, maybe?")
+                return {}
+    except OSError:
+        print(f"[OSError] Config file {p} missing, maybe?")
+        return {}
+    return config_dict
