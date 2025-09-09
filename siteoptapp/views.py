@@ -78,6 +78,15 @@ def post(request, action):
             config = get_client_config(client_id)
             edit_config_file(config.config_path, {action: js[action]})
         return JsonResponse(json_response)
+    elif action == "project_data_path":
+        js = json.loads(request.body.decode("utf-8"))  # dict
+        print(f"New project_path: {js[action]}")
+        # Check if project_path is valid
+        json_response = validate_project_path(js[action])
+        if json_response["success"]:
+            config = get_client_config(client_id)
+            edit_config_file(config.config_path, {action: js[action]})
+        return JsonResponse(json_response)
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"error", f"No handler for action {action}"})
@@ -90,6 +99,15 @@ def validate_input_data_path(p):
         return {"success": True}
     else:
         return {"success": False, "error": "Path is not a valid SiteOpt Data path."}
+
+
+def validate_project_path(p):
+    if not os.path.exists(p):
+        return {"success": False, "error": "Path does not exist"}
+    if ".spinetoolbox" in os.listdir(p):
+        return {"success": True}
+    else:
+        return {"success": False, "error": "Path does not contain a Spine Toolbox project."}
 
 
 def build_tree(path, exclude_dirs=None):
@@ -125,7 +143,20 @@ def fetch_input_file_tree(request):
     excluded_dirs = [os.path.join(p, ".git")]
     tree = build_tree(p, excluded_dirs)
     tree["name"] = "data"
-    print(tree)
+    return JsonResponse({"success": True, "data": {"children": [tree]}})
+
+
+def fetch_project_file_tree(request):
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    print(f"Client {client_id} requesting project files")
+    config = get_client_config(client_id)
+    config_d = read_config_file(config.config_path)
+    p = config_d["project_data_path"]
+    if not validate_project_path(p)["success"]:
+        return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
+    excluded_dirs = [os.path.join(p, ".git")]
+    tree = build_tree(p, excluded_dirs)
+    tree["name"] = "project"
     return JsonResponse({"success": True, "data": {"children": [tree]}})
 
 

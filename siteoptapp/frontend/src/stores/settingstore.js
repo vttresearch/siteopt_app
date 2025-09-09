@@ -8,14 +8,17 @@ export const useSettingStore = defineStore('settingsData', () => {
 
   function setSettings(settings) {
     inputDataPath.value = settings["input_data_path"];
-    projectPath.value = ""
+    projectPath.value = settings["project_data_path"];
     workFolderPath.value = ""
-    console.log(inputDataPath.value)
   }
 
   function setInputDataPath(p) {
     inputDataPath.value = p;
   }
 
-  return { inputDataPath, projectPath, workFolderPath, setSettings, setInputDataPath}
+  function setProjectPath(p) {
+    projectPath.value = p;
+  }
+
+  return { inputDataPath, projectPath, workFolderPath, setSettings, setInputDataPath, setProjectPath}
 })

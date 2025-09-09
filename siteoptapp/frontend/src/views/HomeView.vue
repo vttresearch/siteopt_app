@@ -9,10 +9,12 @@ import { API_BASE } from "@/config.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { fetchSettings } from "@/utils/functions.js";
-import SelectFolder from "@/components/SelectFolder.vue";
+import SelectInputFolder from "@/components/SelectInputFolder.vue";
+import SelectProjectFolder from "@/components/SelectProjectFolder.vue";
 
 
 const inputFiles = ref([]);
+const projectFiles = ref([]);
 const loading = ref(true);
 const backendUnavailable = ref(true);
 const settingStore = useSettingStore()
@@ -71,11 +73,19 @@ onMounted(() => {
   checkBackEndReady()
 })
 
-watch(() => settingStore.inputDataPath, (newInputDataPath) => {
-  loading.value = true;
-  console.log(`inputDataPath changed: ${newInputDataPath}`)
-  fetchInputFiles();
-  loading.value = false;
+watch(() => [settingStore.inputDataPath, settingStore.projectPath], ([newInputDataPath, newProjectPath], [prevInputDataPath, prevProjectPath]) => {
+  if (newInputDataPath !== prevInputDataPath) {
+    loading.value = true;
+    console.log(`inputDataPath changed: ${newInputDataPath}`)
+    fetchInputFiles();
+    loading.value = false;
+  }
+  if (newProjectPath !== prevProjectPath) {
+    loading.value = true;
+    console.log(`projectPath changed: ${newProjectPath}`)
+    fetchProjectFiles();
+    loading.value = false;
+  }
 });
 
 const fetchInputFiles = async () => {
@@ -99,12 +109,33 @@ const fetchInputFiles = async () => {
       }
     }
     inputFiles.value = r.data.children;
-    for (const [keys, values] in Object.entries(r.data)) {
-      console.log(`${keys}: ${values}`)
-    }
+  } catch (err) {
+    notify.show(`[${err}] in fetching url: ${url}`, "5000", "error")
+    console.error("Error fetching input files:", err);
+  }
+};
 
-    console.log(`r.data: ${r.data} type: ${typeof r.data}`)
-    console.log(`r.data.children: ${r.data.children} type: ${typeof r.data.children}`)
+const fetchProjectFiles = async () => {
+  const url = `${API_BASE}api/fetch_project_file_tree/`
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`)
+      notify.show(`Server ${url} responded with error: ${errorText}`, 10000, "error")
+      return
+    }
+    const r = await response.json();
+    if (!r.success) {
+        projectFiles.value = {}
+      if (settingStore.projectPath === "") {
+        return
+      }
+    }
+    projectFiles.value = r.data.children;
   } catch (err) {
     notify.show(`[${err}] in fetching url: ${url}`, "5000", "error")
     console.error("Error fetching input files:", err);
@@ -124,8 +155,12 @@ const fetchInputFiles = async () => {
           <template v-else>
             <template v-if="!backendUnavailable">
             <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
-              <SelectFolder class="mb-4"/>
+              <p>Input data files</p>
+              <SelectInputFolder class="mb-4"/>
               <FileTree :model="inputFiles" />
+              <p>Project files</p>
+              <SelectProjectFolder class="mb-4"/>
+              <FileTree :model="projectFiles" />
             </div>
               <ContentPanel class="col-span-2" :content="Table" />
             </template>
