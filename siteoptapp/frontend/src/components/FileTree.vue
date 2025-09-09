@@ -1,11 +1,10 @@
 <script setup>
+import { ref } from 'vue';
 import FileItem from "./FileItem.vue";
 import FolderItem from "./FolderItem.vue";
-import { useSettingStore } from "@/stores/settingstore.js";
-import SelectFolder from "@/components/SelectFolder.vue";
+import {useSettingStore} from "@/stores/settingstore.js";
 
 const props = defineProps({
-  title: String,
   model: Object,
 })
 
@@ -28,19 +27,15 @@ const listDir = async () => {
 
 <template>
   <section>
-    <div class="bg-white rounded-xl shadow-md relative p-2 text-xs">
-      <div class="mb-4 text-gray-600 text-base"><span>{{ title }}</span></div>
-      <SelectFolder class="mb-4"/>
-      <ul>
-        <template v-for="item in props.model">
-          <li v-if="!isFolder(item)">
-            <FileItem :item_name="item.name"/>
-          </li>
-          <li v-else>
-            <FolderItem :folderName="item.name" :children="item.children" />
-          </li>
-        </template>
-      </ul>
-    </div>
+    <ul>
+      <template v-for="item in model" :key="item.name">
+        <li v-if="!isFolder(item)">
+          <FileItem :item_name="item.name" />
+        </li>
+        <li v-else>
+          <FolderItem :folderName="item.name" :children="item.children" />
+        </li>
+      </template>
+    </ul>
   </section>
 </template>

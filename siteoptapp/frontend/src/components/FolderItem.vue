@@ -1,7 +1,8 @@
 <script setup>
 import { ref } from 'vue';
-import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import FileItem from "@/components/FileItem.vue";
+import FileTree from "@/components/FileTree.vue";
 
 
 const props = defineProps ({
@@ -9,7 +10,7 @@ const props = defineProps ({
   children: Array,
 })
 
-const isOpen = ref(true)
+const isOpen = ref(false)
 
 function toggle() {
   isOpen.value = !isOpen.value
@@ -18,12 +19,16 @@ function toggle() {
 
 <template>
   <div class="py-0.5 cursor-pointer">
-    <span class="font-bold" @click="toggle" v-if="isOpen"><font-awesome-icon class="pr-1" icon="fa-regular fa-folder-closed" fixed-width />{{ folderName }}</span>
-    <span class="font-bold" @click="toggle" v-else><font-awesome-icon class="pr-1" icon="fa-regular fa-folder-open" fixed-width />{{ folderName }}</span>
-    <div class="pt-0.5" v-if="!isOpen">
-      <template v-for="child in children">
-        <FileItem :item_name="child.name" :parent_name="folderName" />
-      </template>
+    <div class="cursor-pointer font-bold flex items-center" @click="toggle">
+      <font-awesome-icon
+        class="pr-1"
+        :icon="isOpen ? 'fa-regular fa-folder-open' : 'fa-regular fa-folder-closed'"
+        fixed-width
+      />
+      <span>{{ folderName }}</span>
+    </div>
+    <div v-show="isOpen" class="pl-4">
+      <FileTree :model="children" />
     </div>
   </div>
 </template>

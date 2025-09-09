@@ -114,7 +114,7 @@ def build_tree(path, exclude_dirs=None):
     return tree
 
 
-def fetch_input_data(request):
+def fetch_input_file_tree(request):
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} requesting input files")
     config = get_client_config(client_id)
@@ -124,7 +124,9 @@ def fetch_input_data(request):
         return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
     excluded_dirs = [os.path.join(p, ".git")]
     tree = build_tree(p, excluded_dirs)
-    return JsonResponse(tree)
+    tree["name"] = "data"
+    print(tree)
+    return JsonResponse({"success": True, "data": {"children": [tree]}})
 
 
 def fetch_data(request, folder, fname):

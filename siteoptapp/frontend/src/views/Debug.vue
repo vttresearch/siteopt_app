@@ -17,9 +17,6 @@ const status = ref("fetching")
 const isLoading = ref(false)
 const error = ref(null)
 
-defineProps({
-  input_files: Array,
-})
 
 onMounted(() => {
   // async IIFE lets you use async/await syntax while still
@@ -27,7 +24,7 @@ onMounted(() => {
   (async () => {
     // Update your refs to re-render the template.
     console.log(`API_BASE in Debug: ${API_BASE}`)
-    const input_data_response = await fetch(`${API_BASE}api/fetch_input_data/`)
+    const input_data_response = await fetch(`${API_BASE}api/fetch_input_file_tree/`)
     if (!input_data_response.ok) {
       status.value = "error fetching input data"
       throw new Error("on_mounted_response not Ok");
@@ -49,7 +46,7 @@ async function test() {
 }
 
 async function test2() {
-  const response = await fetch("api/fetch_input_data/");
+  const response = await fetch("api/fetch_input_file_tree/");
   const data2 = await response.text()
   console.log(data2);
 }

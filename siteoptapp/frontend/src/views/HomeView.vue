@@ -9,10 +9,10 @@ import { API_BASE } from "@/config.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { fetchSettings } from "@/utils/functions.js";
+import SelectFolder from "@/components/SelectFolder.vue";
 
 
 const inputFiles = ref([]);
-const inputDataTitle = ref('');
 const loading = ref(true);
 const backendUnavailable = ref(true);
 const settingStore = useSettingStore()
@@ -79,7 +79,7 @@ watch(() => settingStore.inputDataPath, (newInputDataPath) => {
 });
 
 const fetchInputFiles = async () => {
-  const url = `${API_BASE}api/fetch_input_data/`
+  const url = `${API_BASE}api/fetch_input_file_tree/`
   try {
     const response = await fetch(url, {
       method: "GET",
@@ -93,14 +93,18 @@ const fetchInputFiles = async () => {
     }
     const r = await response.json();
     if (!r.success) {
-        inputDataTitle.value = ""
         inputFiles.value = {}
       if (settingStore.inputDataPath === "") {
         return
       }
     }
-    inputDataTitle.value = r.title;
-    inputFiles.value = r.children;
+    inputFiles.value = r.data.children;
+    for (const [keys, values] in Object.entries(r.data)) {
+      console.log(`${keys}: ${values}`)
+    }
+
+    console.log(`r.data: ${r.data} type: ${typeof r.data}`)
+    console.log(`r.data.children: ${r.data.children} type: ${typeof r.data.children}`)
   } catch (err) {
     notify.show(`[${err}] in fetching url: ${url}`, "5000", "error")
     console.error("Error fetching input files:", err);
@@ -119,8 +123,9 @@ const fetchInputFiles = async () => {
           <Spinner v-if="loading" message="Loading..." class="col-span-1 md:col-span-3" />
           <template v-else>
             <template v-if="!backendUnavailable">
-            <div>
-              <FileTree class="col-span-1" :title="inputDataTitle" :model="inputFiles" />
+            <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
+              <SelectFolder class="mb-4"/>
+              <FileTree :model="inputFiles" />
             </div>
               <ContentPanel class="col-span-2" :content="Table" />
             </template>
