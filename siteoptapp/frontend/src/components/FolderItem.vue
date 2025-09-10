@@ -8,6 +8,7 @@ import FileTree from "@/components/FileTree.vue";
 const props = defineProps ({
   folderName: String,
   children: Array,
+  parentName: String,
 })
 
 const isOpen = ref(false)
@@ -28,7 +29,7 @@ function toggle() {
       <span>{{ folderName }}</span>
     </div>
     <div v-show="isOpen" class="pl-4">
-      <FileTree :model="children" />
+      <FileTree :model="children" :parentName="folderName" />
     </div>
   </div>
 </template>

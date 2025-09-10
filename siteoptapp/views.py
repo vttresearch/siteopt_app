@@ -148,8 +148,8 @@ def fetch_input_file_tree(request):
         return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
     excluded_dirs = [os.path.join(p, ".git")]
     tree = build_tree(p, excluded_dirs)
-    tree["name"] = "data"
-    return JsonResponse({"success": True, "data": {"children": [tree]}})
+    tree["name"] = "dummy"  # This name is not rendered anywhere
+    return JsonResponse({"success": True, "data": tree})
 
 
 def fetch_project_file_tree(request):
@@ -162,8 +162,8 @@ def fetch_project_file_tree(request):
         return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
     excluded_dirs = [os.path.join(p, ".git")]
     tree = build_tree(p, excluded_dirs)
-    tree["name"] = "project"
-    return JsonResponse({"success": True, "data": {"children": [tree]}})
+    tree["name"] = "project"  # "project" is not rendered anywhere
+    return JsonResponse({"success": True, "data": tree})
 
 
 def fetch_data(request, folder, fname):

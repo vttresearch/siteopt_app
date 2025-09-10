@@ -13,7 +13,7 @@ import SelectInputFolder from "@/components/SelectInputFolder.vue";
 import SelectProjectFolder from "@/components/SelectProjectFolder.vue";
 
 
-const inputFiles = ref([]);
+const inputFiles = ref({});
 const projectFiles = ref([]);
 const loading = ref(true);
 const backendUnavailable = ref(true);
@@ -108,8 +108,8 @@ const fetchProjectFiles = async () => {
 
 function makeWorkFolder() {
   /* TODO: Get current work folders and add a new one to the list */
-  const path = "work1"
-  return postNewPath("make_work_folder", "work_folders", path, settings.addWorkFolder, notify)
+  const path = "work2"
+  return postNewPath("make_work_folder", "work_folder", path, settingStore.addWorkFolder, notify)
 }
 
 </script>
@@ -125,15 +125,15 @@ function makeWorkFolder() {
           <template v-else>
             <template v-if="!backendUnavailable">
             <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
-              <h1 class="text-black text-base mb-2">Input data files</h1>
+              <h1 class="text-black text-base mb-2 font-bold">Input data files</h1>
               <SelectInputFolder class="mb-1"/>
               <FileTree class="bg-gray-100 rounded-xl shadow-md relative p-2" :model="inputFiles" />
               <hr class="mt-3">
-              <h1 class="text-black text-base mb-2">Project files</h1>
+              <h1 class="text-black text-base mb-2 font-bold">Project files</h1>
               <SelectProjectFolder class="mb-1"/>
               <FileTree class="bg-gray-100 rounded-xl shadow-md relative p-2" :model="projectFiles" />
               <hr class="mt-3">
-              <h1 class="text-black text-base mb-2">Work folders</h1>
+              <h1 class="text-black text-base mb-2 font-bold">Work folders</h1>
               <button
                   class="flex-nowrap whitespace-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-0.5"
                   @click="makeWorkFolder">Make work folder
