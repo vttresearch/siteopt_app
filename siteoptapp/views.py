@@ -93,6 +93,9 @@ def post(request, action):
 
 
 def validate_input_data_path(p):
+    if p == "":
+        # Enables clearing the input data path
+        return {"success": True}
     if not os.path.exists(p):
         return {"success": False, "error": "Path does not exist"}
     if "modelspec.xlsx" in os.listdir(p):
@@ -102,6 +105,9 @@ def validate_input_data_path(p):
 
 
 def validate_project_path(p):
+    if p == "":
+        # Enables clearing the project path
+        return {"success": True}
     if not os.path.exists(p):
         return {"success": False, "error": "Path does not exist"}
     if ".spinetoolbox" in os.listdir(p):

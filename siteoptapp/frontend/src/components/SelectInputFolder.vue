@@ -3,10 +3,9 @@ import { ref, watch } from 'vue';
 import { isTauri } from '@tauri-apps/api/core';
 import { homeDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
-import { API_BASE } from "@/config.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { fetchSettings, getCookie } from "@/utils/functions.js";
+import { postNewPath } from "@/utils/functions.js";
 
 
 const notify = useNotificationStore()
@@ -71,43 +70,19 @@ function apply() {
   }
 }
 
-async function postNewInputDataPath(path) {
-  const csrfToken = getCookie("csrftoken");
-  const url = `${API_BASE}api/post/input_data_path/`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      "X-CSRFToken": csrfToken,
-    },
-    credentials: "include",
-    body: JSON.stringify({ input_data_path: path })
-  })
-  if (!response.ok) {
-    console.error('Invalid Data Path:', await response.text())
-  } else {
-    const r = await response.json()
-    if (!r.success) {
-      settings.setInputDataPath("")
-      notify.show(`${r.error}`, 3000, "error")
-      return
-    }
-    console.log("Input data path updated")
-    const result = await fetchSettings()
-    if (result.success) {
-      console.log("New settings fetched")
-    }
-    else {
-      console.error("Fetching settings failed")
-    }
-  }
+function clear() {
+  console.log("Clearing input data path")
+  postNewInputDataPath("")
 }
 
+function postNewInputDataPath(path) {
+  return postNewPath("input_data_path", "input_data_path", path, settings.setInputDataPath, notify)
+}
 </script>
 
 <template>
   <section>
-    <div class="flex justify-between mb-2">
+    <div class="flex justify-between">
       <span class="w-full">
         <input
             :class="[isValidPath ? validClass : invalidClass]"
@@ -119,10 +94,12 @@ async function postNewInputDataPath(path) {
       </span>
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1 ml-1 mr-1" @click="apply">
         <font-awesome-icon icon="fa-regular fa-check-circle" fixed-width /></button>
+      <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1 mr-1" @click="clear">
+        <font-awesome-icon icon="fa-solid fa-times" fixed-width /></button>
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1" @click="selectDir">
         <font-awesome-icon icon="fa-regular fa-folder-open" fixed-width /></button>
       </div>
-      <div v-if="settings.inputDataPath !== ''" class="text-gray-600 text-base"><span>{{ settings.inputDataPath }}</span></div>
-      <div v-else class="text-gray-600 text-base"><span>Set SiteOpt input data path to get started.</span></div>
+      <div v-if="settings.inputDataPath !== ''" class="text-gray-600 text-base mt-1"><span>{{ settings.inputDataPath }}</span></div>
+      <div v-else class="text-gray-600 text-base mt-1"><span>Set SiteOpt input data path to get started.</span></div>
     </section>
 </template>

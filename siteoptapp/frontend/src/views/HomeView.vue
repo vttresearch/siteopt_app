@@ -8,7 +8,7 @@ import Table from "@/components/Table.vue";
 import { API_BASE } from "@/config.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { fetchSettings } from "@/utils/functions.js";
+import {fetchSettings, fetchFileTree, postNewPath} from "@/utils/functions.js";
 import SelectInputFolder from "@/components/SelectInputFolder.vue";
 import SelectProjectFolder from "@/components/SelectProjectFolder.vue";
 
@@ -89,58 +89,28 @@ watch(() => [settingStore.inputDataPath, settingStore.projectPath], ([newInputDa
 });
 
 const fetchInputFiles = async () => {
-  const url = `${API_BASE}api/fetch_input_file_tree/`
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-    });
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`)
-      notify.show(`Server ${url} responded with error: ${errorText}`, 10000, "error")
-      return
-    }
-    const r = await response.json();
-    if (!r.success) {
-        inputFiles.value = {}
-      if (settingStore.inputDataPath === "") {
-        return
-      }
-    }
-    inputFiles.value = r.data.children;
-  } catch (err) {
-    notify.show(`[${err}] in fetching url: ${url}`, "5000", "error")
-    console.error("Error fetching input files:", err);
+  if (settingStore.inputDataPath === "") {
+    /* Clear button clicked */
+    inputFiles.value = {}
+    return
   }
+  return fetchFileTree("fetch_input_file_tree", inputFiles, settingStore.inputDataPath, notify)
 };
 
 const fetchProjectFiles = async () => {
-  const url = `${API_BASE}api/fetch_project_file_tree/`
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-    });
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`)
-      notify.show(`Server ${url} responded with error: ${errorText}`, 10000, "error")
-      return
-    }
-    const r = await response.json();
-    if (!r.success) {
-        projectFiles.value = {}
-      if (settingStore.projectPath === "") {
-        return
-      }
-    }
-    projectFiles.value = r.data.children;
-  } catch (err) {
-    notify.show(`[${err}] in fetching url: ${url}`, "5000", "error")
-    console.error("Error fetching input files:", err);
+  if (settingStore.projectPath === "") {
+    /* Clear button clicked */
+    projectFiles.value = {}
+    return
   }
+  return fetchFileTree("fetch_project_file_tree", projectFiles, settingStore.projectPath, notify)
 };
+
+function makeWorkFolder() {
+  /* TODO: Get current work folders and add a new one to the list */
+  const path = "work1"
+  return postNewPath("make_work_folder", "work_folders", path, settings.addWorkFolder, notify)
+}
 
 </script>
 
@@ -155,12 +125,20 @@ const fetchProjectFiles = async () => {
           <template v-else>
             <template v-if="!backendUnavailable">
             <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
-              <p>Input data files</p>
-              <SelectInputFolder class="mb-4"/>
-              <FileTree :model="inputFiles" />
-              <p>Project files</p>
-              <SelectProjectFolder class="mb-4"/>
-              <FileTree :model="projectFiles" />
+              <h1 class="text-black text-base mb-2">Input data files</h1>
+              <SelectInputFolder class="mb-1"/>
+              <FileTree class="bg-gray-100 rounded-xl shadow-md relative p-2" :model="inputFiles" />
+              <hr class="mt-3">
+              <h1 class="text-black text-base mb-2">Project files</h1>
+              <SelectProjectFolder class="mb-1"/>
+              <FileTree class="bg-gray-100 rounded-xl shadow-md relative p-2" :model="projectFiles" />
+              <hr class="mt-3">
+              <h1 class="text-black text-base mb-2">Work folders</h1>
+              <button
+                  class="flex-nowrap whitespace-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-0.5"
+                  @click="makeWorkFolder">Make work folder
+              </button>
+              <hr class="mt-3">
             </div>
               <ContentPanel class="col-span-2" :content="Table" />
             </template>

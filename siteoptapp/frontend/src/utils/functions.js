@@ -47,3 +47,96 @@ export function getCookie(name) {
   }
   return cookieValue;
 }
+
+/**
+ * Fetches a file tree from the specified API endpoint and updates the given reactive reference.
+ *
+ * @param {string} endpoint - The API endpoint suffix (e.g., "fetch_input_file_tree").
+ * @param {object} targetRef - A Vue ref object where the fetched file tree data will be stored.
+ * @param {string} fallbackPath - A fallback path used to determine whether to proceed if the response is unsuccessful.
+ * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
+ *
+ * The function handles:
+ * - Making a GET request to the API.
+ * - Error handling for network and server issues.
+ * - Updating the target ref with the file tree data if successful.
+ * - Displaying notifications for errors or unsuccessful responses.
+ */
+export const fetchFileTree = async (endpoint, targetRef, fallbackPath, notify) => {
+  const url = `${API_BASE}api/${endpoint}/`;
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`);
+      notify.show(`Server ${url} responded with error: ${errorText}`, 10000, "error");
+      return;
+    }
+    const r = await response.json();
+    if (!r.success) {
+      targetRef.value = {};
+      if (fallbackPath === "") {
+        return;
+      }
+    }
+    targetRef.value = r.data.children;
+  } catch (err) {
+    notify.show(`[${err}] in fetching url: ${url}`, "5000", "error");
+    console.error(`Error fetching from ${url}:`, err);
+  }
+};
+
+/**
+ * Sends a POST request to update a data path (e.g., input or project path) on the server,
+ * handles the response, updates local settings, and optionally fetches updated settings.
+ *
+ * @param {string} endpointSuffix - The endpoint suffix to post to (e.g., "input_data_path").
+ * @param {string} pathKey - The key used in the request body (e.g., "input_data_path" or "project_data_path").
+ * @param {string} pathValue - The new path value to send to the server.
+ * @param {Function} clearFn - A function to clear the corresponding path in local settings if the request fails.
+ * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
+ *
+ * The function performs:
+ * - CSRF-protected POST request to the specified endpoint.
+ * - Error handling for failed requests or unsuccessful responses.
+ * - Updates the local settings store if the request succeeds.
+ * - Fetches updated settings from the server after a successful update.
+ * - Displays error notifications using the provided `notify` utility.
+ */
+export async function postNewPath(endpointSuffix, pathKey, pathValue, clearFn, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/${endpointSuffix}/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'include',
+      body: JSON.stringify({ [pathKey]: pathValue }),
+    });
+    if (!response.ok) {
+      console.error(`Invalid ${pathKey}:`, await response.text());
+      return;
+    }
+    const r = await response.json();
+    if (!r.success) {
+      clearFn(""); // Clear the path in settings
+      notify.show(`${r.error}`, 3000, "error");
+      return;
+    }
+    console.log(`${pathKey} updated`);
+    const result = await fetchSettings();
+    if (result.success) {
+      console.log("New settings fetched");
+    } else {
+      console.error("Fetching settings failed");
+    }
+  } catch (err) {
+    console.error(`Error posting ${pathKey}:`, err);
+  }
+}
