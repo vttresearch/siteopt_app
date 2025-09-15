@@ -27,8 +27,8 @@ export default defineConfig(({ mode }) => {
     root: resolve(INPUT_DIR),
     base: './',
     server: {
-      host: env.DJANGO_VITE_DEV_SERVER_HOST,
-      port: env.DJANGO_VITE_DEV_SERVER_PORT,
+      host: env.DJANGO_VITE_DEV_SERVER_HOST,  // TODO: undefined. set in .env.development
+      port: env.DJANGO_VITE_DEV_SERVER_PORT,  // TODO: undefined. set in .env.development
     },
     build: {
       manifest: true,

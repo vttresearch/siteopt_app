@@ -19,4 +19,4 @@ const pinia = createPinia();
 app.use(pinia);
 app.use(router);
 app.component('font-awesome-icon', FontAwesomeIcon);
-app.mount('#siteopt_app');
+app.mount('#app');

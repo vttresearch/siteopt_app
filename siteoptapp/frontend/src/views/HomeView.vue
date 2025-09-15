@@ -5,10 +5,9 @@ import ContentPanel from "@/components/ContentPanel.vue";
 import Spinner from "@/components/Spinner.vue";
 import Notification from "@/components/Notification.vue";
 import Table from "@/components/Table.vue";
-import { API_BASE } from "@/config.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import {fetchSettings, fetchFileTree, postNewPath} from "@/utils/functions.js";
+import { checkBackendReady, fetchSettings, fetchFileTree, postNewPath } from "@/utils/functions.js";
 import SelectInputFolder from "@/components/SelectInputFolder.vue";
 import SelectProjectFolder from "@/components/SelectProjectFolder.vue";
 
@@ -21,56 +20,13 @@ const settingStore = useSettingStore()
 const notify = useNotificationStore()
 const settingsReceived = ref(false)
 
-
-onMounted(() => {
-  /**
-   *  Ensures that fetch fails exactly in given timeout
-   * @param url url to fetch
-   * @param timeout time for fetch to finish
-   * @returns {Promise<Response>} response if fetch succeeded, throws an error if timeout is reached.
-   */
-  const fetchWithTimeout = async (url, timeout = 1000) => {
-    const controller = new AbortController()
-    const id = setTimeout(() => controller.abort(), timeout)
-    try {
-      const response = await fetch(url, {credentials: "include", signal: controller.signal })
-      clearTimeout(id)
-      return response
-    } catch (error) {
-      clearTimeout(id)
-      throw error
-    }
-  }
-
-  /**
-   * Retries connection to backend every 5 seconds (4000ms + 1000ms) until max attempts is reached.
-   */
-  const checkBackEndReady = async () => {
-    let attempts = 0
-    const maxAttempts = 10
-    const url = `${API_BASE}api/health/`
-    while (attempts < maxAttempts) {
-      try {
-        const res = await fetchWithTimeout(url, 4000)
-        if (res.ok) {
-          const result = await fetchSettings()
-          if (result.success) {
-            backendUnavailable.value = false
-          }
-          return
-        }
-      } catch (err) {
-        console.error(`Backend not responding (attempt ${attempts + 1})`)
-        notify.show(`URL: ${url} not responding [attempt ${attempts + 1}/${maxAttempts}]`, 4000, "info")
-      }
-      attempts++
-      // This is like python's time.sleep()
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1s before retrying
-    }
-    console.error("Backend did not start in time")
+onMounted(async () => {
+  const ready = await checkBackendReady()
+  if (ready) {
+    await fetchSettings()
+    backendUnavailable.value = false
     loading.value = false
   }
-  checkBackEndReady()
 })
 
 watch(() => [settingStore.inputDataPath, settingStore.projectPath], ([newInputDataPath, newProjectPath], [prevInputDataPath, prevProjectPath]) => {

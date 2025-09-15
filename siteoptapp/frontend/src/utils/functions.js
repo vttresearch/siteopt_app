@@ -3,6 +3,50 @@ import { useSettingStore } from "@/stores/settingstore.js";
 import {API_BASE} from "@/config.js";
 
 
+/**
+ *  Ensures that fetch fails exactly in given timeout
+ * @param url url to fetch
+ * @param timeout time for fetch to finish
+ * @returns {Promise<Response>} response if fetch succeeded, throws an error if timeout is reached.
+ */
+const fetchWithTimeout = async (url, timeout = 1000) => {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeout)
+  try {
+    const response = await fetch(url, {credentials: "include", signal: controller.signal })
+    clearTimeout(id)
+    return response
+  } catch (error) {
+    clearTimeout(id)
+    throw error
+  }
+}
+
+/**
+ * Retries connection to backend every 5 seconds (4000ms + 1000ms) until max attempts is reached.
+ */
+export const checkBackendReady = async () => {
+  let attempts = 0
+  const maxAttempts = 10
+  const url = `${API_BASE}api/health/`
+  while (attempts < maxAttempts) {
+    try {
+      const res = await fetchWithTimeout(url, 4000)
+      if (res.ok) {
+        return true
+      }
+    } catch (err) {
+      console.error(`Backend not responding (attempt ${attempts + 1})`)
+      notify.show(`URL: ${url} not responding [attempt ${attempts + 1}/${maxAttempts}]`, 4000, "info")
+    }
+    attempts++
+    // This is like python's time.sleep()
+    await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1s before retrying
+  }
+  console.error("Backend did not start in time")
+  return false
+}
+
 export const fetchSettings = async () => {
   const notify = useNotificationStore()
   const settingStore = useSettingStore()
@@ -16,18 +60,18 @@ export const fetchSettings = async () => {
       const errorText = await response.text()
       console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`)
       notify.show(`Server ${url} responded with error: ${errorText}`, 5000, "error")
-      return {success: false}
+      return false
     }
     console.log("parsing settings")
     const parsed = await response.json();
     settingStore.setSettings(parsed["configs"])
     console.log("new settings Stored")
-    return {success: true}
+    return true
   }
   catch (err) {
     console.error(`[${url} Error in fetching Settings: ${err}`)
     notify.show(`[${url}] error: [${err}]`, "5000", "error")
-    return {success: false}
+    return false
   }
 };
 
