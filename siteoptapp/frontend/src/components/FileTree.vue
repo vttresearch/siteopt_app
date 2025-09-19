@@ -9,7 +9,15 @@ const props = defineProps({
   parentName: {
       type: String,
       default: ''
-    }
+    },
+  fullParents : {
+    type: String,
+    default: ''
+  },
+  path: {
+    type: String,
+    default: ''
+  }
 })
 
 const settingStore = useSettingStore()
@@ -25,7 +33,17 @@ const listDir = async () => {
   console.log(`Home: ${baseDir.Home}`)
   console.log(`AppData: ${appData}`)
   console.log(`AppLocalData: ${appLocalData}`)
+}
 
+function concatParentName(itemName) {
+  // console.log(`fullParents:${props.fullParents}`)
+  if (props.parentName !== "") {
+    return props.fullParents + "/" + itemName
+  }
+  else {
+    //console.log(`Returning: ${itemName}`)
+    return itemName
+  }
 }
 </script>
 
@@ -34,10 +52,10 @@ const listDir = async () => {
     <ul>
       <template v-for="item in model" :key="item.name">
         <li v-if="!isFolder(item)">
-          <FileItem :item_name="item.name" :parent_name="parentName" />
+          <FileItem :item_name="item.name" :parent_name="parentName" :interm_paths="fullParents" :base_path="props.path"/>
         </li>
         <li v-else>
-          <FolderItem :folderName="item.name" :children="item.children" :parentName="item.name" />
+          <FolderItem :folderName="item.name" :children="item.children" :parentName="concatParentName(item.name)" :base_path="props.path"/>
         </li>
       </template>
     </ul>

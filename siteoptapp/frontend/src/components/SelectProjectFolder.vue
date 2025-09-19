@@ -71,12 +71,11 @@ function apply() {
 }
 
 function clear() {
-  console.log("Clearing project path")
   postNewProjectPath("")
 }
 
 function postNewProjectPath(path) {
-  return postNewPath("project_data_path", "project_data_path", path, settings.setProjectPath, notify)
+  return postNewPath("project_data_path", "project_data_path", path, notify, settings.setProjectPath)
 }
 
 </script>

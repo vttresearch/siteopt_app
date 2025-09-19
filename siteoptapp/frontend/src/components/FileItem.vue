@@ -2,41 +2,34 @@
 import { ref } from 'vue';
 import EditButton from "@/components/EditButton.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
+import { useNotificationStore } from "@/stores/notificationstore.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
-import { API_BASE } from "@/config.js";
+import { postRequestData } from "@/utils/functions.js";
 
-
-const store = useTableDataStore()
 
 const props = defineProps({
   item_name: {type: String, required: true},
   parent_name: {type: String, required: false, default: ""},
+  interm_paths: {type: String, required: false, default:""},
+  base_path: {type: String, required: false, default: ""}
 })
 
+const store = useTableDataStore()
+const notify = useNotificationStore()
 const fdata = ref({})
 
 async function fetchFileContents(fname) {
-  console.log(`fname:${fname} parent:${props.parent_name}`)
-  let fpath = API_BASE + "api/fetch_data/"
-  if (props.parent_name !== "") {
-    fpath = fpath.concat(props.parent_name + "/").concat(fname)
+  let full_path = ""
+  if (props.interm_paths === "") {
+    full_path = props.base_path + "/" + fname
   }
   else {
-    fpath = fpath.concat("root/").concat(fname)
+    full_path = props.base_path + "/" + props.interm_paths + "/" + fname
   }
-  console.log(`Fetching from ${fpath}`)
+  console.log(`Requesting file: ${full_path}`)
+  store.clear()
   store.toggleLoading()
-  const response = await fetch(fpath)
-  if (!response.ok) {
-    console.log("Failed")
-  }
-  else {
-    console.log("Response received ok")
-    fdata.value = await response.text()
-    fdata.value = JSON.parse(fdata.value)
-    console.log(fdata.value)
-    store.addData(fname, fdata.value)
-  }
+  fdata.value = await postRequestData(full_path, fname, store, notify)
   store.toggleLoading()
 }
 

@@ -3,6 +3,7 @@ import { useSettingStore } from "@/stores/settingstore.js";
 import {API_BASE} from "@/config.js";
 
 
+
 /**
  *  Ensures that fetch fails exactly in given timeout
  * @param url url to fetch
@@ -26,6 +27,7 @@ const fetchWithTimeout = async (url, timeout = 1000) => {
  * Retries connection to backend every 5 seconds (4000ms + 1000ms) until max attempts is reached.
  */
 export const checkBackendReady = async () => {
+  const notify = useNotificationStore()
   let attempts = 0
   const maxAttempts = 10
   const url = `${API_BASE}api/health/`
@@ -62,10 +64,9 @@ export const fetchSettings = async () => {
       notify.show(`Server ${url} responded with error: ${errorText}`, 5000, "error")
       return false
     }
-    console.log("parsing settings")
     const parsed = await response.json();
     settingStore.setSettings(parsed["configs"])
-    console.log("new settings Stored")
+    console.log("Settings updated")
     return true
   }
   catch (err) {
@@ -79,7 +80,7 @@ export function getCookie(name) {
   let cookieValue = null;
   if (document.cookie && document.cookie !== "") {
     const cookies = document.cookie.split(";");
-    console.log(cookies)
+    // console.log(cookies)
     for (let i = 0; i < cookies.length; i++) {
       const cookie = cookies[i].trim();
       // Match start of cookie string with given name
@@ -106,7 +107,7 @@ export function getCookie(name) {
  * - Updating the target ref with the file tree data if successful.
  * - Displaying notifications for errors or unsuccessful responses.
  */
-export const fetchFileTree = async (endpoint, targetRef, fallbackPath, notify) => {
+export const fetchFileTree = async (endpoint, notify) => {
   const url = `${API_BASE}api/${endpoint}/`;
   try {
     const response = await fetch(url, {
@@ -121,12 +122,13 @@ export const fetchFileTree = async (endpoint, targetRef, fallbackPath, notify) =
     }
     const r = await response.json();
     if (!r.success) {
-      targetRef.value = {};
-      if (fallbackPath === "") {
-        return;
-      }
+      //targetRef.value = {};
+      return {}
+      //if (fallbackPath === "") {
+      //  return;
+      //}
     }
-    targetRef.value = r.data.children;
+    return r.data
   } catch (err) {
     notify.show(`[${err}] in fetching url: ${url}`, "5000", "error");
     console.error(`Error fetching from ${url}:`, err);
@@ -140,9 +142,8 @@ export const fetchFileTree = async (endpoint, targetRef, fallbackPath, notify) =
  * @param {string} endpointSuffix - The endpoint suffix to post to (e.g., "input_data_path").
  * @param {string} pathKey - The key used in the request body (e.g., "input_data_path" or "project_data_path").
  * @param {string} pathValue - The new path value to send to the server.
- * @param {Function} clearFn - A function to clear the corresponding path in local settings if the request fails.
  * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
- *
+ * @param {Function} clearFn - A function to clear the corresponding path in local settings if the request fails.
  * The function performs:
  * - CSRF-protected POST request to the specified endpoint.
  * - Error handling for failed requests or unsuccessful responses.
@@ -150,7 +151,7 @@ export const fetchFileTree = async (endpoint, targetRef, fallbackPath, notify) =
  * - Fetches updated settings from the server after a successful update.
  * - Displays error notifications using the provided `notify` utility.
  */
-export async function postNewPath(endpointSuffix, pathKey, pathValue, clearFn, notify) {
+export async function postNewPath(endpointSuffix, pathKey, pathValue, notify, clearFn = null) {
   const csrfToken = getCookie("csrftoken");
   const url = `${API_BASE}api/post/${endpointSuffix}/`;
   try {
@@ -161,26 +162,67 @@ export async function postNewPath(endpointSuffix, pathKey, pathValue, clearFn, n
         'X-CSRFToken': csrfToken,
       },
       credentials: 'include',
-      body: JSON.stringify({ [pathKey]: pathValue }),
+      body: JSON.stringify({[pathKey]: pathValue}),
     });
     if (!response.ok) {
       console.error(`Invalid ${pathKey}:`, await response.text());
-      return;
+      return false
     }
     const r = await response.json();
     if (!r.success) {
-      clearFn(""); // Clear the path in settings
+      if (clearFn !== null ) {
+        clearFn(""); // Clears a path in settingStore. Forgot whether it's needed
+      }
       notify.show(`${r.error}`, 3000, "error");
-      return;
-    }
-    console.log(`${pathKey} updated`);
-    const result = await fetchSettings();
-    if (result.success) {
-      console.log("New settings fetched");
-    } else {
-      console.error("Fetching settings failed");
+      return false
     }
   } catch (err) {
     console.error(`Error posting ${pathKey}:`, err);
+    return false
+  }
+  return true
+}
+
+
+/**
+ * Sends a POST to request file data.
+ *
+ * @param {string} path - Full abs. path to requested file.
+ * @param {string} fname - File name.
+ * @param {Object} store - Pinia store for storing received data
+ * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
+ * The function performs:
+ * - CSRF-protected POST request to the specified endpoint.
+ * - Error handling for failed requests or unsuccessful responses.
+ * - Updates the local settings store if the request succeeds.
+ * - Displays error notifications using the provided `notify` utility.
+ */
+export async function postRequestData(path, fname, store, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/fetch_data/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'include',
+      body: JSON.stringify({["path"]: path}),
+    });
+    if (!response.ok) {
+      console.error(`Invalid ${path}:`, await response.text());
+      return {"success": false}
+    }
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(`${r.error}`, 5000, "error");
+      return {"success": false}
+    }
+    store.addData(fname, r.data)
+    return {"success": true}
+  } catch (err) {
+    console.error(`Error posting ${path}:`, err);
+    return {"success": false}
   }
 }

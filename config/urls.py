@@ -24,7 +24,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/fetch_input_file_tree/", views.fetch_input_file_tree, name="fetch_input_file_tree"),
     path("api/fetch_project_file_tree/", views.fetch_project_file_tree, name="fetch_project_file_tree"),
-    path("api/fetch_data/<str:folder>/<str:fname>/", views.fetch_data, name="fetch_data"),
+    path("api/fetch_work_folders_tree/", views.fetch_work_folders_tree, name="fetch_work_folders_tree"),
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),

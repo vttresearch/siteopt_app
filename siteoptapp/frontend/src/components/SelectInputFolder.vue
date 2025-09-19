@@ -76,7 +76,7 @@ function clear() {
 }
 
 function postNewInputDataPath(path) {
-  return postNewPath("input_data_path", "input_data_path", path, settings.setInputDataPath, notify)
+  return postNewPath("input_data_path", "input_data_path", path, notify, settings.setInputDataPath)
 }
 </script>
 

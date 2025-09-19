@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from 'vue';
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
-import FileItem from "@/components/FileItem.vue";
 import FileTree from "@/components/FileTree.vue";
 
 
@@ -9,6 +8,7 @@ const props = defineProps ({
   folderName: String,
   children: Array,
   parentName: String,
+  base_path: String,
 })
 
 const isOpen = ref(false)
@@ -29,7 +29,7 @@ function toggle() {
       <span>{{ folderName }}</span>
     </div>
     <div v-show="isOpen" class="pl-4">
-      <FileTree :model="children" :parentName="folderName" />
+      <FileTree :model="children" :parentName="folderName" :fullParents="parentName" :path="props.base_path"/>
     </div>
   </div>
 </template>

@@ -16,5 +16,11 @@ export const useTableDataStore = defineStore('tableData', () => {
     loading.value = !loading.value;
   }
 
-  return { daata, fname, loading, addData, toggleLoading}
+  function clear() {
+    fname.value = "";
+    daata.value = {};
+    loading.value = false;
+  }
+
+  return { daata, fname, loading, addData, toggleLoading, clear}
 })

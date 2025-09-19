@@ -13,11 +13,22 @@ const fileData = ref({})
 const rowData = ref([])
 const columnDefs = ref([])
 
+function clearRefs() {
+  sheetNames.value = []
+  selectedSheet.value = ""
+  fileData.value = {}
+  rowData.value = []
+  columnDefs.value = []
+}
+
 // Watch for changes in the store's data
 watch(() => data_store.daata, (newItems) => {
+  if (Object.keys(newItems).length === 0) {
+    clearRefs()
+    return
+  }
   const fileType = newItems["filetype"]
   fileData.value = newItems["data"]
-  console.log(`fileType: ${fileType} data: ${fileData.value}`)
   if (fileType === "xlsx") {
     console.log("Updating table with Excel data")
     sheetNames.value = Object.keys(fileData.value)  // or use slice(), or structuredClone if needed
