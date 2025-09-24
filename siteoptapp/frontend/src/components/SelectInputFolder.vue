@@ -5,7 +5,7 @@ import { homeDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postNewPath } from "@/utils/functions.js";
+import { fetchSettings, postNewPath } from "@/utils/functions.js";
 
 
 const notify = useNotificationStore()
@@ -71,13 +71,18 @@ function apply() {
 }
 
 function clear() {
-  console.log("Clearing input data path")
+  inputFieldRef.value = ""
   postNewInputDataPath("")
 }
 
-function postNewInputDataPath(path) {
-  return postNewPath("input_data_path", "input_data_path", path, notify, settings.setInputDataPath)
+async function postNewInputDataPath(path) {
+  const postResult = await postNewPath("input_data_path", "input_data_path", path, notify)
+    if (!postResult) {
+    return
+  }
+  await fetchSettings()
 }
+
 </script>
 
 <template>

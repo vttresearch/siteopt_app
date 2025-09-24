@@ -5,13 +5,11 @@ import shutil
 import uuid
 import openpyxl
 import platformdirs
-from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.timezone import now
 from siteoptapp.models import ClientConfig
 
-SITEOPTDATA = os.path.join("C:\\", "data", "GIT", "SITEOPT-DATA")
 APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
 SETTINGS_DIR = "settings"
 WORK_DIR = "work"
@@ -75,7 +73,10 @@ def post(request, action):
         js = json.loads(request.body.decode("utf-8"))  # dict
         print(f"New input_data_path: {js[action]}")
         # Check if input_data_path is valid
-        json_response = validate_input_data_path(js[action])
+        if js[action] == "":  # Clears input data path
+            json_response = {"success": True}
+        else:
+            json_response = validate_input_data_path(js[action])
         if json_response["success"]:
             config = get_client_config(client_id)
             edit_config_file(config.config_path, {action: js[action]})
@@ -84,7 +85,10 @@ def post(request, action):
         js = json.loads(request.body.decode("utf-8"))  # dict
         print(f"New project_path: {js[action]}")
         # Check if project_path is valid
-        json_response = validate_project_path(js[action])
+        if js[action] == "":  # Clears project path
+            json_response = {"success": True}
+        else:
+            json_response = validate_project_path(js[action])
         if json_response["success"]:
             config = get_client_config(client_id)
             edit_config_file(config.config_path, {action: js[action]})
@@ -93,9 +97,8 @@ def post(request, action):
         js = json.loads(request.body.decode("utf-8"))
         print(f"New work folder: {js['work_folder']}")
         config = get_client_config(client_id)
-        if not make_work_folder(config.config_path, client_id, js['work_folder']):
-            return JsonResponse({"success": False, "error": "Making work folder failed"})
-        return JsonResponse({"success": True})
+        json_response = make_work_folder(config.config_path, client_id, js['work_folder'])
+        return JsonResponse(json_response)
     elif action == "fetch_data":
         js = json.loads(request.body.decode("utf-8"))
         print(f"{client_id} fetching {js['path']}")
@@ -106,39 +109,32 @@ def post(request, action):
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
 
 
-def validate_path(p):
-    if p == "":
-        # Enables clearing the input data path
-        return {"success": True}
+def validate_input_data_path(p):
     if not os.path.exists(p):
         return {"success": False, "error": "Path does not exist"}
-    return {"success": True}
-
-
-def validate_input_data_path(p):
-    valid = validate_path(p)
-    if not valid["success"]:
-        return valid
     if "modelspec.xlsx" in os.listdir(p):
         return {"success": True}
-    else:
-        return {"success": False, "error": "Path is not a valid SiteOpt Data path."}
+    return {"success": False, "error": "Path is not a valid SiteOpt Data path."}
 
 
 def validate_project_path(p):
-    valid = validate_path(p)
-    if not valid["success"]:
-        return valid
+    if not os.path.exists(p):
+        return {"success": False, "error": "Path does not exist"}
     if ".spinetoolbox" in os.listdir(p):
         return {"success": True}
-    else:
-        return {"success": False, "error": "Path does not contain a Spine Toolbox project."}
+    return {"success": False, "error": "Path does not contain a Spine Toolbox project."}
 
 
 def make_work_folder(config_fpath, client_id, work_folder_name):
     configs = read_config_file(config_fpath)
-    idp = configs["input_data_path"]  # TODO: Check that this exists
-    pdp = configs["project_data_path"]  # TODO: Check that this exists
+    idp = configs["input_data_path"]
+    if not os.path.exists(idp):
+        # If it exists, it must be a valid input data path already
+        return {"success": False, "error": "Please set the Input data path first"}
+    pdp = configs["project_data_path"]
+    if not os.path.exists(pdp):
+        # If it exists, it must be a valid project path already
+        return {"success": False, "error": "Please set the SiteOpt project path first"}
     base = platformdirs.user_data_dir()  # Win: %APPDATA%/Local
     work_dir = os.path.abspath(os.path.join(base, APP_DATA_DIR, WORK_DIR, str(client_id)[0:6], work_folder_name))
     try:
@@ -148,13 +144,12 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
         # Copy contents of input_data_path to 'current_input' folder in the same work_dir
         shutil.copytree(idp, os.path.join(work_dir, "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
     except OSError as e:
-        print(f"[OSError] Creating workdir failed. [{e}]")
-        return False
+        return {"success": False, "error": f"[OSError] [{e}] Creating work dir failed"}
     work_folders = configs.get("work_folders", {})
     if work_folder_name not in work_folders.keys():
         work_folders[work_folder_name] = work_dir
     edit_config_file(config_fpath, {"work_folders": work_folders})
-    return True
+    return {"success": True}
 
 
 def build_tree(path, exclude_dirs=None):
@@ -185,6 +180,8 @@ def fetch_input_file_tree(request):
     config = get_client_config(client_id)
     config_d = read_config_file(config.config_path)
     p = config_d["input_data_path"]
+    if p == "":
+        return JsonResponse({"success": True, "data": {}})
     if not validate_input_data_path(p)["success"]:
         return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
     excluded_dirs = [os.path.join(p, ".git")]
@@ -199,6 +196,8 @@ def fetch_project_file_tree(request):
     config = get_client_config(client_id)
     config_d = read_config_file(config.config_path)
     p = config_d["project_data_path"]
+    if p == "":
+        return JsonResponse({"success": True, "data": {}})
     if not validate_project_path(p)["success"]:
         return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
     excluded_dirs = [os.path.join(p, ".git")]
@@ -215,7 +214,8 @@ def fetch_work_folders_tree(request):
     work_folders_dict = config_d["work_folders"]
     trees = list()
     for name, p in work_folders_dict.items():
-        if not validate_path(p)["success"]:
+        if not os.path.exists(p):
+            print(f"Error building work folder tree: path:'{p}' does not exist")
             continue
         excluded_dirs = [os.path.join(p, ".git")]
         tree = build_tree(p, excluded_dirs)

@@ -5,7 +5,7 @@ import { homeDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postNewPath } from "@/utils/functions.js";
+import { postNewPath, fetchSettings } from "@/utils/functions.js";
 
 
 const notify = useNotificationStore()
@@ -71,12 +71,18 @@ function apply() {
 }
 
 function clear() {
+  inputFieldRef.value = ""
   postNewProjectPath("")
 }
 
-function postNewProjectPath(path) {
-  return postNewPath("project_data_path", "project_data_path", path, notify, settings.setProjectPath)
+async function postNewProjectPath(path) {
+  const postResult = await postNewPath("project_data_path", "project_data_path", path, notify)
+  if (!postResult) {
+    return
+  }
+  await fetchSettings()
 }
+
 
 </script>
 

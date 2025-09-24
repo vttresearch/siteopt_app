@@ -1,17 +1,18 @@
 <script setup>
 import { ref } from 'vue';
-import EditButton from "@/components/EditButton.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { postRequestData } from "@/utils/functions.js";
+import OpenButton from "@/components/OpenButton.vue";
 
 
 const props = defineProps({
   item_name: {type: String, required: true},
   parent_name: {type: String, required: false, default: ""},
   interm_paths: {type: String, required: false, default:""},
-  base_path: {type: String, required: false, default: ""}
+  base_path: {type: String, required: false, default: ""},
+  enableOpen: {type: Boolean, default: false}
 })
 
 const store = useTableDataStore()
@@ -59,8 +60,8 @@ function isCSV(fname) {
         <font-awesome-icon class="pr-1" icon="fa-regular fa-file" fixed-width />{{ item_name }}
       </span>
     </div>
-    <div class="md:ml-auto">
-      <EditButton :root="parent_name" :fname="item_name"/>
+    <div v-if="props.enableOpen" class="md:ml-auto">
+      <OpenButton :root="parent_name" :fname="item_name"/>
     </div>
   </div>
 </template>

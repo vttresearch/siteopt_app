@@ -37,7 +37,6 @@ function postNewWorkPath() {
 const makeWorkFolder = async () => {
   const postResult = await postNewPath("make_work_folder", "work_folder", workFolderName.value, notify)
   if (!postResult) {
-    notify.show(`Making work folder ${workFolderName.value} failed`, 5000, "error")
     return
   }
   const fetchSettingsResult = await fetchSettings();

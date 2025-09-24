@@ -9,6 +9,10 @@ const props = defineProps ({
   children: Array,
   parentName: String,
   base_path: String,
+  enableOpen: {
+    type: Boolean,
+    default: false
+  }
 })
 
 const isOpen = ref(false)
@@ -29,7 +33,7 @@ function toggle() {
       <span>{{ folderName }}</span>
     </div>
     <div v-show="isOpen" class="pl-4">
-      <FileTree :model="children" :parentName="folderName" :fullParents="parentName" :path="props.base_path"/>
+      <FileTree :model="children" :parentName="folderName" :fullParents="parentName" :path="props.base_path" :enableOpen="props.enableOpen"/>
     </div>
   </div>
 </template>

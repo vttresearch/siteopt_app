@@ -50,7 +50,6 @@ export const checkBackendReady = async () => {
 }
 
 export const fetchSettings = async () => {
-  const notify = useNotificationStore()
   const settingStore = useSettingStore()
   const url = `${API_BASE}api/settings/`
   try {
@@ -61,7 +60,6 @@ export const fetchSettings = async () => {
     if (!response.ok) {
       const errorText = await response.text()
       console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`)
-      notify.show(`Server ${url} responded with error: ${errorText}`, 5000, "error")
       return false
     }
     const parsed = await response.json();
@@ -71,7 +69,6 @@ export const fetchSettings = async () => {
   }
   catch (err) {
     console.error(`[${url} Error in fetching Settings: ${err}`)
-    notify.show(`[${url}] error: [${err}]`, "5000", "error")
     return false
   }
 };
@@ -97,8 +94,6 @@ export function getCookie(name) {
  * Fetches a file tree from the specified API endpoint and updates the given reactive reference.
  *
  * @param {string} endpoint - The API endpoint suffix (e.g., "fetch_input_file_tree").
- * @param {object} targetRef - A Vue ref object where the fetched file tree data will be stored.
- * @param {string} fallbackPath - A fallback path used to determine whether to proceed if the response is unsuccessful.
  * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
  *
  * The function handles:
@@ -122,11 +117,7 @@ export const fetchFileTree = async (endpoint, notify) => {
     }
     const r = await response.json();
     if (!r.success) {
-      //targetRef.value = {};
       return {}
-      //if (fallbackPath === "") {
-      //  return;
-      //}
     }
     return r.data
   } catch (err) {
@@ -143,7 +134,6 @@ export const fetchFileTree = async (endpoint, notify) => {
  * @param {string} pathKey - The key used in the request body (e.g., "input_data_path" or "project_data_path").
  * @param {string} pathValue - The new path value to send to the server.
  * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
- * @param {Function} clearFn - A function to clear the corresponding path in local settings if the request fails.
  * The function performs:
  * - CSRF-protected POST request to the specified endpoint.
  * - Error handling for failed requests or unsuccessful responses.
@@ -151,7 +141,7 @@ export const fetchFileTree = async (endpoint, notify) => {
  * - Fetches updated settings from the server after a successful update.
  * - Displays error notifications using the provided `notify` utility.
  */
-export async function postNewPath(endpointSuffix, pathKey, pathValue, notify, clearFn = null) {
+export async function postNewPath(endpointSuffix, pathKey, pathValue, notify) {
   const csrfToken = getCookie("csrftoken");
   const url = `${API_BASE}api/post/${endpointSuffix}/`;
   try {
@@ -170,9 +160,6 @@ export async function postNewPath(endpointSuffix, pathKey, pathValue, notify, cl
     }
     const r = await response.json();
     if (!r.success) {
-      if (clearFn !== null ) {
-        clearFn(""); // Clears a path in settingStore. Forgot whether it's needed
-      }
       notify.show(`${r.error}`, 3000, "error");
       return false
     }

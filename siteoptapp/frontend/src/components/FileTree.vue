@@ -17,6 +17,10 @@ const props = defineProps({
   path: {
     type: String,
     default: ''
+  },
+  enableOpen: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -52,10 +56,10 @@ function concatParentName(itemName) {
     <ul>
       <template v-for="item in model" :key="item.name">
         <li v-if="!isFolder(item)">
-          <FileItem :item_name="item.name" :parent_name="parentName" :interm_paths="fullParents" :base_path="props.path"/>
+          <FileItem :item_name="item.name" :parent_name="parentName" :interm_paths="fullParents" :base_path="props.path" :enableOpen="props.enableOpen"/>
         </li>
         <li v-else>
-          <FolderItem :folderName="item.name" :children="item.children" :parentName="concatParentName(item.name)" :base_path="props.path"/>
+          <FolderItem :folderName="item.name" :children="item.children" :parentName="concatParentName(item.name)" :base_path="props.path" :enableOpen="props.enableOpen" />
         </li>
       </template>
     </ul>
