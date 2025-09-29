@@ -87,7 +87,7 @@ async function postNewInputDataPath(path) {
 
 <template>
   <section>
-    <div class="flex justify-between">
+    <div class="flex justify-between mb-1">
       <span class="w-full">
         <input
             :class="[isValidPath ? validClass : invalidClass]"
@@ -104,7 +104,11 @@ async function postNewInputDataPath(path) {
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1" @click="selectDir">
         <font-awesome-icon icon="fa-regular fa-folder-open" fixed-width /></button>
       </div>
-      <div v-if="settings.inputDataPath !== ''" class="text-gray-600 text-base mt-1"><span>{{ settings.inputDataPath }}</span></div>
-      <div v-else class="text-gray-600 text-base mt-1"><span>Set SiteOpt input data path to get started.</span></div>
+      <div v-if="settings.inputDataPath !== ''" class="text-gray-600 text-xs">
+        <span>{{ settings.inputDataPath }}</span>
+      </div>
+      <div v-else class="text-gray-600 text-base mt-1">
+        <span>Set SiteOpt input data path to get started.</span>
+      </div>
     </section>
 </template>

@@ -3,9 +3,10 @@ import json
 import csv
 import shutil
 import uuid
+import subprocess
 import openpyxl
 import platformdirs
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.timezone import now
 from siteoptapp.models import ClientConfig
@@ -14,6 +15,7 @@ APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
 SETTINGS_DIR = "settings"
 WORK_DIR = "work"
 CONFIG_FILE = "config.json"
+JOBS = {}
 
 
 @ensure_csrf_cookie
@@ -68,10 +70,9 @@ def post(request, action):
     Note: @csrf_protect decorator is needed for views that modify data (POST, PUT, DELETE)
     """
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    print(f"Client {client_id} updating settings {action}")
+    js = json.loads(request.body.decode("utf-8"))  # dict
     if action == "input_data_path":
-        js = json.loads(request.body.decode("utf-8"))  # dict
-        print(f"New input_data_path: {js[action]}")
+        print(f"[{client_id}] setting input data path {js[action]}")
         # Check if input_data_path is valid
         if js[action] == "":  # Clears input data path
             json_response = {"success": True}
@@ -82,8 +83,7 @@ def post(request, action):
             edit_config_file(config.config_path, {action: js[action]})
         return JsonResponse(json_response)
     elif action == "project_data_path":
-        js = json.loads(request.body.decode("utf-8"))  # dict
-        print(f"New project_path: {js[action]}")
+        print(f"[{client_id}] setting project path {js[action]}")
         # Check if project_path is valid
         if js[action] == "":  # Clears project path
             json_response = {"success": True}
@@ -94,19 +94,60 @@ def post(request, action):
             edit_config_file(config.config_path, {action: js[action]})
         return JsonResponse(json_response)
     elif action == "make_work_folder":
-        js = json.loads(request.body.decode("utf-8"))
-        print(f"New work folder: {js['work_folder']}")
+        print(f"[{client_id}] creating work folder {js['work_folder']}")
         config = get_client_config(client_id)
         json_response = make_work_folder(config.config_path, client_id, js['work_folder'])
         return JsonResponse(json_response)
     elif action == "fetch_data":
-        js = json.loads(request.body.decode("utf-8"))
-        print(f"{client_id} fetching {js['path']}")
+        print(f"[{client_id}] fetching {js['path']}")
         response = fetch_data(js["path"])
         return JsonResponse(response)
+    elif action == "execute":
+        print(f"[{client_id}] executing {js['execute']}")
+        client_config = get_client_config(client_id)
+        config = read_config_file(client_config.config_path)
+        work_folder_name = js["execute"][0]
+        execution_type = js["execute"][1]
+        project_path = config["work_folders"][work_folder_name]
+        job_id = str(uuid.uuid4())
+        JOBS[job_id] = [project_path, execution_type]
+        return JsonResponse({"success": True, "data": job_id})
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
+
+
+def execute(request, job_id):
+    print(f"Starting execution of job_id {job_id}")
+
+    def event_stream():
+        ppath = JOBS[job_id][0]
+        exec_type = JOBS[job_id][1]
+        args = [
+            "C:/data/GIT/SITEOPT-WEB-INTERFACE/.venv_st/Scripts/python.exe",
+            "-m",
+            "spinetoolbox",
+            "--execute-only",
+            "--execute-remotely",
+            "server_config.txt",
+            ppath
+        ]
+        try:
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            for line in iter(proc.stdout.readline, b""):
+                line = line.decode("utf-8", "ignore").strip()
+                yield f"data: {line}\n\n"
+            proc.stdout.close()
+            proc_retval = proc.wait()
+            JOBS.pop(job_id)
+            # Notify frontend that execution is done
+            yield f"event: done\ndata: Execution finished [{proc_retval}]\n\n"
+        except OSError as e:
+            print(f"[OSError] {e}")
+            yield f"data: [OSError]: {e}\n\n"
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response["Cache-Control"] = "no-cache"
+    return response
 
 
 def validate_input_data_path(p):

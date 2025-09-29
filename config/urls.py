@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
+    path("api/stream/execute/<str:job_id>", views.execute, name="execute"),
     path("debug/api/download_excel_file/", views.download_excel_file, name="dl_excel_file"),
     path("__reload__/", include("django_browser_reload.urls")),
 ]

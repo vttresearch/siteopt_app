@@ -11,6 +11,7 @@ import { checkBackendReady, fetchSettings, fetchFileTree } from "@/utils/functio
 import SelectInputFolder from "@/components/SelectInputFolder.vue";
 import SelectProjectFolder from "@/components/SelectProjectFolder.vue";
 import InputWorkFolder from "@/components/InputWorkFolder.vue";
+import WorkSettings from "@/components/WorkSettings.vue";
 
 
 const inputFiles = ref({});
@@ -91,24 +92,27 @@ const fetchWorkFolderFiles = async () => {
           <Spinner v-if="loading" message="Loading..." class="col-span-1 md:col-span-3" />
           <template v-else>
             <template v-if="!backendUnavailable">
-            <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
-              <h1 class="text-black text-base mb-2 font-bold">Input data files</h1>
-              <SelectInputFolder class="mb-1"/>
-              <FileTree class="bg-gray-100 rounded-xl shadow-md relative p-2" :model="inputFiles" :path="settingStore.inputDataPath" />
-              <hr class="mt-3">
-              <h1 class="text-black text-base mb-2 font-bold">Project files</h1>
-              <SelectProjectFolder class="mb-1"/>
-              <FileTree class="bg-gray-100 rounded-xl shadow-md relative p-2" :model="projectFiles" :path="settingStore.projectPath" />
-              <hr class="mt-3">
-              <h1 class="text-black text-base mb-2 font-bold">Work folders</h1>
-              <InputWorkFolder class="mb-1" />
-              <template v-for="tree in workFolderFiles">
-                <div class="text-gray-600 text-base"><span>{{ tree[0].path + "\\" + tree[0].name }}</span></div>
-                <FileTree class="bg-gray-100 rounded-xl shadow-md relative p-2" :model="tree" :path="tree[0].path" :enableOpen="true"/>
-              </template>
-              <hr class="mt-3">
-            </div>
+              <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
+                <h1 class="text-black text-base mb-2 font-bold">Input data files</h1>
+                <SelectInputFolder class="mb-1"/>
+                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="inputFiles" :path="settingStore.inputDataPath" />
+                <hr class="mt-3">
+                <h1 class="text-black text-base mb-2 font-bold">Project files</h1>
+                <SelectProjectFolder class="mb-1"/>
+                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="projectFiles" :path="settingStore.projectPath" />
+              </div>
               <ContentPanel class="col-span-2" :content="Table" />
+              <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-xs">
+                <h1 class="text-black text-base mb-2 font-bold">Work folders</h1>
+                <InputWorkFolder class="mb-1" />
+                <template v-for="tree in workFolderFiles">
+                  <div class="border border-gray-500 p-1 mb-1">
+                    <div class="text-gray-600 text-xs mb-1"><span>{{ tree[0].path + "\\" + tree[0].name }}</span></div>
+                    <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="tree" :path="tree[0].path" :enableOpen="true" />
+                    <WorkSettings class="pt-2" :workDirName="tree[0].name" />
+                  </div>
+                </template>
+              </div>
             </template>
             <template v-else>
               <ContentPanel class="col-span-1" />

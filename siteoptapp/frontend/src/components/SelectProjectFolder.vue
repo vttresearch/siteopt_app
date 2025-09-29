@@ -88,7 +88,7 @@ async function postNewProjectPath(path) {
 
 <template>
   <section>
-    <div class="flex justify-between mb-2">
+    <div class="flex justify-between mb-1">
       <span class="w-full">
         <input
             :class="[isValidPath ? validClass : invalidClass]"
@@ -105,7 +105,11 @@ async function postNewProjectPath(path) {
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1" @click="selectDir">
         <font-awesome-icon icon="fa-regular fa-folder-open" fixed-width /></button>
       </div>
-      <div v-if="settings.projectPath !== ''" class="text-gray-600 text-base"><span>{{ settings.projectPath }}</span></div>
-      <div v-else class="text-gray-600 text-base"><span>Set SiteOpt Spine Toolbox path</span></div>
+      <div v-if="settings.projectPath !== ''" class="text-gray-600 text-xs">
+        <span>{{ settings.projectPath }}</span>
+      </div>
+      <div v-else class="text-gray-600 text-base">
+        <span>Set SiteOpt Spine Toolbox path</span>
+      </div>
     </section>
 </template>

@@ -5,6 +5,7 @@ import { useNotificationStore } from "@/stores/notificationstore.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { useSettingStore } from "@/stores/settingstore.js";
 
+
 const props = defineProps({
   root: String,
   fname: String,

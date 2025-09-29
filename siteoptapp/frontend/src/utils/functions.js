@@ -1,7 +1,6 @@
 import { useNotificationStore } from '@/stores/notificationstore.js'
 import { useSettingStore } from "@/stores/settingstore.js";
-import {API_BASE} from "@/config.js";
-
+import { API_BASE } from "@/config.js";
 
 
 /**
@@ -168,6 +167,48 @@ export async function postNewPath(endpointSuffix, pathKey, pathValue, notify) {
     return false
   }
   return true
+}
+
+/**
+ * Sends a POST request to start execution. Returns the job_id if execution was started successfully, false otherwise
+ *
+ * @param {string} endpointSuffix - The endpoint suffix to post to (e.g., "input_data_path").
+ * @param {array} options - An array containing the work folder name and the execution type
+ * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
+ * The function performs:
+ * - CSRF-protected POST request to the specified endpoint.
+ * - Error handling for failed requests or unsuccessful responses.
+ * - Displays error notifications using the provided `notify` utility.
+ */
+export async function postExecuteRequest(endpointSuffix, options, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/${endpointSuffix}/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'include',
+      body: JSON.stringify({["execute"]: options}),
+    });
+    if (!response.ok) {
+      console.error(`Invalid ${options}:`, await response.text());
+      return false
+    }
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(`${r.error}`, 3000, "error");
+      return false
+    }
+    else {
+        return r.data
+    }
+  } catch (err) {
+    console.error(`Error posting ${options}:`, err);
+    return false
+  }
 }
 
 

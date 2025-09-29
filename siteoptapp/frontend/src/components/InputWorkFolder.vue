@@ -2,7 +2,8 @@
 import { ref } from 'vue';
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import {fetchSettings, postNewPath} from "@/utils/functions.js";
+import { fetchSettings, postNewPath } from "@/utils/functions.js";
+
 
 const notify = useNotificationStore()
 const settings = useSettingStore()
@@ -55,7 +56,7 @@ function clear() {
 
 <template>
   <section>
-    <div class="flex justify-between mb-2">
+    <div class="flex justify-between mb-1">
       <span class="w-full">
         <input
             class="p-1 w-full bg-blue-100"
