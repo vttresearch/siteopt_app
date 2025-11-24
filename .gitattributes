@@ -1,0 +1,8 @@
+# Ensure shell scripts always use LF line endings, even on Windows
+*.sh text eol=lf
+
+# Ensure batch files always use CRLF line endings
+*.bat text eol=crlf
+
+# Let Git handle other text files automatically
+* text=auto

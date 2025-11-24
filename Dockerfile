@@ -8,7 +8,7 @@ WORKDIR /app/frontend
 COPY siteoptapp/frontend/package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy frontend source code
 COPY siteoptapp/frontend/ ./
@@ -56,8 +56,9 @@ COPY --chown=appuser:appuser data/ /app/data/
 # Create directories for static files and media
 RUN mkdir -p staticfiles media && chown appuser:appuser staticfiles media
 
-# Make entrypoint scripts executable
-RUN chmod +x /app/docker-entrypoint.sh /app/entrypoint-with-env.sh
+# Fix line endings and make entrypoint scripts executable (for Windows/Linux compatibility)
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh /app/entrypoint-with-env.sh && \
+    chmod +x /app/docker-entrypoint.sh /app/entrypoint-with-env.sh
 
 # Ensure database file exists and has correct permissions
 # SQLite needs write access to the directory to create journal files

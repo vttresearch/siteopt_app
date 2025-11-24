@@ -34,14 +34,16 @@ if "%CLEAN_ONLY%"=="true" goto :eof
 echo Starting build process...
 
 :: 0. Setup Python Environment
-if defined VIRTUAL_ENV goto :venv_active
-if exist .venv\Scripts\activate.bat (
-    echo Activating virtual environment (.venv)...
-    call .venv\Scripts\activate.bat
-) else (
-    echo Note: No active virtual environment detected and .venv not found.
-    echo Using system python.
-)
+if not "%VIRTUAL_ENV%"=="" goto :venv_active
+if exist .venv\Scripts\activate.bat goto :activate_venv
+echo Note: No active virtual environment detected and .venv not found.
+echo Using system python.
+goto :venv_active
+
+:activate_venv
+echo Activating virtual environment (.venv)...
+call .venv\Scripts\activate.bat
+
 :venv_active
 
 :: 1. Python dependencies
@@ -57,14 +59,16 @@ echo Step 2: Building frontend...
 echo ----------------------------------------------------------------
 pushd siteoptapp\frontend
 
-if not exist node_modules (
-    echo Installing npm packages...
-    call npm install
-    if !ERRORLEVEL! NEQ 0 popd & goto :error
-) else (
-    echo node_modules exists, skipping npm install (use --clean to force reinstall)
-)
+if exist node_modules goto :skip_npm_install
+echo Installing npm packages...
+call npm install
+if !ERRORLEVEL! NEQ 0 popd & goto :error
+goto :npm_done
 
+:skip_npm_install
+echo node_modules exists, skipping npm install (use --clean to force reinstall)
+
+:npm_done
 echo Running npm build...
 call npm run build
 if !ERRORLEVEL! NEQ 0 popd & goto :error
@@ -84,11 +88,11 @@ echo Step 4: Building Docker image...
 echo ----------------------------------------------------------------
 
 set DOCKER_ARGS=
-if "%NO_CACHE%"=="true" (
-    echo Building with --no-cache...
-    set DOCKER_ARGS=--no-cache
-)
+if not "%NO_CACHE%"=="true" goto :docker_build
+echo Building with --no-cache...
+set DOCKER_ARGS=--no-cache
 
+:docker_build
 docker build %DOCKER_ARGS% -t siteopt-web .
 if %ERRORLEVEL% NEQ 0 goto :error
 
@@ -102,20 +106,21 @@ goto :eof
 :clean
 echo Cleaning build artifacts...
 
-if exist staticfiles (
-    echo Removing staticfiles...
-    rmdir /s /q staticfiles
-)
+if not exist staticfiles goto :skip_staticfiles
+echo Removing staticfiles...
+rmdir /s /q staticfiles
 
-if exist siteoptapp\frontend\dist (
-    echo Removing frontend dist...
-    rmdir /s /q siteoptapp\frontend\dist
-)
+:skip_staticfiles
+if not exist siteoptapp\frontend\dist goto :skip_dist
+echo Removing frontend dist...
+rmdir /s /q siteoptapp\frontend\dist
 
-if exist siteoptapp\frontend\node_modules (
-    echo Removing node_modules...
-    rmdir /s /q siteoptapp\frontend\node_modules
-)
+:skip_dist
+if not exist siteoptapp\frontend\node_modules goto :skip_node_modules
+echo Removing node_modules...
+rmdir /s /q siteoptapp\frontend\node_modules
+
+:skip_node_modules
 
 echo Removing __pycache__ directories...
 for /d /r . %%d in (__pycache__) do @if exist "%%d" rd /s /q "%%d"
