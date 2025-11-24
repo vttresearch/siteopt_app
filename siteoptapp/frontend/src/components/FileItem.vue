@@ -1,9 +1,10 @@
 <script setup>
 import { ref } from 'vue';
 import EditButton from "@/components/EditButton.vue";
+import DownloadButton from "@/components/DownloadButton.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
-import { API_BASE } from "@/config.js";
+import { buildApiUrl } from "@/utils/apiUrl.js";
 
 
 const store = useTableDataStore()
@@ -17,13 +18,14 @@ const fdata = ref({})
 
 async function fetchFileContents(fname) {
   console.log(`fname:${fname} parent:${props.parent_name}`)
-  let fpath = API_BASE + "api/fetch_data/"
+  let apiPath = "api/fetch_data/";
   if (props.parent_name !== "") {
-    fpath = fpath.concat(props.parent_name + "/").concat(fname)
+    apiPath = apiPath.concat(props.parent_name + "/").concat(fname)
   }
   else {
-    fpath = fpath.concat("root/").concat(fname)
+    apiPath = apiPath.concat("root/").concat(fname)
   }
+  const fpath = buildApiUrl(apiPath);
   console.log(`Fetching from ${fpath}`)
   store.toggleLoading()
   const response = await fetch(fpath)
@@ -47,6 +49,15 @@ function isExcel(fname) {
 function isCSV(fname) {
   return fname.endsWith(".csv")
 }
+
+// Generate file path for download
+function getFilePath() {
+  if (props.parent_name && props.parent_name !== "") {
+    return `${props.parent_name}/${props.item_name}`;
+  } else {
+    return `root/${props.item_name}`;
+  }
+}
 </script>
 
 <template>
@@ -66,7 +77,8 @@ function isCSV(fname) {
         <font-awesome-icon class="pr-1" icon="fa-regular fa-file" fixed-width />{{ item_name }}
       </span>
     </div>
-    <div class="md:ml-auto">
+    <div class="md:ml-auto flex gap-1">
+      <DownloadButton :file_path="getFilePath()" :filename="item_name"/>
       <EditButton :root="parent_name" :fname="item_name"/>
     </div>
   </div>

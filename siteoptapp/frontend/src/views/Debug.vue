@@ -4,7 +4,7 @@ import { saveAs } from 'file-saver';
 import FileTree from '@/components/FileTree.vue';
 import Table from "@/components/Table.vue";
 import { API_BASE } from "@/config.js";
-import SelectInputFolder from "@/components/SelectInputFolder.vue";
+import SelectFolder from "@/components/SelectFolder.vue";
 
 const count = ref(0);
 const tasks = ref(["Task 1", "Task 2", "Task 3"])
@@ -17,6 +17,9 @@ const status = ref("fetching")
 const isLoading = ref(false)
 const error = ref(null)
 
+defineProps({
+  input_files: Array,
+})
 
 onMounted(() => {
   // async IIFE lets you use async/await syntax while still
@@ -24,7 +27,7 @@ onMounted(() => {
   (async () => {
     // Update your refs to re-render the template.
     console.log(`API_BASE in Debug: ${API_BASE}`)
-    const input_data_response = await fetch(`${API_BASE}api/fetch_input_file_tree/`)
+    const input_data_response = await fetch(`${API_BASE}api/fetch_input_data/`)
     if (!input_data_response.ok) {
       status.value = "error fetching input data"
       throw new Error("on_mounted_response not Ok");
@@ -46,7 +49,7 @@ async function test() {
 }
 
 async function test2() {
-  const response = await fetch("api/fetch_input_file_tree/");
+  const response = await fetch("api/fetch_input_data/");
   const data2 = await response.text()
   console.log(data2);
 }
@@ -80,7 +83,7 @@ const dl_excel_file = async () => {
   >Count is {{ count }}
   </button>
 
-  <SelectInputFolder />
+  <SelectFolder />
 
   <div>
     <Table />

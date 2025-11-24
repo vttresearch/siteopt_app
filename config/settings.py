@@ -21,14 +21,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-9(_#f2mnwmohr%v$xb8d_k6xf&**os=fr2%t)9g)-#!hww=vc&"
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False  # Disable debug mode for production
 # When DEBUG is True and ALLOWED_HOSTS is empty, the host is validated against ['.localhost', '127.0.0.1', '[::1]'].
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']
+
+# URL prefix will be auto-detected from reverse proxy headers
+import os
+# Remove FORCE_SCRIPT_NAME - let Django auto-detect from headers
+
+# Disable automatic slash appending to avoid 301 redirects in API calls
+APPEND_SLASH = False
 
 # Application definition
 
 INSTALLED_APPS = [
-    "django_browser_reload",
+    # "django_browser_reload",  # Disable in production
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -42,8 +49,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "siteoptapp.middleware.ReverseProxyMiddleware",
     "corsheaders.middleware.CorsMiddleware",
-    "django_browser_reload.middleware.BrowserReloadMiddleware",
+    # "django_browser_reload.middleware.BrowserReloadMiddleware",  # Disable in production
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -126,10 +134,20 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Allow all origins (for development)
 # CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5000",  # Container served frontend
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:5174",
+    "https://elexia.amct.pl"
+]
 CORS_ALLOW_CREDENTIALS = True
 # Enable receiving POSTs from frontend
-CSRF_TRUSTED_ORIGINS = ["http://localhost:5173"]
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5000",  # Container served frontend
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:5174",
+    "https://elexia.amct.pl"
+]
 CSRF_COOKIE_NAME = "csrftoken"
 CSRF_COOKIE_HTTPONLY = False  # False enables the frontend to read it
 CSRF_COOKIE_SAMESITE = "Lax"  # "None for cross-origin but then you must do SECURE=True

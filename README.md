@@ -5,6 +5,13 @@ This web app can be built into a desktop app using [Tauri](https://v2.tauri.app/
 which includes the Django backend and the Vue.js frontend. Older Python and Node.js 
 versions may work but have not been tested.
 
+## Docker usage
+
+- **Single container (default)** – `docker build -t siteopt-web .` then `docker run --rm -p 5000:5000 siteopt-web`. This bundles Django, Gunicorn, and the built Vue frontend and uses the included SQLite database. No PostgreSQL or Nginx is involved.
+- **docker-compose stack (optional)** – `docker-compose up --build` starts the web container plus PostgreSQL and Nginx. Use this only when you need an external database or reverse proxy. The defaults live in `docker-compose.yml`.
+
+See `DOCKER_README.md` for detailed instructions, persistence tips, and troubleshooting.
+
 ## Setting up the development environment
 
 

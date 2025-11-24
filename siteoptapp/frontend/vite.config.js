@@ -25,10 +25,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     root: resolve(INPUT_DIR),
-    base: './',
+    base: env.VITE_BASE_PATH || './',
     server: {
-      host: env.DJANGO_VITE_DEV_SERVER_HOST,  // TODO: undefined. set in .env.development
-      port: env.DJANGO_VITE_DEV_SERVER_PORT,  // TODO: undefined. set in .env.development
+      host: env.DJANGO_VITE_DEV_SERVER_HOST,
+      port: env.DJANGO_VITE_DEV_SERVER_PORT,
     },
     build: {
       manifest: true,

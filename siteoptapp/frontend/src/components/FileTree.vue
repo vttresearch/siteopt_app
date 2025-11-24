@@ -1,18 +1,21 @@
 <script setup>
-import { ref } from 'vue';
 import FileItem from "./FileItem.vue";
 import FolderItem from "./FolderItem.vue";
+import UploadButton from "@/components/UploadButton.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
+import SelectFolder from "@/components/SelectFolder.vue";
 
 const props = defineProps({
+  title: String,
   model: Object,
-  parentName: {
-      type: String,
-      default: ''
-    }
 })
 
+const emit = defineEmits(['refresh']);
 const settingStore = useSettingStore()
+
+function handleUpload() {
+  emit('refresh'); // Trigger refresh of file tree
+}
 
 function isFolder(list_item) {
   return "children" in list_item
@@ -31,15 +34,22 @@ const listDir = async () => {
 
 <template>
   <section>
-    <ul>
-      <template v-for="item in model" :key="item.name">
-        <li v-if="!isFolder(item)">
-          <FileItem :item_name="item.name" :parent_name="parentName" />
-        </li>
-        <li v-else>
-          <FolderItem :folderName="item.name" :children="item.children" :parentName="item.name" />
-        </li>
-      </template>
-    </ul>
+    <div class="bg-white rounded-xl shadow-md relative p-2 text-xs">
+      <div class="mb-4 text-gray-600 text-base flex justify-between items-center">
+        <span>{{ title }}</span>
+        <UploadButton folder_path="" @uploaded="handleUpload" />
+      </div>
+      <SelectFolder class="mb-4"/>
+      <ul>
+        <template v-for="item in props.model">
+          <li v-if="!isFolder(item)">
+            <FileItem :item_name="item.name"/>
+          </li>
+          <li v-else>
+            <FolderItem :folderName="item.name" :children="item.children" />
+          </li>
+        </template>
+      </ul>
+    </div>
   </section>
 </template>

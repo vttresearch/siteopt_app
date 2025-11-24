@@ -7,3 +7,6 @@ django-cors-headers >= 4.7
 openpyxl >=3.1.5
 pyinstaller >= 6.15
 platformdirs >= 4.4.0
+psycopg2-binary >= 2.9.0
+gunicorn >= 21.0.0
+requests >= 2.31.0

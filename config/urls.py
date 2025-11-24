@@ -17,19 +17,33 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from django.views.static import serve
+from django.urls import re_path
 from siteoptapp import views
 
 urlpatterns = [
     path('admin/doc/', include('django.contrib.admindocs.urls')),
     path("admin/", admin.site.urls),
-    path("api/fetch_input_file_tree/", views.fetch_input_file_tree, name="fetch_input_file_tree"),
-    path("api/fetch_project_file_tree/", views.fetch_project_file_tree, name="fetch_project_file_tree"),
+    path("api/fetch_input_data/", views.fetch_input_data, name="fetch_input"),
     path("api/fetch_data/<str:folder>/<str:fname>/", views.fetch_data, name="fetch_data"),
+    path("api/fetch_data/<str:folder>/<str:fname>", views.fetch_data, name="fetch_data_no_slash"),
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
     path("debug/api/download_excel_file/", views.download_excel_file, name="dl_excel_file"),
-    path("__reload__/", include("django_browser_reload.urls")),
+    path("api/upload_file/", views.upload_file, name="upload_file"),
+    path("api/download_file/<path:file_path>", views.download_file, name="download_file"),
+    # path("__reload__/", include("django_browser_reload.urls")),  # Disabled for production
+    # Serve runtime config.js
+    path("config.js", views.config_js, name="config_js"),
+    # Serve static files
+    re_path(r'^static/(?P<path>.*)$', views.static_file_handler, name="static_files"),
+    # Serve frontend static assets
+    re_path(r'^vite-assets/(?P<path>.*)$', views.frontend_static, name="frontend_static"),
+    # Serve frontend for all other routes
+    path("", views.frontend_view, name="frontend"),
 ]
 
 # http://127.0.0.1:8000/admin/doc/ provides docs for the custom tag libraries that can be used

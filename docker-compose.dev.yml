@@ -1,0 +1,20 @@
+services:
+  web:
+    environment:
+      - DEBUG=1
+      - DJANGO_SETTINGS_MODULE=config.settings
+    volumes:
+      - .:/app
+      - /app/siteoptapp/frontend/node_modules
+    ports:
+      - "8001:8000"  # Map to 8001 to avoid conflicts
+
+  # Remove database for development (use SQLite)
+  db:
+    profiles:
+      - production
+
+  # Remove nginx for development
+  nginx:
+    profiles:
+      - production
