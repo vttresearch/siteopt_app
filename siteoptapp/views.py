@@ -135,7 +135,7 @@ def execute(request, job_id):
         try:
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             for line in iter(proc.stdout.readline, b""):
-                line = line.decode("utf-8", "ignore").strip()
+                line = line.decode("utf-8", "replace").strip()
                 yield f"data: {line}\n\n"
             proc.stdout.close()
             proc_retval = proc.wait()
