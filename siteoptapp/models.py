@@ -12,6 +12,21 @@ class ClientConfig(models.Model):
         return f"[{self.client_id}] path:{self.config_path} last_seen:{self.last_seen}"
 
 
+class WorkFolder(models.Model):
+    """Represents a work folder for a client."""
+    client = models.ForeignKey(ClientConfig, on_delete=models.CASCADE, related_name='work_folders')
+    name = models.CharField(max_length=255)
+    path = models.TextField()
+    created_from = models.CharField(max_length=50, default='new')  # 'new', 'input_data', or folder name
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['client', 'name']
+    
+    def __str__(self):
+        return f"{self.name} ({self.client.client_id})"
+
+
 class Project(models.Model):
     name = models.CharField(max_length=512)
     project_dir = models.CharField(max_length=512)

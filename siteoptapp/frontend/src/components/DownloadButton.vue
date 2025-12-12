@@ -6,6 +6,7 @@ import {ref} from "vue";
 const props = defineProps({
   file_path: String,  // Full path to the file
   filename: String,   // Display name for the file
+  folderId: Number,   // Optional: Work folder ID
 })
 
 const downloading = ref(false);
@@ -18,12 +19,23 @@ async function downloadFile() {
   try {
     // Construct proper URL - handle empty or "/" API_BASE
     let downloadUrl;
-    if (!API_BASE || API_BASE === '' || API_BASE === '/') {
-      downloadUrl = `/api/download_file/${props.file_path}`;
+    
+    // Use work folder download endpoint if folderId is provided
+    if (props.folderId) {
+      if (!API_BASE || API_BASE === '' || API_BASE === '/') {
+        downloadUrl = `/api/work_folders/${props.folderId}/download/${props.file_path}`;
+      } else {
+        const baseUrl = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+        downloadUrl = `${baseUrl}/api/work_folders/${props.folderId}/download/${props.file_path}`;
+      }
     } else {
-      // Remove trailing slash from API_BASE if present, then add path
-      const baseUrl = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
-      downloadUrl = `${baseUrl}/api/download_file/${props.file_path}`;
+      // Use regular download endpoint
+      if (!API_BASE || API_BASE === '' || API_BASE === '/') {
+        downloadUrl = `/api/download_file/${props.file_path}`;
+      } else {
+        const baseUrl = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+        downloadUrl = `${baseUrl}/api/download_file/${props.file_path}`;
+      }
     }
     
     console.log(`API_BASE: "${API_BASE}"`);

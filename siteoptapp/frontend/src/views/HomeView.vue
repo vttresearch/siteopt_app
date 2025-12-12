@@ -5,6 +5,8 @@ import ContentPanel from "@/components/ContentPanel.vue";
 import Spinner from "@/components/Spinner.vue";
 import Notification from "@/components/Notification.vue";
 import DataViewer from "@/components/DataViewer.vue";
+import WorkFolderManager from "@/components/WorkFolderManager.vue";
+import WorkFolderViewer from "@/components/WorkFolderViewer.vue";
 import { buildApiUrl } from "@/utils/apiUrl.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
@@ -20,6 +22,7 @@ const settingStore = useSettingStore()
 const notify = useNotificationStore()
 const tableDataStore = useTableDataStore()
 const settingsReceived = ref(false)
+const selectedWorkFolderId = ref(null)
 
 
 onMounted(() => {
@@ -109,6 +112,12 @@ const fetchInputFiles = async () => {
   }
 };
 
+function onWorkFolderSelected(folderId) {
+  selectedWorkFolderId.value = folderId;
+  // Clear data viewer when switching folders or deselecting
+  tableDataStore.addData('', {}, '', null);
+}
+
 </script>
 
 <template>
@@ -121,8 +130,14 @@ const fetchInputFiles = async () => {
           <Spinner v-if="loading" message="Loading..." class="col-span-1 md:col-span-3" />
           <template v-else>
             <template v-if="!backendUnavailable">
-            <div>
-              <FileTree class="col-span-1" :title="inputDataTitle" :model="inputFiles" @refresh="fetchInputFiles" />
+            <!-- Work Folder Management -->
+            <div class="col-span-1 md:col-span-3 mb-4">
+              <WorkFolderManager @folder-selected="onWorkFolderSelected" />
+            </div>
+            
+            <!-- Work Folder Viewer and Data Viewer -->
+            <div class="col-span-1">
+              <WorkFolderViewer :folder-id="selectedWorkFolderId" />
             </div>
               <div class="col-span-2">
                 <!-- Loading state for file data -->
@@ -141,6 +156,8 @@ const fetchInputFiles = async () => {
                     <DataViewer 
                       :data="tableDataStore.daata" 
                       :fileName="tableDataStore.fname"
+                      :filePath="tableDataStore.fpath"
+                      :folderId="tableDataStore.folderId"
                     />
                   </div>
                 </div>

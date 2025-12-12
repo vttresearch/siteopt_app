@@ -77,16 +77,46 @@
       <!-- Table Only View -->
       <div v-if="activeTab === 'table'" class="table-container">
         <div class="mb-4 flex justify-between items-center">
-          <h3 class="text-lg font-semibold text-gray-900">Data Table</h3>
-          <div class="text-sm text-gray-600">
-            {{ dataRows.length }} rows × {{ dataColumns.length }} columns
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Data Table</h3>
+            <div class="text-sm text-gray-600">
+              {{ dataRows.length }} rows × {{ dataColumns.length }} columns
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button
+              v-if="canEdit && !editMode"
+              @click="enableEditMode"
+              class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            >
+              <font-awesome-icon icon="fa-solid fa-edit" class="mr-1" />
+              Edit
+            </button>
+            <button
+              v-if="editMode"
+              @click="cancelEdit"
+              class="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition"
+            >
+              Cancel
+            </button>
+            <button
+              v-if="editMode"
+              @click="saveChanges"
+              :disabled="saving"
+              class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50"
+            >
+              <font-awesome-icon v-if="!saving" icon="fa-solid fa-save" class="mr-1" />
+              <span v-if="saving">Saving...</span>
+              <span v-else>Save</span>
+            </button>
           </div>
         </div>
         <ag-grid-vue
+          ref="gridRef"
           style="width: 100%; height: 500px;"
           class="ag-theme-alpine"
           :columnDefs="columnDefs"
-          :rowData="dataRows"
+          :rowData="editMode ? editableRows : dataRows"
           :defaultColDef="defaultColDef"
           :pagination="true"
           :paginationPageSize="50"
@@ -94,6 +124,8 @@
           :enableFilter="true"
           :enableColResize="true"
           :suppressMenuHide="true"
+          :stopEditingWhenCellsLoseFocus="true"
+          @cell-value-changed="onCellValueChanged"
         />
       </div>
 
@@ -130,13 +162,13 @@
             </div>
           </div>
           <ag-grid-vue
-            style="width: 100%; height: 400px;"
+            style="width: 100%; height: 500px;"
             class="ag-theme-alpine"
             :columnDefs="columnDefs"
-            :rowData="dataRows"
+            :rowData="editMode ? editableRows : dataRows"
             :defaultColDef="defaultColDef"
             :pagination="true"
-            :paginationPageSize="25"
+            :paginationPageSize="50"
             :enableSorting="true"
             :enableFilter="true"
             :enableColResize="true"
@@ -171,12 +203,121 @@ const props = defineProps({
   fileName: {
     type: String,
     default: 'data'
+  },
+  filePath: {
+    type: String,
+    default: ''
+  },
+  folderId: {
+    type: Number,
+    default: null
   }
 });
 
 const activeTab = ref('table');
 const selectedSheet = ref('');
 const processingData = ref(false); // For Excel files with multiple sheets
+const editMode = ref(false);
+const saving = ref(false);
+const gridRef = ref(null);
+const editableRows = ref([]);
+const hasChanges = ref(false);
+
+const canEdit = computed(() => {
+  return props.filePath && (props.fileName.endsWith('.csv') || props.fileName.endsWith('.xlsx'));
+});
+
+function enableEditMode() {
+  editMode.value = true;
+  // Create a deep copy for editing
+  editableRows.value = JSON.parse(JSON.stringify(dataRows.value));
+  hasChanges.value = false;
+}
+
+function cancelEdit() {
+  if (hasChanges.value) {
+    if (!confirm('You have unsaved changes. Are you sure you want to cancel?')) {
+      return;
+    }
+  }
+  editMode.value = false;
+  editableRows.value = [];
+  hasChanges.value = false;
+}
+
+function onCellValueChanged(event) {
+  hasChanges.value = true;
+}
+
+import { API_BASE } from '@/config.js';
+
+async function saveChanges() {
+  if (!hasChanges.value) {
+    editMode.value = false;
+    return;
+  }
+
+  saving.value = true;
+  try {
+    // Construct URL based on whether it's a work folder or data folder
+    let saveUrl;
+    if (props.folderId) {
+      const baseUrl = !API_BASE || API_BASE === '' || API_BASE === '/' ? '' : (API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE);
+      saveUrl = `${baseUrl}/api/work_folders/${props.folderId}/save/`;
+    } else {
+      const baseUrl = !API_BASE || API_BASE === '' || API_BASE === '/' ? '' : (API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE);
+      saveUrl = `${baseUrl}/api/save_file/`;
+    }
+
+    // Prepare data based on file type
+    let saveData;
+    if (props.fileName.endsWith('.xlsx')) {
+      // For Excel, maintain the original structure
+      if (selectedSheet.value && props.data.sheets) {
+        saveData = {
+          sheets: {
+            ...props.data.sheets,
+            [selectedSheet.value]: editableRows.value
+          }
+        };
+      } else {
+        saveData = editableRows.value;
+      }
+    } else {
+      // For CSV, just the rows
+      saveData = editableRows.value;
+    }
+
+    const response = await fetch(saveUrl, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        file_path: props.filePath,
+        data: saveData,
+        sheet: selectedSheet.value || null
+      })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      alert('File saved successfully!');
+      editMode.value = false;
+      hasChanges.value = false;
+      // Update the original data
+      Object.assign(dataRows.value, editableRows.value);
+    } else {
+      alert(`Error saving file: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error saving file:', error);
+    alert(`Error saving file: ${error.message}`);
+  } finally {
+    saving.value = false;
+  }
+}
 
 // Get available sheets for Excel files
 const availableSheets = computed(() => {
@@ -307,6 +448,7 @@ const columnDefs = computed(() => {
     sortable: true,
     filter: true,
     resizable: true,
+    editable: editMode.value,
     width: Math.max(120, Math.min(200, col.length * 8 + 50))
   }));
 });

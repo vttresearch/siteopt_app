@@ -5,6 +5,7 @@ import {ref} from "vue";
 
 const props = defineProps({
   folder_path: String,  // Current folder path for upload
+  folderId: Number,     // Optional: Work folder ID
 })
 
 const emit = defineEmits(['uploaded']);
@@ -27,6 +28,9 @@ async function handleFileUpload(event) {
     if (props.folder_path) {
       formData.append('folder_path', props.folder_path);
     }
+    if (props.folderId) {
+      formData.append('folder_id', props.folderId);
+    }
     
     // Get CSRF token
     const csrfToken = document.cookie
@@ -42,12 +46,22 @@ async function handleFileUpload(event) {
     
     // Construct proper URL - handle empty or "/" API_BASE
     let uploadUrl;
-    if (!API_BASE || API_BASE === '' || API_BASE === '/') {
-      uploadUrl = '/api/upload_file/';
+    
+    // Use work folder upload endpoint if folderId is provided
+    if (props.folderId) {
+      if (!API_BASE || API_BASE === '' || API_BASE === '/') {
+        uploadUrl = `/api/work_folders/${props.folderId}/upload/`;
+      } else {
+        const baseUrl = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+        uploadUrl = `${baseUrl}/api/work_folders/${props.folderId}/upload/`;
+      }
     } else {
-      // Remove trailing slash from API_BASE if present, then add path
-      const baseUrl = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
-      uploadUrl = `${baseUrl}/api/upload_file/`;
+      if (!API_BASE || API_BASE === '' || API_BASE === '/') {
+        uploadUrl = '/api/upload_file/';
+      } else {
+        const baseUrl = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+        uploadUrl = `${baseUrl}/api/upload_file/`;
+      }
     }
     
     console.log(`API_BASE: "${API_BASE}"`);

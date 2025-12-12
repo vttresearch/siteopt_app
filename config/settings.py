@@ -153,6 +153,10 @@ CSRF_COOKIE_HTTPONLY = False  # False enables the frontend to read it
 CSRF_COOKIE_SAMESITE = "Lax"  # "None for cross-origin but then you must do SECURE=True
 CSRF_COOKIE_SECURE = False  # Only True if using HTTPS
 
+# Increase upload size limits for large files
+DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024  # 100 MB
+
 
 # Set dev_mode to True for development, False for production
 DJANGO_VITE = {

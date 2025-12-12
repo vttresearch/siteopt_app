@@ -35,6 +35,19 @@ urlpatterns = [
     path("debug/api/download_excel_file/", views.download_excel_file, name="dl_excel_file"),
     path("api/upload_file/", views.upload_file, name="upload_file"),
     path("api/download_file/<path:file_path>", views.download_file, name="download_file"),
+    # Work folder management
+    path("api/work_folders/", views.list_work_folders, name="list_work_folders"),
+    path("api/work_folders/create/", views.create_work_folder, name="create_work_folder"),
+    path("api/work_folders/<int:folder_id>/", views.delete_work_folder, name="delete_work_folder"),
+    path("api/work_folders/<int:folder_id>/tree/", views.fetch_work_folder_tree, name="fetch_work_folder_tree"),
+    path("api/work_folders/<int:folder_id>/file/<path:file_path>", views.fetch_work_folder_file, name="fetch_work_folder_file"),
+    path("api/work_folders/<int:folder_id>/upload/", views.upload_work_folder_file, name="upload_work_folder_file"),
+    path("api/work_folders/<int:folder_id>/download/<path:file_path>", views.download_work_folder_file, name="download_work_folder_file"),
+    path("api/work_folders/<int:folder_id>/download-zip/", views.download_work_folder_zip, name="download_work_folder_zip"),
+    path("api/work_folders/<int:folder_id>/upload-zip/", views.upload_work_folder_zip, name="upload_work_folder_zip"),
+    path("api/work_folders/<int:folder_id>/clear/", views.clear_work_folder, name="clear_work_folder"),
+    path("api/work_folders/<int:folder_id>/save/", views.save_work_folder_file, name="save_work_folder_file"),
+    path("api/save_file/", views.save_data_file, name="save_data_file"),
     # path("__reload__/", include("django_browser_reload.urls")),  # Disabled for production
     # Serve runtime config.js
     path("config.js", views.config_js, name="config_js"),
