@@ -78,19 +78,29 @@ class ReverseProxyMiddleware:
             
         # Ensure client has a proper UUID client_id BEFORE processing the request
         client_id = request.COOKIES.get('client_id')
+        new_client = False
         if not client_id:
             # Generate a new UUID for this client and add it to the request
             client_id = str(uuid.uuid4())
             # Add to request.COOKIES so views can access it immediately
             request.COOKIES['client_id'] = client_id
+            new_client = True
             print(f"Generated new client_id: {client_id}")
 
         try:
             response = self.get_response(request)
             
             # Set the client_id cookie for future requests if it was newly generated
-            if not request.COOKIES.get('client_id') or client_id != request.COOKIES.get('client_id'):
-                response.set_cookie('client_id', client_id, max_age=30*24*60*60)  # 30 days
+            if new_client:
+                response.set_cookie(
+                    'client_id', 
+                    client_id, 
+                    max_age=30*24*60*60,  # 30 days
+                    httponly=False,  # JavaScript can read it
+                    samesite='Lax',  # Required for modern browsers
+                    secure=False,  # Set True for HTTPS
+                    path='/'  # Available for all paths
+                )
         finally:
             # Restore original SCRIPT_NAME
             if old_script_name:
