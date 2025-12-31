@@ -8,7 +8,6 @@ import Table from "@/components/Table.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { checkBackendReady, fetchSettings, fetchFileTree } from "@/utils/functions.js";
-import SelectInputFolder from "@/components/SelectInputFolder.vue";
 import SelectProjectFolder from "@/components/SelectProjectFolder.vue";
 import InputWorkFolder from "@/components/InputWorkFolder.vue";
 import WorkSettings from "@/components/WorkSettings.vue";
@@ -26,17 +25,13 @@ onMounted(async () => {
   const ready = await checkBackendReady()
   if (ready) {
     await fetchSettings()
+    await fetchInputFiles()
     backendUnavailable.value = false
     loading.value = false
   }
 })
 
-watch(() => [settingStore.inputDataPath, settingStore.projectPath, settingStore.workFolders], ([newInputDataPath, newProjectPath, newworkFolders], [prevInputDataPath, prevProjectPath, prevworkFolders]) => {
-  if (newInputDataPath !== prevInputDataPath) {
-    loading.value = true;
-    fetchInputFiles();
-    loading.value = false;
-  }
+watch(() => [settingStore.projectPath, settingStore.workFolders], ([newProjectPath, newworkFolders], [prevInputDataPath, prevProjectPath, prevworkFolders]) => {
   if (newProjectPath !== prevProjectPath) {
     loading.value = true;
     fetchProjectFiles();
@@ -50,14 +45,8 @@ watch(() => [settingStore.inputDataPath, settingStore.projectPath, settingStore.
 });
 
 const fetchInputFiles = async () => {
-  if (settingStore.inputDataPath === "") {
-    /* Clear button clicked */
-    inputFiles.value = {}
-    return
-  }
   const data = await fetchFileTree("fetch_input_file_tree", notify)
   inputFiles.value = data.children
-  // settingStore.inputDataPath.value = data.children
 };
 
 const fetchProjectFiles = async () => {
@@ -94,8 +83,7 @@ const fetchWorkFolderFiles = async () => {
             <template v-if="!backendUnavailable">
               <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
                 <h1 class="text-black text-base mb-2 font-bold">Input data files</h1>
-                <SelectInputFolder class="mb-1"/>
-                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="inputFiles" :path="settingStore.inputDataPath" />
+                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="inputFiles" :path="siteopt_data" />
                 <hr class="mt-3">
                 <h1 class="text-black text-base mb-2 font-bold">Project files</h1>
                 <SelectProjectFolder class="mb-1"/>
