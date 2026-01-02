@@ -8,7 +8,6 @@ import Table from "@/components/Table.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { checkBackendReady, fetchSettings, fetchFileTree } from "@/utils/functions.js";
-import SelectProjectFolder from "@/components/SelectProjectFolder.vue";
 import InputWorkFolder from "@/components/InputWorkFolder.vue";
 import WorkSettings from "@/components/WorkSettings.vue";
 
@@ -26,17 +25,13 @@ onMounted(async () => {
   if (ready) {
     await fetchSettings()
     await fetchInputFiles()
+    await fetchProjectFiles()
     backendUnavailable.value = false
     loading.value = false
   }
 })
 
-watch(() => [settingStore.projectPath, settingStore.workFolders], ([newProjectPath, newworkFolders], [prevInputDataPath, prevProjectPath, prevworkFolders]) => {
-  if (newProjectPath !== prevProjectPath) {
-    loading.value = true;
-    fetchProjectFiles();
-    loading.value = false;
-  }
+watch(() => [settingStore.workFolders], ([newworkFolders], [prevworkFolders]) => {
   if (newworkFolders !== prevworkFolders) {
     loading.value = true;
     fetchWorkFolderFiles();
@@ -50,11 +45,6 @@ const fetchInputFiles = async () => {
 };
 
 const fetchProjectFiles = async () => {
-  if (settingStore.projectPath === "") {
-    /* Clear button clicked */
-    projectFiles.value = {}
-    return
-  }
   const data = await fetchFileTree("fetch_project_file_tree", notify)
   projectFiles.value = data.children
   // settingStore.projectPath.value = data.children
@@ -83,11 +73,10 @@ const fetchWorkFolderFiles = async () => {
             <template v-if="!backendUnavailable">
               <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
                 <h1 class="text-black text-base mb-2 font-bold">Input data files</h1>
-                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="inputFiles" :path="siteopt_data" />
+                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="inputFiles" path="siteopt_data" />
                 <hr class="mt-3">
                 <h1 class="text-black text-base mb-2 font-bold">Project files</h1>
-                <SelectProjectFolder class="mb-1"/>
-                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="projectFiles" :path="settingStore.projectPath" />
+                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="projectFiles" path="siteopt_toolbox" />
               </div>
               <ContentPanel class="col-span-2" :content="Table" />
               <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-xs">

@@ -19,9 +19,13 @@ WORK_DIR = "work"
 CONFIG_FILE = "config.json"
 JOBS = {}
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
+PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
 
 def get_input_data_path() -> str:
     return str(INPUT_DATA_DIR)
+
+def get_project_data_path() -> str:
+    return str(PROJECT_DATA_DIR)
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -79,16 +83,7 @@ def post(request, action):
     if action == "input_data_path":
         return JsonResponse({"success": True})
     elif action == "project_data_path":
-        print(f"[{client_id}] setting project path {js[action]}")
-        # Check if project_path is valid
-        if js[action] == "":  # Clears project path
-            json_response = {"success": True}
-        else:
-            json_response = validate_project_path(js[action])
-        if json_response["success"]:
-            config = get_client_config(client_id)
-            edit_config_file(config.config_path, {action: js[action]})
-        return JsonResponse(json_response)
+        return JsonResponse({"success": True})
     elif action == "make_work_folder":
         print(f"[{client_id}] creating work folder {js['work_folder']}")
         config = get_client_config(client_id)
@@ -169,9 +164,9 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
     if not validate_input_data_path(idp)["success"]:
         return {"success": False, "error": f"Bundled input data is invalid: '{idp}'"}
     pdp = configs["project_data_path"]
-    if not os.path.exists(pdp):
-        # If it exists, it must be a valid project path already
-        return {"success": False, "error": "Please set the SiteOpt project path first"}
+    pdp = get_project_data_path()
+    if not validate_project_path(pdp)["success"]:
+        return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
     base = platformdirs.user_data_dir()  # Win: %APPDATA%/Local
     work_dir = os.path.abspath(os.path.join(base, APP_DATA_DIR, WORK_DIR, str(client_id)[0:6], work_folder_name))
     try:
@@ -228,11 +223,9 @@ def fetch_input_file_tree(request):
 def fetch_project_file_tree(request):
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} is fetching project files")
-    config = get_client_config(client_id)
-    config_d = read_config_file(config.config_path)
-    p = config_d["project_data_path"]
-    if p == "":
-        return JsonResponse({"success": True, "data": {}})
+    p = get_project_data_path()
+    if not validate_project_path(p)["success"]:
+        return JsonResponse({"success": False, "error": f"Bundled project data is invalid: '{p}'"})
     if not validate_project_path(p)["success"]:
         return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
     excluded_dirs = [os.path.join(p, ".git")]
@@ -341,7 +334,7 @@ def make_config_file(p):
         p (str): Full path to config file
     """
     d = {"input_data_path": get_input_data_path(),
-         "project_data_path": "",
+         "project_data_path": get_project_data_path(),
          "work_folders": {}}
     with open(p, "w") as fp:
         json.dump(d, fp, indent=4)
