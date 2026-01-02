@@ -273,6 +273,13 @@ def fetch_data(fpath):
             return {"success": False, "error": f"Invalid JSON: {e}"}
         except OSError as e:
             return {"success": False, "error": f"[OSError] {e}"}
+    elif fpath.endswith(".md"):
+        try:
+            with open(fpath, "r", encoding="utf-8") as fh:
+                text = fh.read()
+            return {"success": True, "data": {"filetype": "md", "data": {"text": text}}}
+        except OSError as e:
+            return {"success": False, "error": f"[OSError] {e}"}
     else:
         _, ext = os.path.splitext(fpath)
         return {"success": False, "error": f"Reading files with extension '{ext}' not implemented"}

@@ -13,6 +13,7 @@ const fileData = ref({})
 const rowData = ref([])
 const columnDefs = ref([])
 const jsonText = ref("")
+const mdText = ref("")
 
 function clearRefs() {
   sheetNames.value = []
@@ -21,6 +22,7 @@ function clearRefs() {
   rowData.value = []
   columnDefs.value = []
   jsonText.value = ""
+  mdText.value = ""
 }
 
 // Watch for changes in the store's data
@@ -54,6 +56,17 @@ watch(() => data_store.daata, (newItems) => {
     } catch (e) {
       jsonText.value = String(fileData.value)
     }
+  }
+  else if (fileType === "md") {
+    console.log("Updating view with Markdown data")
+
+    sheetNames.value = []
+    selectedSheet.value = ""
+    rowData.value = []
+    columnDefs.value = []
+    jsonText.value = ""
+
+    mdText.value = fileData.value?.text ?? ""
   }
   else {
     console.warn(`Unsupported fileType: ${fileType}`)
@@ -145,6 +158,12 @@ function newSheetSelected(event) {
       :activeIndex="0"
       :activeSheet="selectedSheet"
       @update:activeSheet="newSheetSelected($event)" />
+  <pre
+    v-if="mdText.length > 0"
+    class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap"
+  >
+  {{ mdText }}
+  </pre>
   <pre
     v-if="jsonText.length > 0"
     class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap"
