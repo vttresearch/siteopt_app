@@ -264,6 +264,15 @@ def fetch_data(fpath):
     elif fpath.endswith(".csv"):
         data = read_csv_as_json(fpath)
         return {"success": True, "data": data}
+    elif fpath.endswith(".json"):
+        try:
+            with open(fpath, "r", encoding="utf-8") as fh:
+                obj = json.load(fh)
+            return {"success": True, "data": {"filetype": "json", "data": obj}}
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"Invalid JSON: {e}"}
+        except OSError as e:
+            return {"success": False, "error": f"[OSError] {e}"}
     else:
         _, ext = os.path.splitext(fpath)
         return {"success": False, "error": f"Reading files with extension '{ext}' not implemented"}

@@ -12,6 +12,7 @@ const selectedSheet = ref("");
 const fileData = ref({})
 const rowData = ref([])
 const columnDefs = ref([])
+const jsonText = ref("")
 
 function clearRefs() {
   sheetNames.value = []
@@ -19,6 +20,7 @@ function clearRefs() {
   fileData.value = {}
   rowData.value = []
   columnDefs.value = []
+  jsonText.value = ""
 }
 
 // Watch for changes in the store's data
@@ -40,6 +42,18 @@ watch(() => data_store.daata, (newItems) => {
     sheetNames.value = []
     selectedSheet.value = ""
     updateTableFromCsv()
+  }
+  else if (fileType === "json") {
+    console.log("Updating view with JSON data")
+    sheetNames.value = []
+    selectedSheet.value = ""
+    rowData.value = []
+    columnDefs.value = []
+    try {
+      jsonText.value = JSON.stringify(fileData.value, null, 2)
+    } catch (e) {
+      jsonText.value = String(fileData.value)
+    }
   }
   else {
     console.warn(`Unsupported fileType: ${fileType}`)
@@ -131,23 +145,29 @@ function newSheetSelected(event) {
       :activeIndex="0"
       :activeSheet="selectedSheet"
       @update:activeSheet="newSheetSelected($event)" />
+  <pre
+    v-if="jsonText.length > 0"
+    class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap"
+  >
+{{ jsonText }}
+  </pre>    
     <!-- // ?? {} is a nullish coalescing operator, so if column_name_and_data is null or undefined, it falls back to {} -->
-    <div class="w-full h-80 overflow-auto" v-if="Object.keys(columnDefs ?? {}).length !== 0">
-      <AgGridVue
-          class="w-full h-full"
-          :domLayout="'normal'"
-          :columnDefs="columnDefs"
-          :rowData="rowData"
-          :rowBuffer="10"
-          :rowHeight="40"
-          :animateRows="true"
-          :rowSelection.enableClickSelection="false"
-          :suppressColumnVirtualization="false"
-          :suppressCellFocus="true"
-          :suppressAnimationFrame="true"
-          :enableCellTextSelection="false"
-        />
-      </div>
+  <div class="w-full h-80 overflow-auto" v-if="Object.keys(columnDefs ?? {}).length !== 0">
+    <AgGridVue
+        class="w-full h-full"
+        :domLayout="'normal'"
+        :columnDefs="columnDefs"
+        :rowData="rowData"
+        :rowBuffer="10"
+        :rowHeight="40"
+        :animateRows="true"
+        :rowSelection.enableClickSelection="false"
+        :suppressColumnVirtualization="false"
+        :suppressCellFocus="true"
+        :suppressAnimationFrame="true"
+        :enableCellTextSelection="false"
+      />
+    </div>
     <div v-else class="p-4 text-gray-500">Select a file to view data.</div>
   </div>
 </template>
