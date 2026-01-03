@@ -247,10 +247,45 @@ export async function postRequestData(path, fname, store, notify) {
       notify.show(`${r.error}`, 5000, "error");
       return {"success": false}
     }
-    store.addData(fname, r.data)
+    store.addData(fname, path, r.data)
     return {"success": true}
   } catch (err) {
     console.error(`Error posting ${path}:`, err);
     return {"success": false}
   }
 }
+
+export async function postSaveFile(path, filetype, data, meta, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/save_file/`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({ path, filetype, data, meta }),
+    });
+
+    if (!response.ok) {
+      const txt = await response.text()
+      notify.show(`Save failed: ${txt}`, 5000, "error")
+      return { success: false }
+    }
+
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(r.error || "Save failed", 5000, "error");
+      return { success: false };
+    }
+
+    return { success: true };
+  } catch (err) {
+    notify.show(String(err), 5000, "error");
+    return { success: false };
+  }
+}
+

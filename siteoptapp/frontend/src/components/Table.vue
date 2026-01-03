@@ -4,6 +4,8 @@ import { AgGridVue } from 'ag-grid-vue3';
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
 import Spinner from "@/components/Spinner.vue";
+import { useNotificationStore } from "@/stores/notificationstore.js";
+import { postSaveFile } from "@/utils/functions.js";
 
 
 const data_store = useTableDataStore()
@@ -14,6 +16,10 @@ const rowData = ref([])
 const columnDefs = ref([])
 const jsonText = ref("")
 const mdText = ref("")
+const notify = useNotificationStore()
+const saving = ref(false)
+const mdDirty = ref(false)
+
 
 function clearRefs() {
   sheetNames.value = []
@@ -67,6 +73,7 @@ watch(() => data_store.daata, (newItems) => {
     jsonText.value = ""
 
     mdText.value = fileData.value?.text ?? ""
+    mdDirty.value = false
   }
   else {
     console.warn(`Unsupported fileType: ${fileType}`)
@@ -77,6 +84,11 @@ watch(() => data_store.daata, (newItems) => {
     columnDefs.value = []
   }
 });
+
+watch(mdText, () => {
+  if (data_store.daata?.filetype === "md") mdDirty.value = true
+});
+
 
 /**
  * Updates columnDefs for AG Grid data from an .xlsx file is loaded or when user selects a sheet.
@@ -146,24 +158,67 @@ function newSheetSelected(event) {
   selectedSheet.value = event
   updateTableFromExcel()
 }
+
+async function saveCurrentFile() {
+  if (!data_store.fpath) {
+    notify.show("No file path available to save.", 3000, "error")
+    return
+  }
+
+  const filetype = data_store.daata?.filetype
+  if (filetype !== "md") {
+    notify.show(`Save not implemented for ${filetype}`, 3000, "error")
+    return
+  }
+
+  saving.value = true
+  const r = await postSaveFile(
+    data_store.fpath,
+    "md",
+    { text: mdText.value },
+    {},
+    notify
+  )
+  saving.value = false
+
+  if (r.success) {
+    mdDirty.value = false
+    notify.show("Saved", 2000, "info")
+  }
+}
+
 </script>
 
 <template>
   <Spinner v-if="data_store.loading" message="Loading data..." class="col-auto"/>
   <div v-else>
-    <div class="text-gray-600 my-2 mb-6">{{ data_store.fname }}</div>
+    <div class="flex items-center justify-between text-gray-600 my-2 mb-4">
+      <div class="truncate">{{ data_store.fname }}</div>
+
+      <button
+        v-if="data_store.daata?.filetype === 'md'"
+        class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+        :disabled="!mdDirty || saving"
+        @click="saveCurrentFile"
+      >
+        {{ saving ? "Saving..." : "Save" }}
+      </button>
+    </div>
+
+    <div v-if="data_store.daata?.filetype === 'md' && mdDirty" class="text-xs text-gray-500 mb-2">
+      Unsaved changes
+    </div>
   <SelectSheetButtons
       v-if="selectedSheet.length > 0"
       :sheets="sheetNames"
       :activeIndex="0"
       :activeSheet="selectedSheet"
       @update:activeSheet="newSheetSelected($event)" />
-  <pre
-    v-if="mdText.length > 0"
-    class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap"
-  >
-  {{ mdText }}
-  </pre>
+  <textarea
+    v-if="data_store.daata?.filetype === 'md'"
+    v-model="mdText"
+    class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
+  />
   <pre
     v-if="jsonText.length > 0"
     class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap"

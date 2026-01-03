@@ -71,13 +71,6 @@ const fetchWorkFolderFiles = async () => {
           <Spinner v-if="loading" message="Loading..." class="col-span-1 md:col-span-3" />
           <template v-else>
             <template v-if="!backendUnavailable">
-              <div class="col-span-1 bg-white rounded-xl shadow-md relative p-2 text-xs">
-                <h1 class="text-black text-base mb-2 font-bold">Input data files</h1>
-                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="inputFiles" path="siteopt_data" />
-                <hr class="mt-3">
-                <h1 class="text-black text-base mb-2 font-bold">Project files</h1>
-                <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="projectFiles" path="siteopt_toolbox" />
-              </div>
               <ContentPanel class="col-span-2" :content="Table" />
               <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-xs">
                 <h1 class="text-black text-base mb-2 font-bold">Work folders</h1>

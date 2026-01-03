@@ -103,6 +103,10 @@ def post(request, action):
         job_id = str(uuid.uuid4())
         JOBS[job_id] = [project_path, execution_type]
         return JsonResponse({"success": True, "data": job_id})
+    elif action == "save_file":
+        print(f"[{client_id}] saving {js.get('path')}")
+        config = get_client_config(client_id)
+        return JsonResponse(save_file(config.config_path, js))
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
@@ -381,3 +385,69 @@ def read_config_file(p):
         print(f"[OSError] Config file {p} missing, maybe?")
         return {}
     return config_dict
+
+def is_path_inside_any_work_folder(config_fpath: str, target_path: str) -> bool:
+    cfg = read_config_file(config_fpath)
+    work_folders = cfg.get("work_folders", {})
+    target = os.path.abspath(target_path)
+
+    for wf in work_folders.values():
+        wf_abs = os.path.abspath(wf)
+        try:
+            common = os.path.commonpath([target, wf_abs])
+        except ValueError:
+            continue
+        if common == wf_abs:
+            return True
+    return False
+
+def _save_md(fpath: str, data, meta: dict):
+    # data can be either raw string or {"text": "..."} – allow both for flexibility
+    if isinstance(data, dict):
+        text = data.get("text", "")
+    else:
+        text = "" if data is None else str(data)
+
+    if not fpath.endswith(".md"):
+        return {"success": False, "error": "Not a .md file."}
+
+    with open(fpath, "w", encoding="utf-8", newline="\n") as fp:
+        fp.write(text)
+
+    return {"success": True}
+
+def save_file(config_fpath: str, js: dict):
+    fpath = js.get("path")
+    filetype = js.get("filetype")
+    data = js.get("data")
+    meta = js.get("meta", {})  # optional, used by xlsx later (sheet name etc.)
+
+    if not fpath or not filetype:
+        return {"success": False, "error": "Missing 'path' or 'filetype'."}
+
+    if not is_path_inside_any_work_folder(config_fpath, fpath):
+        return {"success": False, "error": "Refusing to write outside work folders."}
+
+    if not os.path.exists(fpath):
+        return {"success": False, "error": f"File does not exist: {fpath}"}
+
+    save_handlers = {
+        "md": _save_md,
+        # later:
+        # "json": _save_json,
+        # "csv": _save_csv,
+        # "xlsx": _save_xlsx,
+    }
+
+    handler = save_handlers.get(filetype)
+    if not handler:
+        return {"success": False, "error": f"Saving not implemented for '{filetype}'."}
+
+    try:
+        return handler(fpath, data, meta)
+    except OSError as e:
+        return {"success": False, "error": f"[OSError] {e}"}
+    except Exception as e:
+        return {"success": False, "error": f"[Error] {e}"}
+
+
