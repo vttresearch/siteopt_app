@@ -429,11 +429,33 @@ def _save_csv(fpath: str, data, meta: dict):
 
     return {"success": True}
 
+def _save_json(fpath: str, data, meta: dict):
+    if not fpath.endswith(".json"):
+        return {"success": False, "error": "Not a .json file."}
+    obj = None
+
+    if isinstance(data, dict) and "text" in data:
+        try:
+            obj = json.loads(data["text"])
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"Invalid JSON: {e}"}
+    else:
+        obj = data
+
+    try:
+        with open(fpath, "w", encoding="utf-8", newline="\n") as fp:
+            json.dump(obj, fp, ensure_ascii=False, indent=2)
+            fp.write("\n")
+        return {"success": True}
+    except TypeError as e:
+        return {"success": False, "error": f"JSON is not serializable: {e}"}
+
+
 def save_file(config_fpath: str, js: dict):
     fpath = js.get("path")
     filetype = js.get("filetype")
     data = js.get("data")
-    meta = js.get("meta", {})  # optional, used by xlsx later (sheet name etc.)
+    meta = js.get("meta", {}) 
 
     if not fpath or not filetype:
         return {"success": False, "error": "Missing 'path' or 'filetype'."}
@@ -447,7 +469,7 @@ def save_file(config_fpath: str, js: dict):
     save_handlers = {
         "md": _save_md,
         # later:
-        # "json": _save_json,
+        "json": _save_json,
         "csv": _save_csv,
         # "xlsx": _save_xlsx,
     }

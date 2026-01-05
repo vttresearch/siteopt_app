@@ -14,12 +14,13 @@ const selectedSheet = ref("");
 const fileData = ref({})
 const rowData = ref([])
 const columnDefs = ref([])
-const jsonText = ref("")
 const mdText = ref("")
 const notify = useNotificationStore()
 const saving = ref(false)
 const mdDirty = ref(false)
 const csvDirty = ref(false)
+const jsonDirty = ref(false)
+const jsonEditText = ref("")
 const gridApi = ref(null)
 
 function onGridReady(params) {
@@ -36,8 +37,9 @@ function clearRefs() {
   fileData.value = {}
   rowData.value = []
   columnDefs.value = []
-  jsonText.value = ""
   mdText.value = ""
+  jsonEditText.value = ""
+  jsonDirty.value = false
 }
 
 // Watch for changes in the store's data
@@ -67,11 +69,14 @@ watch(() => data_store.daata, (newItems) => {
     selectedSheet.value = ""
     rowData.value = []
     columnDefs.value = []
+    mdText.value = ""
+
     try {
-      jsonText.value = JSON.stringify(fileData.value, null, 2)
+      jsonEditText.value = JSON.stringify(fileData.value, null, 2)
     } catch (e) {
-      jsonText.value = String(fileData.value)
+      jsonEditText.value = String(fileData.value)
     }
+    jsonDirty.value = false
   }
   else if (fileType === "md") {
     console.log("Updating view with Markdown data")
@@ -80,7 +85,6 @@ watch(() => data_store.daata, (newItems) => {
     selectedSheet.value = ""
     rowData.value = []
     columnDefs.value = []
-    jsonText.value = ""
 
     mdText.value = fileData.value?.text ?? ""
     mdDirty.value = false
@@ -99,6 +103,10 @@ watch(mdText, () => {
   if (data_store.daata?.filetype === "md") mdDirty.value = true
 });
 
+watch(jsonEditText, () => {
+  if (data_store.daata?.filetype === "json") jsonDirty.value = true
+});
+
 /**
  * Updates columnDefs for AG Grid data from an .xlsx file is loaded or when user selects a sheet.
  */
@@ -106,9 +114,7 @@ function updateTableFromExcel() {
   const sheet_data = fileData.value[selectedSheet.value]
   if (!Array.isArray(sheet_data) || sheet_data.length === 0) return
 
-  // Step 1: Merge all column-wise objects into one
   const merged = Object.assign({}, ...sheet_data)
-  // Step 2: Get column names
   const rowNumberColumn = {
   headerName: "#",
   valueGetter: "node.rowIndex + 1",
@@ -121,9 +127,7 @@ function updateTableFromExcel() {
   field: col,
   minWidth: 100
   }))]
-  // Step 3: Determine number of rows
   const rowCount = merged[columns[0]].length
-  // Step 4: Build row-wise objects
   rowData.value = Array.from({ length: rowCount }, (_, i) => {
     const row = {}
     for (const col of columns) {
@@ -203,6 +207,20 @@ async function saveCurrentFile() {
     gridApi.value.forEachNode(node => rows.push(node.data))
     payloadData = rows
     dirtyRef = csvDirty
+  } else if (filetype === "json") {
+    payloadType = "json"
+
+    // validate before sending
+    let parsed
+    try {
+      parsed = JSON.parse(jsonEditText.value)
+    } catch (e) {
+      notify.show(`Invalid JSON: ${e}`, 5000, "error")
+      return
+    }
+
+    payloadData = parsed
+    dirtyRef = jsonDirty
   } else {
     notify.show(`Save not implemented for ${filetype}`, 3000, "error")
     return
@@ -233,10 +251,11 @@ async function saveCurrentFile() {
       <div class="truncate">{{ data_store.fname }}</div>
 
       <button
-        v-if="data_store.daata?.filetype === 'md' || data_store.daata?.filetype === 'csv'"
+        v-if="['md','csv','json'].includes(data_store.daata?.filetype)"
         class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
         :disabled="(data_store.daata?.filetype === 'md' && !mdDirty)
         || (data_store.daata?.filetype === 'csv' && !csvDirty)
+        || (data_store.daata?.filetype === 'json' && !jsonDirty) 
         || saving"
         @click="saveCurrentFile"
       >
@@ -250,6 +269,9 @@ async function saveCurrentFile() {
     <div v-if="data_store.daata?.filetype === 'csv' && csvDirty" class="text-xs text-gray-500 mb-2">
       Unsaved changes
     </div>
+    <div v-if="data_store.daata?.filetype === 'json' && jsonDirty" class="text-xs text-gray-500 mb-2">
+      Unsaved changes
+    </div>
   <SelectSheetButtons
       v-if="selectedSheet.length > 0"
       :sheets="sheetNames"
@@ -261,12 +283,11 @@ async function saveCurrentFile() {
     v-model="mdText"
     class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
   />
-  <pre
-    v-if="jsonText.length > 0"
-    class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap"
-  >
-{{ jsonText }}
-  </pre>    
+  <textarea
+    v-if="data_store.daata?.filetype === 'json'"
+    v-model="jsonEditText"
+    class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
+  />
     <!-- // ?? {} is a nullish coalescing operator, so if column_name_and_data is null or undefined, it falls back to {} -->
   <div class="w-full h-80 overflow-auto" v-if="Object.keys(columnDefs ?? {}).length !== 0">
     <AgGridVue
