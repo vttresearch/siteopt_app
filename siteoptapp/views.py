@@ -290,20 +290,41 @@ def fetch_data(fpath):
 
 
 def read_excel_as_json(wb):
-    """Reads all sheets, rows, and columns from an Excel workbook object and returns the data in JSON format."""
-    data = {"filetype": "xlsx", "data": {}}
-    for sheet in wb:
-        data["data"][sheet.title] = []
-        rows = sheet.max_row
-        columns = sheet.max_column
-        for i in range(1, columns+1):
-            column_data = []
-            column_name = sheet.cell(row=1, column=i)
-            for j in range(1, rows):
-                row_data = sheet.cell(row=j+1, column=i)
-                column_data.append(row_data.value)
-            data["data"][sheet.title].append({column_name.value: column_data})
-    return data
+    """
+    Return:
+    {
+      "filetype": "xlsx",
+      "data": {
+        "Sheet1": {"columns": [...], "rows": [ {col: val, ...}, ... ]},
+        ...
+      }
+    }
+    Assumes row 1 is header.
+    """
+    out = {"filetype": "xlsx", "data": {}}
+
+    for sheet in wb.worksheets:
+        # Read header row
+        max_col = sheet.max_column
+        max_row = sheet.max_row
+
+        columns = []
+        for c in range(1, max_col + 1):
+            v = sheet.cell(row=1, column=c).value
+            columns.append("" if v is None else str(v))
+
+        # Build rows (row 2..max_row)
+        rows = []
+        for r in range(2, max_row + 1):
+            row_obj = {}
+            for c, col_name in enumerate(columns, start=1):
+                row_obj[col_name] = sheet.cell(row=r, column=c).value
+            rows.append(row_obj)
+
+        out["data"][sheet.title] = {"columns": columns, "rows": rows}
+
+    return out
+
 
 
 def read_csv_as_json(p):
@@ -450,6 +471,60 @@ def _save_json(fpath: str, data, meta: dict):
     except TypeError as e:
         return {"success": False, "error": f"JSON is not serializable: {e}"}
 
+def _save_xlsx(fpath: str, data, meta: dict):
+    """
+    Expects:
+      data = list of row objects (same as CSV save)
+      meta = {"sheet": "SheetName", "columns": ["A","B",...]}
+    """
+    if not fpath.endswith(".xlsx"):
+        return {"success": False, "error": "Not a .xlsx file."}
+
+    sheet_name = meta.get("sheet")
+    columns = meta.get("columns")
+
+    if not sheet_name:
+        return {"success": False, "error": "Missing meta.sheet for xlsx save."}
+    if not isinstance(data, list):
+        return {"success": False, "error": "xlsx save expects a list of row objects."}
+
+    wb = openpyxl.load_workbook(fpath)
+    if sheet_name not in wb.sheetnames:
+        return {"success": False, "error": f"Sheet not found: {sheet_name}"}
+
+    ws = wb[sheet_name]
+
+    # Determine column order
+    if not columns:
+        # try existing header row
+        columns = []
+        for c in range(1, ws.max_column + 1):
+            v = ws.cell(row=1, column=c).value
+            if v is None:
+                break
+            columns.append(str(v))
+        if not columns:
+            # fallback to union of keys
+            cols_set = set()
+            for row in data:
+                if isinstance(row, dict):
+                    cols_set.update(row.keys())
+            columns = list(cols_set)
+
+    # Clear sheet
+    ws.delete_rows(1, ws.max_row)
+
+    for c, col in enumerate(columns, start=1):
+        ws.cell(row=1, column=c, value=col)
+
+    for r_i, row in enumerate(data, start=2):
+        if not isinstance(row, dict):
+            return {"success": False, "error": "Each XLSX row must be an object/dict."}
+        for c_i, col in enumerate(columns, start=1):
+            ws.cell(row=r_i, column=c_i, value=row.get(col, ""))
+
+    wb.save(fpath)
+    return {"success": True}
 
 def save_file(config_fpath: str, js: dict):
     fpath = js.get("path")
@@ -471,7 +546,7 @@ def save_file(config_fpath: str, js: dict):
         # later:
         "json": _save_json,
         "csv": _save_csv,
-        # "xlsx": _save_xlsx,
+        "xlsx": _save_xlsx,
     }
 
     handler = save_handlers.get(filetype)

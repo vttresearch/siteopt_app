@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import { useTableDataStore } from '@/stores/filedatastore.js';
@@ -20,6 +20,9 @@ const saving = ref(false)
 const mdDirty = ref(false)
 const csvDirty = ref(false)
 const jsonDirty = ref(false)
+const xlsxDirty = ref(false)
+const xlsxDirtyBySheet = ref({})
+const currentXlsxDirty = computed(() => !!xlsxDirtyBySheet.value[selectedSheet.value])
 const jsonEditText = ref("")
 const gridApi = ref(null)
 
@@ -28,7 +31,9 @@ function onGridReady(params) {
 }
 
 function onCellValueChanged() {
-  if (data_store.daata?.filetype === "csv") csvDirty.value = true
+  const ft = data_store.daata?.filetype
+  if (ft === "csv") csvDirty.value = true
+  if (ft === "xlsx") markXlsxDirty()
 }
 
 function clearRefs() {
@@ -42,6 +47,16 @@ function clearRefs() {
   jsonDirty.value = false
 }
 
+function markXlsxDirty() {
+  const s = selectedSheet.value
+  if (!s) return
+  xlsxDirtyBySheet.value = { ...xlsxDirtyBySheet.value, [s]: true }
+}
+
+function clearXlsxDirty(sheet) {
+  xlsxDirtyBySheet.value = { ...xlsxDirtyBySheet.value, [sheet]: false }
+}
+
 // Watch for changes in the store's data
 watch(() => data_store.daata, (newItems) => {
   if (Object.keys(newItems).length === 0) {
@@ -52,8 +67,12 @@ watch(() => data_store.daata, (newItems) => {
   fileData.value = newItems["data"]
   if (fileType === "xlsx") {
     console.log("Updating table with Excel data")
-    sheetNames.value = Object.keys(fileData.value) 
+    sheetNames.value = Object.keys(fileData.value)
     selectedSheet.value = sheetNames.value[0]
+
+    const init = {}
+    for (const s of sheetNames.value) init[s] = false
+    xlsxDirtyBySheet.value = init
     updateTableFromExcel()
   }
   else if (fileType === "csv") {
@@ -89,6 +108,12 @@ watch(() => data_store.daata, (newItems) => {
     mdText.value = fileData.value?.text ?? ""
     mdDirty.value = false
   }
+  else if (fileType === "xlsx") {
+    sheetNames.value = Object.keys(fileData.value)
+    selectedSheet.value = sheetNames.value[0]
+    updateTableFromExcel()
+    xlsxDirty.value = false
+  }
   else {
     console.warn(`Unsupported fileType: ${fileType}`)
     sheetNames.value = []
@@ -111,30 +136,27 @@ watch(jsonEditText, () => {
  * Updates columnDefs for AG Grid data from an .xlsx file is loaded or when user selects a sheet.
  */
 function updateTableFromExcel() {
-  const sheet_data = fileData.value[selectedSheet.value]
-  if (!Array.isArray(sheet_data) || sheet_data.length === 0) return
+  const sheetObj = fileData.value?.[selectedSheet.value]
+  const cols = sheetObj?.columns ?? []
+  const rows = sheetObj?.rows ?? []
 
-  const merged = Object.assign({}, ...sheet_data)
-  const rowNumberColumn = {
-  headerName: "#",
-  valueGetter: "node.rowIndex + 1",
-  width: 50,
-  cellClass: 'bg-gray-50 font-medium text-left'
-}
-  const columns = Object.keys(merged)
-  columnDefs.value = [rowNumberColumn, ...columns.map(col => ({
-  headerName: col,
-  field: col,
-  minWidth: 100
-  }))]
-  const rowCount = merged[columns[0]].length
-  rowData.value = Array.from({ length: rowCount }, (_, i) => {
-    const row = {}
-    for (const col of columns) {
-      row[col] = merged[col][i]
-    }
-    return row
-  })
+  columnDefs.value = [
+    {
+      headerName: "#",
+      valueGetter: "node.rowIndex + 1",
+      width: 75,
+      pinned: "left",
+      cellClass: "bg-gray-50 font-medium text-left"
+    },
+    ...cols.map(col => ({
+      headerName: col,
+      field: col,
+      minWidth: 100,
+      editable: true
+    }))
+  ]
+
+  rowData.value = rows
 }
 
 /**
@@ -221,6 +243,37 @@ async function saveCurrentFile() {
 
     payloadData = parsed
     dirtyRef = jsonDirty
+  } else if (filetype === "xlsx") {
+    payloadType = "xlsx"
+    if (!gridApi.value) {
+      notify.show("Grid not ready yet.", 3000, "error")
+      return
+    }
+    gridApi.value.stopEditing()
+
+    const rows = []
+    gridApi.value.forEachNode(node => rows.push(node.data))
+    payloadData = rows
+    dirtyRef = null // handled per sheet
+
+    const sheetObj = fileData.value?.[selectedSheet.value]
+    const cols = sheetObj?.columns ?? []
+
+    saving.value = true
+    const r = await postSaveFile(
+      data_store.fpath,
+      payloadType,
+      payloadData,
+      { sheet: selectedSheet.value, columns: cols },
+      notify
+    )
+    saving.value = false
+
+    if (r.success) {
+      clearXlsxDirty(selectedSheet.value)
+      notify.show("Saved", 2000, "info")
+    }
+    return
   } else {
     notify.show(`Save not implemented for ${filetype}`, 3000, "error")
     return
@@ -231,7 +284,7 @@ async function saveCurrentFile() {
     data_store.fpath,
     payloadType,
     payloadData,
-    {},
+    meta,
     notify
   )
   saving.value = false
@@ -251,11 +304,12 @@ async function saveCurrentFile() {
       <div class="truncate">{{ data_store.fname }}</div>
 
       <button
-        v-if="['md','csv','json'].includes(data_store.daata?.filetype)"
+        v-if="['md','csv','json', 'xlsx'].includes(data_store.daata?.filetype)"
         class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
         :disabled="(data_store.daata?.filetype === 'md' && !mdDirty)
         || (data_store.daata?.filetype === 'csv' && !csvDirty)
-        || (data_store.daata?.filetype === 'json' && !jsonDirty) 
+        || (data_store.daata?.filetype === 'json' && !jsonDirty)
+        || (data_store.daata?.filetype === 'xlsx' && !currentXlsxDirty) 
         || saving"
         @click="saveCurrentFile"
       >
@@ -272,6 +326,10 @@ async function saveCurrentFile() {
     <div v-if="data_store.daata?.filetype === 'json' && jsonDirty" class="text-xs text-gray-500 mb-2">
       Unsaved changes
     </div>
+    <div v-if="data_store.daata?.filetype === 'xlsx' && currentXlsxDirty" class="text-xs text-gray-500 mb-2">
+      Unsaved changes in {{ selectedSheet }}
+    </div>
+
   <SelectSheetButtons
       v-if="selectedSheet.length > 0"
       :sheets="sheetNames"
