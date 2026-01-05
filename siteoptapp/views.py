@@ -307,22 +307,11 @@ def read_excel_as_json(wb):
 
 
 def read_csv_as_json(p):
-    """Reads csv data from given path and returns the data in JSON format."""
-    data = {"filetype": "csv", "data": []}
-    l = []
-    with open(p, newline="") as fp:
-        csv_reader = csv.reader(fp)
-        i = 0
-        for row in csv_reader:
-            l.append(row)
-            i += 1
-    # Pivot the table
-    pivoted_list = [[row[i] for row in l] for i in range(len(l[0]))]
-    d = {}
-    for r in pivoted_list:
-        d[r.pop(0)] = r[1:]
-    data["data"] = d
-    return data
+    with open(p, newline="", encoding="utf-8") as fp:
+        reader = csv.DictReader(fp)
+        rows = list(reader)
+        cols = reader.fieldnames or []
+    return {"filetype": "csv", "data": {"columns": cols, "rows": rows}}
 
 
 def download_excel_file(request):
@@ -422,13 +411,21 @@ def _save_csv(fpath: str, data, meta: dict):
     if len(data) == 0:
         return {"success": False, "error": "No data to save."}
 
-    fieldnames = list(data[0].keys())
+    columns = meta.get("columns")
+    if not columns:
+        cols_set = set()
+        for row in data:
+            if isinstance(row, dict):
+                cols_set.update(row.keys())
+        columns = list(cols_set)
 
     with open(fpath, "w", newline="", encoding="utf-8") as fp:
-        writer = csv.DictWriter(fp, fieldnames=fieldnames)
+        writer = csv.DictWriter(fp, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         for row in data:
-            writer.writerow({k: row.get(k) for k in fieldnames})
+            if not isinstance(row, dict):
+                return {"success": False, "error": "Each CSV row must be an object/dict."}
+            writer.writerow({c: row.get(c, "") for c in columns})
 
     return {"success": True}
 

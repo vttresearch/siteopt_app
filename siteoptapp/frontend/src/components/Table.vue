@@ -20,7 +20,15 @@ const notify = useNotificationStore()
 const saving = ref(false)
 const mdDirty = ref(false)
 const csvDirty = ref(false)
+const gridApi = ref(null)
 
+function onGridReady(params) {
+  gridApi.value = params.api
+}
+
+function onCellValueChanged() {
+  if (data_store.daata?.filetype === "csv") csvDirty.value = true
+}
 
 function clearRefs() {
   sheetNames.value = []
@@ -91,10 +99,6 @@ watch(mdText, () => {
   if (data_store.daata?.filetype === "md") mdDirty.value = true
 });
 
-watch(rowData, () => {
-  if (data_store.daata?.filetype === "csv") csvDirty.value = true
-}, { deep: true })
-
 /**
  * Updates columnDefs for AG Grid data from an .xlsx file is loaded or when user selects a sheet.
  */
@@ -133,36 +137,42 @@ function updateTableFromExcel() {
  * Updates columnDefs for AG Grid when data from a .csv file is loaded.
  */
 function updateTableFromCsv() {
-  const csvData = fileData.value; // { time: [...], value: [...] }
-  const columns = Object.keys(csvData); // ['time', 'value']
+  const cols = fileData.value?.columns ?? []
+  const rows = fileData.value?.rows ?? []
+
   columnDefs.value = [
     {
       headerName: "#",
       valueGetter: "node.rowIndex + 1",
       width: 75,
-      pinned: 'left',
-      cellClass: 'bg-gray-50 font-medium text-left'
+      pinned: "left",
+      cellClass: "bg-gray-50 font-medium text-left"
     },
-    ...columns.map((col, index) => ({
+    ...cols.map(col => ({
       headerName: col,
       field: col,
       minWidth: 100,
       editable: true
     }))
-  ];
-  const rowCount = csvData[columns[0]].length;
-  rowData.value = Array.from({ length: rowCount }, (_, i) => {
-    const row = {};
-    for (const col of columns) {
-      row[col] = csvData[col][i];
-    }
-    return row;
-  });
+  ]
+
+  rowData.value = rows
 }
 
 function newSheetSelected(event) {
   selectedSheet.value = event
   updateTableFromExcel()
+}
+
+function rowsToColumns(rows) {
+  if (!rows || rows.length === 0) return {}
+  const cols = Object.keys(rows[0])
+  const out = {}
+  for (const c of cols) out[c] = []
+  for (const r of rows) {
+    for (const c of cols) out[c].push(r[c])
+  }
+  return out
 }
 
 async function saveCurrentFile() {
@@ -177,12 +187,21 @@ async function saveCurrentFile() {
   let payloadData = null
   let dirtyRef = null
 
-  if (filetype !== "md") {
-    notify.show(`Save not implemented for ${filetype}`, 3000, "error")
-    return
+  if (filetype === "md") {
+    payloadType = "md"
+    payloadData = { text: mdText.value }
+    dirtyRef = mdDirty
   } else if (filetype === "csv") {
     payloadType = "csv"
-    payloadData = rowData.value
+    if (!gridApi.value) {
+      notify.show("Grid not ready yet.", 3000, "error")
+      return
+    }
+    gridApi.value.stopEditing()
+
+    const rows = []
+    gridApi.value.forEachNode(node => rows.push(node.data))
+    payloadData = rows
     dirtyRef = csvDirty
   } else {
     notify.show(`Save not implemented for ${filetype}`, 3000, "error")
@@ -255,6 +274,8 @@ async function saveCurrentFile() {
         :domLayout="'normal'"
         :columnDefs="columnDefs"
         :rowData="rowData"
+        @grid-ready="onGridReady"
+        @cell-value-changed="onCellValueChanged"
         :rowBuffer="10"
         :rowHeight="40"
         :animateRows="true"
