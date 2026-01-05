@@ -416,6 +416,22 @@ def _save_md(fpath: str, data, meta: dict):
 
     return {"success": True}
 
+def _save_csv(fpath: str, data, meta: dict):
+    if not isinstance(data, list):
+        return {"success": False, "error": "csv save expects a list of row objects."}
+    if len(data) == 0:
+        return {"success": False, "error": "No data to save."}
+
+    fieldnames = list(data[0].keys())
+
+    with open(fpath, "w", newline="", encoding="utf-8") as fp:
+        writer = csv.DictWriter(fp, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in data:
+            writer.writerow({k: row.get(k) for k in fieldnames})
+
+    return {"success": True}
+
 def save_file(config_fpath: str, js: dict):
     fpath = js.get("path")
     filetype = js.get("filetype")
@@ -435,7 +451,7 @@ def save_file(config_fpath: str, js: dict):
         "md": _save_md,
         # later:
         # "json": _save_json,
-        # "csv": _save_csv,
+        "csv": _save_csv,
         # "xlsx": _save_xlsx,
     }
 

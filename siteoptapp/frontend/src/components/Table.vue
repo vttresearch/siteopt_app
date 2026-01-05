@@ -19,6 +19,7 @@ const mdText = ref("")
 const notify = useNotificationStore()
 const saving = ref(false)
 const mdDirty = ref(false)
+const csvDirty = ref(false)
 
 
 function clearRefs() {
@@ -41,7 +42,7 @@ watch(() => data_store.daata, (newItems) => {
   fileData.value = newItems["data"]
   if (fileType === "xlsx") {
     console.log("Updating table with Excel data")
-    sheetNames.value = Object.keys(fileData.value)  // or use slice(), or structuredClone if needed
+    sheetNames.value = Object.keys(fileData.value) 
     selectedSheet.value = sheetNames.value[0]
     updateTableFromExcel()
   }
@@ -50,6 +51,7 @@ watch(() => data_store.daata, (newItems) => {
     sheetNames.value = []
     selectedSheet.value = ""
     updateTableFromCsv()
+    csvDirty.value = false
   }
   else if (fileType === "json") {
     console.log("Updating view with JSON data")
@@ -89,6 +91,9 @@ watch(mdText, () => {
   if (data_store.daata?.filetype === "md") mdDirty.value = true
 });
 
+watch(rowData, () => {
+  if (data_store.daata?.filetype === "csv") csvDirty.value = true
+}, { deep: true })
 
 /**
  * Updates columnDefs for AG Grid data from an .xlsx file is loaded or when user selects a sheet.
@@ -141,7 +146,8 @@ function updateTableFromCsv() {
     ...columns.map((col, index) => ({
       headerName: col,
       field: col,
-      minWidth: 100
+      minWidth: 100,
+      editable: true
     }))
   ];
   const rowCount = csvData[columns[0]].length;
@@ -166,7 +172,19 @@ async function saveCurrentFile() {
   }
 
   const filetype = data_store.daata?.filetype
+
+  let payloadType = null
+  let payloadData = null
+  let dirtyRef = null
+
   if (filetype !== "md") {
+    notify.show(`Save not implemented for ${filetype}`, 3000, "error")
+    return
+  } else if (filetype === "csv") {
+    payloadType = "csv"
+    payloadData = rowData.value
+    dirtyRef = csvDirty
+  } else {
     notify.show(`Save not implemented for ${filetype}`, 3000, "error")
     return
   }
@@ -174,15 +192,15 @@ async function saveCurrentFile() {
   saving.value = true
   const r = await postSaveFile(
     data_store.fpath,
-    "md",
-    { text: mdText.value },
+    payloadType,
+    payloadData,
     {},
     notify
   )
   saving.value = false
 
   if (r.success) {
-    mdDirty.value = false
+    dirtyRef.value = false
     notify.show("Saved", 2000, "info")
   }
 }
@@ -196,9 +214,11 @@ async function saveCurrentFile() {
       <div class="truncate">{{ data_store.fname }}</div>
 
       <button
-        v-if="data_store.daata?.filetype === 'md'"
+        v-if="data_store.daata?.filetype === 'md' || data_store.daata?.filetype === 'csv'"
         class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
-        :disabled="!mdDirty || saving"
+        :disabled="(data_store.daata?.filetype === 'md' && !mdDirty)
+        || (data_store.daata?.filetype === 'csv' && !csvDirty)
+        || saving"
         @click="saveCurrentFile"
       >
         {{ saving ? "Saving..." : "Save" }}
@@ -206,6 +226,9 @@ async function saveCurrentFile() {
     </div>
 
     <div v-if="data_store.daata?.filetype === 'md' && mdDirty" class="text-xs text-gray-500 mb-2">
+      Unsaved changes
+    </div>
+    <div v-if="data_store.daata?.filetype === 'csv' && csvDirty" class="text-xs text-gray-500 mb-2">
       Unsaved changes
     </div>
   <SelectSheetButtons
