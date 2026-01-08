@@ -6,6 +6,7 @@ import { useTableDataStore } from '@/stores/filedatastore.js';
 import Spinner from "@/components/Spinner.vue";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { postSaveFile } from "@/utils/functions.js";
+import { useSettingStore } from "@/stores/settingstore.js";
 
 
 const data_store = useTableDataStore()
@@ -25,6 +26,12 @@ const xlsxDirtyBySheet = ref({})
 const currentXlsxDirty = computed(() => !!xlsxDirtyBySheet.value[selectedSheet.value])
 const jsonEditText = ref("")
 const gridApi = ref(null)
+const settingStore = useSettingStore()
+
+const hasWorkFolders = computed(() =>
+  Object.keys(settingStore.workFolders ?? {}).length > 0
+)
+
 
 function onGridReady(params) {
   gridApi.value = params.api
@@ -365,6 +372,8 @@ async function saveCurrentFile() {
         :enableCellTextSelection="false"
       />
     </div>
-    <div v-else class="p-4 text-gray-500">Select a file to view data.</div>
+    <div v-else class="p-4 text-gray-500">
+      {{ hasWorkFolders ? "Select a file to view data." : "Create a work folder to begin." }}
+    </div>
   </div>
 </template>
