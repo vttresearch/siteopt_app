@@ -72,12 +72,12 @@ const fetchWorkFolderFiles = async () => {
           <template v-else>
             <template v-if="!backendUnavailable">
               <ContentPanel class="col-span-2" :content="Table" />
-              <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-xs">
+              <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-sm">
                 <h1 class="text-black text-base mb-2 font-bold">Work folders</h1>
                 <InputWorkFolder class="mb-1" />
                 <template v-for="tree in workFolderFiles">
                   <div class="border border-gray-500 p-1 mb-1">
-                    <div class="text-gray-600 text-xs mb-1"><span>{{ tree[0].path + "\\" + tree[0].name }}</span></div>
+                    <div class="text-gray-600 text-sm mb-1"><span>{{ tree[0].path + "\\" + tree[0].name }}</span></div>
                     <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="tree" :path="tree[0].path" :enableOpen="true" />
                     <WorkSettings class="pt-2" :workDirName="tree[0].name" />
                   </div>
