@@ -23,15 +23,15 @@ function workFolderNameTaken() {
 
 function postNewWorkPath() {
   if (workFolderName.value === "") {
-    notify.show("Please enter work folder name (e.g. work1)", 5000, "info")
+    notify.show("Please enter project name (e.g. work1)", 5000, "info")
     return
   }
   if (workFolderNameTaken()) {
-    notify.show("Given work folder name already exists", 1000, "info")
+    notify.show("Given project name already exists", 1000, "info")
     return
   }
   if (!validFolderName()) {
-    notify.show("Given work folder name contains invalid characters", 5000, "error")
+    notify.show("Given project name contains invalid characters", 5000, "error")
     return
   }
   makeWorkFolder()
@@ -50,7 +50,7 @@ const makeWorkFolder = async () => {
       creating.value = false
       return
     }
-  notify.show(`New work folder ${workFolderName.value} created`, 2000, "info")
+  notify.show(`New project ${workFolderName.value} created`, 2000, "info")
   emit("created", workFolderName.value)
   workFolderName.value = ""
   creating.value = false
@@ -71,7 +71,7 @@ function clear() {
             type="text"
             v-model="workFolderName"
             :disabled="creating"
-            placeholder="Enter work folder name (e.g. work1)"
+            placeholder="Enter project name (e.g. work1)"
             @keyup.enter="postNewWorkPath"
         />
       </span>

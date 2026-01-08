@@ -73,7 +73,7 @@ const fetchWorkFolderFiles = async () => {
             <template v-if="!backendUnavailable">
               <ContentPanel class="col-span-2" :content="Table" />
               <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-sm">
-                <h1 class="text-black text-base mb-2 font-bold">Work folders</h1>
+                <h1 class="text-black text-base mb-2 font-bold">Projects</h1>
                 <InputWorkFolder class="mb-1" />
                 <template v-for="tree in workFolderFiles">
                   <div class="border border-gray-500 p-1 mb-1">

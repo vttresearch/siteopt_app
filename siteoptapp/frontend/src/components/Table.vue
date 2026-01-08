@@ -373,7 +373,7 @@ async function saveCurrentFile() {
       />
     </div>
     <div v-else class="p-4 text-gray-500">
-      {{ hasWorkFolders ? "Select a file to view data." : "Create a work folder to begin." }}
+      {{ hasWorkFolders ? "Select a file to view data." : "Create a new project to begin." }}
     </div>
   </div>
 </template>
