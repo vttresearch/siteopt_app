@@ -77,8 +77,6 @@ function clear() {
       </span>
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50" :disabled="creating" @click="postNewWorkPath">
         <span>Create project</span></button>
-      <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50" :disabled="creating" @click="clear">
-        <font-awesome-icon icon="fa-solid fa-times" fixed-width /></button>
       </div>
     </section>
 </template>
