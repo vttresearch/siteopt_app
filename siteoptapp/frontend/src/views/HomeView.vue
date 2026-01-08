@@ -19,6 +19,11 @@ const loading = ref(true);
 const backendUnavailable = ref(true);
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
+const activeProjectIndex = ref(0)
+
+function setActiveProject(i) {
+  activeProjectIndex.value = i
+}
 
 onMounted(async () => {
   const ready = await checkBackendReady()
@@ -52,11 +57,15 @@ const fetchProjectFiles = async () => {
 
 const fetchWorkFolderFiles = async () => {
   if (Object.keys(settingStore.workFolders).length === 0) {
-    /* Clear button clicked (Not implemented) */
-    workFolderFiles.value = {}
+    workFolderFiles.value = []
+    activeProjectIndex.value = 0
     return
   }
   workFolderFiles.value = await fetchFileTree("fetch_work_folders_tree", notify)
+
+  if (activeProjectIndex.value >= workFolderFiles.value.length) {
+    activeProjectIndex.value = Math.max(0, workFolderFiles.value.length - 1)
+  }
 };
 
 </script>
@@ -74,14 +83,44 @@ const fetchWorkFolderFiles = async () => {
               <ContentPanel class="col-span-2" :content="Table" />
               <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-sm">
                 <h1 class="text-black text-base mb-2 font-bold">Projects</h1>
-                <InputWorkFolder class="mb-1" />
-                <template v-for="tree in workFolderFiles">
-                  <div class="border border-gray-500 p-1 mb-1">
-                    <div class="text-gray-600 text-sm mb-1"><span>{{ tree[0].path + "\\" + tree[0].name }}</span></div>
-                    <FileTree class="bg-blue-50 rounded-l shadow-md relative p-2" :model="tree" :path="tree[0].path" :enableOpen="true" />
-                    <WorkSettings class="pt-2" :workDirName="tree[0].name" />
+                <InputWorkFolder class="mb-1" @created="fetchWorkFolderFiles" />
+                <!-- Tabs row -->
+                <div v-if="Array.isArray(workFolderFiles) && workFolderFiles.length" class="flex flex-wrap gap-2 mb-3">
+                  <button
+                    v-for="(tree, i) in workFolderFiles"
+                    :key="tree?.[0]?.name ?? i"
+                    @click="setActiveProject(i)"
+                    class="px-3 py-1 rounded-md text-sm border"
+                    :class="i === activeProjectIndex
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                  >
+                    {{ tree?.[0]?.name ?? `Project ${i + 1}` }}
+                  </button>
+                </div>
+
+                <!-- Active project panel -->
+                <div v-if="Array.isArray(workFolderFiles) && workFolderFiles.length" class="border border-gray-500 p-2">
+                  <div class="text-gray-600 text-sm mb-2">
+                    <span>
+                      {{ workFolderFiles[activeProjectIndex][0].path + "\\" + workFolderFiles[activeProjectIndex][0].name }}
+                    </span>
                   </div>
-                </template>
+
+                  <FileTree
+                    class="bg-blue-50 rounded-l shadow-md relative p-2"
+                    :model="workFolderFiles[activeProjectIndex]"
+                    :path="workFolderFiles[activeProjectIndex][0].path"
+                    :enableOpen="true"
+                  />
+
+                  <WorkSettings class="pt-2" :workDirName="workFolderFiles[activeProjectIndex][0].name" />
+                </div>
+
+                <!-- Empty state -->
+                <div v-else class="text-gray-500 text-sm p-2">
+                  Create a project to begin.
+                </div>
               </div>
             </template>
             <template v-else>

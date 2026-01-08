@@ -65,7 +65,7 @@ function clear() {
 <template>
   <section>
     <div class="flex items-center gap-2 mb-2">
-      <span class="flex-1">
+      <span class="w-80">
         <input
             class="w-full px-3 py-2 bg-blue-100 rounded-md text-sm"
             type="text"
