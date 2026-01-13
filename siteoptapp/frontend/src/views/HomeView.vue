@@ -126,7 +126,7 @@ async function restoreProject(c) {
                   @click="openRestore"
                   :disabled="restoring"
                 >
-                  {{ restoring ? "Checking..." : "Restore project" }}
+                  {{ restoring ? "Checking..." : "Open existing project" }}
                 </button>
 
                 <!-- Tabs row -->
