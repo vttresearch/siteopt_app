@@ -7,7 +7,7 @@ import Notification from "@/components/Notification.vue";
 import Table from "@/components/Table.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { checkBackendReady, fetchSettings, fetchFileTree } from "@/utils/functions.js";
+import { checkBackendReady, fetchSettings, fetchFileTree, postRemoveWorkFolder, postListExistingWorkFolders, postAddExistingWorkFolder } from "@/utils/functions.js";
 import InputWorkFolder from "@/components/InputWorkFolder.vue";
 import WorkSettings from "@/components/WorkSettings.vue";
 
@@ -20,6 +20,9 @@ const backendUnavailable = ref(true);
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
 const activeProjectIndex = ref(0)
+const restoreOpen = ref(false)
+const restoreCandidates = ref([])
+const restoring = ref(false)
 
 function setActiveProject(i) {
   activeProjectIndex.value = i
@@ -68,6 +71,40 @@ const fetchWorkFolderFiles = async () => {
   }
 };
 
+async function removeProject(name) {
+  if (!name) return
+  const ok = confirm(`Remove "${name}" from view? Files stay on disk.`)
+  if (!ok) return
+
+  const r = await postRemoveWorkFolder(name, notify)
+  if (r?.success) {
+    await fetchSettings()
+    await fetchWorkFolderFiles()
+    notify.show("Removed from view", 2000, "info")
+  }
+}
+
+async function openRestore() {
+  restoring.value = true
+  const r = await postListExistingWorkFolders(notify)
+  restoring.value = false
+
+  if (r?.success) {
+    restoreCandidates.value = r.data ?? []
+    restoreOpen.value = true
+  }
+}
+
+async function restoreProject(c) {
+  const r = await postAddExistingWorkFolder(c.name, c.path, notify)
+  if (r?.success) {
+    restoreOpen.value = false
+    await fetchSettings()
+    await fetchWorkFolderFiles()
+    notify.show("Project restored", 2000, "info")
+  }
+}
+
 </script>
 
 <template>
@@ -84,21 +121,61 @@ const fetchWorkFolderFiles = async () => {
               <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-sm">
                 <h1 class="text-black text-base mb-2 font-bold">Projects</h1>
                 <InputWorkFolder class="mb-1" @created="fetchWorkFolderFiles" />
+                <button
+                  class="mb-2 px-3 py-1 rounded bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-50"
+                  @click="openRestore"
+                  :disabled="restoring"
+                >
+                  {{ restoring ? "Checking..." : "Restore project" }}
+                </button>
+
                 <!-- Tabs row -->
-                <div v-if="Array.isArray(workFolderFiles) && workFolderFiles.length" class="flex flex-wrap gap-2 mb-3">
+              <div v-if="Array.isArray(workFolderFiles) && workFolderFiles.length" class="flex flex-wrap gap-2 mb-3">
+                <div v-for="(tree, i) in workFolderFiles" :key="tree?.[0]?.name ?? i" class="flex items-stretch">
                   <button
-                    v-for="(tree, i) in workFolderFiles"
-                    :key="tree?.[0]?.name ?? i"
                     @click="setActiveProject(i)"
-                    class="px-3 py-1 rounded-md text-sm border"
+                    class="px-3 py-1 rounded-l-md text-sm border"
                     :class="i === activeProjectIndex
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
                   >
                     {{ tree?.[0]?.name ?? `Project ${i + 1}` }}
                   </button>
-                </div>
 
+                  <button
+                    class="px-2 py-1 rounded-r-md text-sm border border-l-0"
+                    :class="i === activeProjectIndex
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'"
+                    title="Remove from view"
+                    @click.stop="removeProject(tree?.[0]?.name)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div v-if="restoreOpen" class="mb-3 border border-gray-300 rounded p-3 bg-gray-50">
+              <div class="flex items-center justify-between mb-2">
+                <div class="font-semibold text-gray-800">Restore project</div>
+                <button class="text-sm text-gray-600 hover:underline" @click="restoreOpen = false">Close</button>
+              </div>
+
+              <div v-if="restoreCandidates.length === 0" class="text-sm text-gray-600">
+                No hidden projects found.
+              </div>
+
+              <div v-else class="space-y-2">
+                <button
+                  v-for="c in restoreCandidates"
+                  :key="c.path"
+                  class="w-full text-left px-3 py-2 rounded border bg-white hover:bg-gray-50"
+                  @click="restoreProject(c)"
+                >
+                  <div class="font-medium">{{ c.name }}</div>
+                  <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
+                </button>
+              </div>
+            </div>
                 <!-- Active project panel -->
                 <div v-if="Array.isArray(workFolderFiles) && workFolderFiles.length" class="border border-gray-500 p-2">
                   <div class="text-gray-600 text-sm mb-2">
@@ -112,6 +189,7 @@ const fetchWorkFolderFiles = async () => {
                     :model="workFolderFiles[activeProjectIndex]"
                     :path="workFolderFiles[activeProjectIndex][0].path"
                     :enableOpen="true"
+                    :depth="0"
                   />
 
                   <WorkSettings class="pt-2" :workDirName="workFolderFiles[activeProjectIndex][0].name" />

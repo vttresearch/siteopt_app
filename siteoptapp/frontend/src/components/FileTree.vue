@@ -21,7 +21,8 @@ const props = defineProps({
   enableOpen: {
     type: Boolean,
     default: false
-  }
+  },
+  depth: { type: Number, default: 0 }
 })
 
 const settingStore = useSettingStore()
@@ -59,7 +60,7 @@ function concatParentName(itemName) {
           <FileItem :item_name="item.name" :parent_name="parentName" :interm_paths="fullParents" :base_path="props.path" :enableOpen="props.enableOpen"/>
         </li>
         <li v-else>
-          <FolderItem :folderName="item.name" :children="item.children" :parentName="concatParentName(item.name)" :base_path="props.path" :enableOpen="props.enableOpen" />
+          <FolderItem :folderName="item.name" :children="item.children" :parentName="concatParentName(item.name)" :base_path="props.path" :enableOpen="props.enableOpen" :depth="props.depth" />
         </li>
       </template>
     </ul>

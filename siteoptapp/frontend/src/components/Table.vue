@@ -33,6 +33,7 @@ const hasWorkFolders = computed(() =>
 )
 
 
+
 function onGridReady(params) {
   gridApi.value = params.api
 }
@@ -307,6 +308,9 @@ async function saveCurrentFile() {
 <template>
   <Spinner v-if="data_store.loading" message="Loading data..." class="col-auto"/>
   <div v-else>
+    <div class="mb-3 text-lg font-semibold text-gray-800">
+      Data Editor
+    </div>
     <div class="flex items-center justify-between text-gray-600 my-2 mb-4">
       <div class="truncate">{{ data_store.fname }}</div>
 

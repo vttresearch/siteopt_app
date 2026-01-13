@@ -289,3 +289,106 @@ export async function postSaveFile(path, filetype, data, meta, notify) {
   }
 }
 
+export async function postRemoveWorkFolder(work_folder, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/remove_work_folder/`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({ work_folder }),
+    });
+
+    if (!response.ok) {
+      const txt = await response.text()
+      notify.show(`Remove failed: ${txt}`, 5000, "error")
+      return { success: false }
+    }
+
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(r.error || "Remove failed", 5000, "error");
+      return { success: false };
+    }
+
+    return { success: true };
+  } catch (err) {
+    notify.show(String(err), 5000, "error");
+    return { success: false };
+  }
+}
+
+export async function postListExistingWorkFolders(notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/list_existing_work_folders/`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      const txt = await response.text()
+      notify.show(`Listing failed: ${txt}`, 5000, "error")
+      return { success: false, data: [] }
+    }
+
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(r.error || "Listing failed", 5000, "error");
+      return { success: false, data: [] };
+    }
+
+    return { success: true, data: r.data ?? [] };
+  } catch (err) {
+    notify.show(String(err), 5000, "error");
+    return { success: false, data: [] };
+  }
+}
+
+export async function postAddExistingWorkFolder(work_folder, path, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/add_existing_work_folder/`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({ work_folder, path }),
+    });
+
+    if (!response.ok) {
+      const txt = await response.text()
+      notify.show(`Restore failed: ${txt}`, 5000, "error")
+      return { success: false }
+    }
+
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(r.error || "Restore failed", 5000, "error");
+      return { success: false };
+    }
+
+    return { success: true };
+  } catch (err) {
+    notify.show(String(err), 5000, "error");
+    return { success: false };
+  }
+}
+
+

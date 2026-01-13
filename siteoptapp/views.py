@@ -27,6 +27,16 @@ def get_input_data_path() -> str:
 def get_project_data_path() -> str:
     return str(PROJECT_DATA_DIR)
 
+def get_client_work_root(client_id: str) -> str:
+    """
+    Returns the root directory containing all work folders
+    for this client (does not create it).
+    """
+    base = platformdirs.user_data_dir()
+    return os.path.abspath(
+        os.path.join(base, APP_DATA_DIR, WORK_DIR, str(client_id)[0:6])
+    )
+
 @ensure_csrf_cookie
 def health_check(request):
     """For polling the backend."""
@@ -70,6 +80,69 @@ def get_client_config(client_id):
         )
     return config
 
+def remove_work_folder(config_fpath: str, work_folder_name: str):
+    if not work_folder_name:
+        return {"success": False, "error": "Missing work_folder"}
+
+    cfg = read_config_file(config_fpath)
+    work_folders = cfg.get("work_folders", {})
+
+    if work_folder_name not in work_folders:
+        return {"success": False, "error": f"Unknown work folder: {work_folder_name}"}
+
+    # Soft remove: only remove from config, keep files on disk
+    work_folders.pop(work_folder_name, None)
+    edit_config_file(config_fpath, {"work_folders": work_folders})
+    return {"success": True}
+
+def list_existing_work_folders(client_id: str, config_fpath: str):
+    root = get_client_work_root(client_id)
+    if not os.path.exists(root):
+        return {"success": True, "data": []}
+
+    cfg = read_config_file(config_fpath)
+    active = cfg.get("work_folders", {})
+    active_paths = set(os.path.abspath(p) for p in active.values())
+
+    out = []
+    for entry in os.listdir(root):
+        p = os.path.join(root, entry)
+        if not os.path.isdir(p):
+            continue
+        # only show projects not currently in view
+        if os.path.abspath(p) in active_paths:
+            continue
+        # (optional) sanity check: looks like a Spine Toolbox project
+        if not validate_project_path(p)["success"]:
+            continue
+
+        out.append({"name": entry, "path": p})
+
+    out.sort(key=lambda x: x["name"].lower())
+    return {"success": True, "data": out}
+
+def add_existing_work_folder(config_fpath: str, js: dict):
+    name = js.get("work_folder")
+    path = js.get("path")
+
+    if not name or not path:
+        return {"success": False, "error": "Missing work_folder or path"}
+
+    if not os.path.exists(path):
+        return {"success": False, "error": f"Path does not exist: {path}"}
+
+    # Ensure this is under the client work root (prevents adding arbitrary dirs)
+    cfg = read_config_file(config_fpath)
+    # You can also pass client_id and check get_client_work_root(client_id)
+    # For now, at least validate it is a project
+    if not validate_project_path(path)["success"]:
+        return {"success": False, "error": "Folder is not a valid Spine Toolbox project"}
+
+    work_folders = cfg.get("work_folders", {})
+    work_folders[name] = path
+    edit_config_file(config_fpath, {"work_folders": work_folders})
+    return {"success": True}
+
 
 @csrf_protect
 def post(request, action):
@@ -107,6 +180,16 @@ def post(request, action):
         print(f"[{client_id}] saving {js.get('path')}")
         config = get_client_config(client_id)
         return JsonResponse(save_file(config.config_path, js))
+    elif action == "remove_work_folder":
+        config = get_client_config(client_id)
+        name = js.get("work_folder")
+        return JsonResponse(remove_work_folder(config.config_path, name))
+    elif action == "list_existing_work_folders":
+        config = get_client_config(client_id)
+        return JsonResponse(list_existing_work_folders(client_id, config.config_path))
+    elif action == "add_existing_work_folder":
+        config = get_client_config(client_id)
+        return JsonResponse(add_existing_work_folder(config.config_path, js))
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
