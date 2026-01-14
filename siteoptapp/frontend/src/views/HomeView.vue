@@ -10,7 +10,7 @@ import { useNotificationStore } from "@/stores/notificationstore.js";
 import { checkBackendReady, fetchSettings, fetchFileTree, postRemoveWorkFolder, postListExistingWorkFolders, postAddExistingWorkFolder } from "@/utils/functions.js";
 import InputWorkFolder from "@/components/InputWorkFolder.vue";
 import WorkSettings from "@/components/WorkSettings.vue";
-
+import BaseButton from "@/components/ui/BaseButton.vue";
 
 const inputFiles = ref({});
 const projectFiles = ref([]);
@@ -124,60 +124,57 @@ async function restoreProject(c) {
                   <div class="shrink-0">
                     <InputWorkFolder @created="fetchWorkFolderFiles" />
                   </div>
-                  <button
-                    class="text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50 whitespace-nowrap"
-                    @click="openRestore"
+                  <BaseButton
                     :disabled="restoring"
+                    @click="openRestore"
                   >
                     {{ restoring ? "Checking..." : "Open existing project" }}
-                  </button>
+                  </BaseButton>
                 </div>
 
                 <!-- Tabs row -->
               <div v-if="Array.isArray(workFolderFiles) && workFolderFiles.length" class="flex flex-wrap gap-2 mb-3">
                 <div v-for="(tree, i) in workFolderFiles" :key="tree?.[0]?.name ?? i" class="flex items-stretch">
-                  <button
-                    @click="setActiveProject(i)"
-                    class="px-3 py-1 rounded-l-md text-sm border"
-                    :class="i === activeProjectIndex
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
-                  >
-                    {{ tree?.[0]?.name ?? `Project ${i + 1}` }}
-                  </button>
-
-                  <button
-                    class="px-2 py-1 rounded-r-md text-sm border border-l-0"
-                    :class="i === activeProjectIndex
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'"
+                <BaseButton
+                  variant="secondary"
+                  class="relative pr-8"
+                  :class="i === activeProjectIndex && 'ring-2 ring-blue-500'"
+                  @click="setActiveProject(i)"
+                >
+                  {{ tree?.[0]?.name ?? `Project ${i + 1}` }}
+                  <span
+                    class="absolute right-2 top-1/2 -translate-y-1/2
+                          text-red-600 hover:text-red-800 cursor-pointer"
                     title="Remove from view"
                     @click.stop="removeProject(tree?.[0]?.name)"
                   >
                     ✕
-                  </button>
+                  </span>
+                </BaseButton>
                 </div>
               </div>
               <div v-if="restoreOpen" class="mb-3 border border-gray-300 rounded p-3 bg-gray-50">
               <div class="flex items-center justify-between mb-2">
                 <div class="font-semibold text-gray-800">Restore project</div>
-                <button class="text-sm text-gray-600 hover:underline" @click="restoreOpen = false">Close</button>
+                <BaseButton variant="ghost" @click="restoreOpen = false">Close</BaseButton>
               </div>
 
               <div v-if="restoreCandidates.length === 0" class="text-sm text-gray-600">
                 No hidden projects found.
               </div>
-
               <div v-else class="space-y-2">
-                <button
+                <BaseButton
                   v-for="c in restoreCandidates"
                   :key="c.path"
-                  class="w-full text-left px-3 py-2 rounded border bg-white hover:bg-gray-50"
+                  variant="secondary"
+                  class="w-full justify-start text-left"
                   @click="restoreProject(c)"
                 >
-                  <div class="font-medium">{{ c.name }}</div>
-                  <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
-                </button>
+                  <div class="w-full">
+                    <div class="font-medium">{{ c.name }}</div>
+                    <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
+                  </div>
+                </BaseButton>
               </div>
             </div>
                 <!-- Active project panel -->

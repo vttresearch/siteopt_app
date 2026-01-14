@@ -4,6 +4,7 @@ import { useNotificationStore } from "@/stores/notificationstore.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { postExecuteRequest } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
+import BaseButton from "@/components/ui/BaseButton.vue";
 
 
 const props = defineProps({
@@ -63,36 +64,29 @@ async function executeSelected() {
       </div>
 
       <div class="flex gap-2">
-        <button
-          @click="execType = 'opt1'"
-          :class="execType === 'opt1'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-          class="px-3 py-1 rounded border text-sm"
-        >
-          Option 1
-        </button>
-
-        <button
-          @click="execType = 'opt2'"
-          :class="execType === 'opt2'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-          class="px-3 py-1 rounded border text-sm"
-        >
-          Option 2
-        </button>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt1'"
+        :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
+      >
+        Option 1
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt2'"
+        :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
+      >
+        Option 2
+      </BaseButton>
       </div>
-
-      <button
-        class="px-3 py-1 bg-blue-500 hover:bg-blue-700 text-white rounded shadow flex items-center gap-2 disabled:opacity-50"
+      <BaseButton
         :disabled="!execType"
         @click="executeSelected"
+        class="flex items-center gap-2"
       >
         <font-awesome-icon icon="fa-solid fa-play" fixed-width />
         <span>Execute</span>
-      </button>
-
+      </BaseButton>
     </div>
 
     <div class="col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
