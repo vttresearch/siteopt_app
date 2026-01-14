@@ -120,14 +120,18 @@ async function restoreProject(c) {
               <ContentPanel class="col-span-2" :content="Table" />
               <div class="col-span-3 bg-white rounded-xl shadow-md relative p-2 text-sm">
                 <h1 class="text-black text-base mb-2 font-bold">Projects</h1>
-                <InputWorkFolder class="mb-1" @created="fetchWorkFolderFiles" />
-                <button
-                  class="mb-2 px-3 py-1 rounded bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-50"
-                  @click="openRestore"
-                  :disabled="restoring"
-                >
-                  {{ restoring ? "Checking..." : "Open existing project" }}
-                </button>
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="shrink-0">
+                    <InputWorkFolder @created="fetchWorkFolderFiles" />
+                  </div>
+                  <button
+                    class="text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50 whitespace-nowrap"
+                    @click="openRestore"
+                    :disabled="restoring"
+                  >
+                    {{ restoring ? "Checking..." : "Open existing project" }}
+                  </button>
+                </div>
 
                 <!-- Tabs row -->
               <div v-if="Array.isArray(workFolderFiles) && workFolderFiles.length" class="flex flex-wrap gap-2 mb-3">

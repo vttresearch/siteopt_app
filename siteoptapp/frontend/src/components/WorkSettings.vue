@@ -55,32 +55,52 @@ async function executeSelected() {
 
 <template>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <div class="col-span-1">
-    <!-- Execution Type Selection -->
-    <div class="flex space-x-4 items-center">
-      <label class="flex items-center space-x-2">
-        <input type="radio" value="One" v-model="execType" />
-        <span>Type 1</span>
-      </label>
-      <label class="flex items-center space-x-2">
-        <input type="radio" value="Two" v-model="execType" />
-        <span>Type 2</span>
-      </label>
-    </div>
-    <!-- Execute Button -->
-    <button
-        class="mt-1 px-2 py-1 bg-blue-500 hover:bg-blue-700 text-white rounded shadow flex items-center space-x-2"
+
+    <div class="col-span-1 space-y-3">
+
+      <div class="text-black text-base mb-2 font-bold">
+        Execution
+      </div>
+
+      <div class="flex gap-2">
+        <button
+          @click="execType = 'opt1'"
+          :class="execType === 'opt1'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          class="px-3 py-1 rounded border text-sm"
+        >
+          Option 1
+        </button>
+
+        <button
+          @click="execType = 'opt2'"
+          :class="execType === 'opt2'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          class="px-3 py-1 rounded border text-sm"
+        >
+          Option 2
+        </button>
+      </div>
+
+      <button
+        class="px-3 py-1 bg-blue-500 hover:bg-blue-700 text-white rounded shadow flex items-center gap-2 disabled:opacity-50"
+        :disabled="!execType"
         @click="executeSelected"
-    >
-      <font-awesome-icon icon="fa-solid fa-play" fixed-width />
-      <span>Execute</span>
-    </button>
+      >
+        <font-awesome-icon icon="fa-solid fa-play" fixed-width />
+        <span>Execute</span>
+      </button>
+
     </div>
-    <!-- Execution Output -->
+
     <div class="col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
       <div v-for="(line, index) in executionOutput" :key="index" class="whitespace-pre-wrap">
         {{ line }}
       </div>
     </div>
+
   </div>
 </template>
+
