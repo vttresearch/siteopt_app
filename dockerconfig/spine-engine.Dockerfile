@@ -17,8 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Python build deps (yours)
     libssl-dev \
     zlib1g-dev \
-    libncurses5-dev \
-    libncursesw5-dev \
+    libncurses-dev \
     libreadline-dev \
     libsqlite3-dev \
     libgdbm-dev \
