@@ -28,7 +28,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libegl1 \
     libgl1 \
     libxkbcommon-x11-0 \
+    libglib2.0-0 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcb1 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libxi6 \
+    libsm6 \
+    libice6 \
   && rm -rf /var/lib/apt/lists/*
+
 
 RUN add-apt-repository ppa:deadsnakes/ppa -y && apt-get update \
   && apt-get install -y --no-install-recommends \
