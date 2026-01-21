@@ -18,8 +18,10 @@ function validFolderName() {
 }
 
 function workFolderNameTaken() {
-  return Object.keys(settings.workFolders).includes(workFolderName.value)
+  const wf = settings.workFolders ?? {}
+  return Object.prototype.hasOwnProperty.call(wf, workFolderName.value)
 }
+
 
 function postNewWorkPath() {
   if (workFolderName.value === "") {

@@ -5,13 +5,14 @@ import shutil
 import uuid
 import subprocess
 import openpyxl
-import platformdirs
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.timezone import now
 from siteoptapp.models import ClientConfig
 from pathlib import Path
 from django.conf import settings
+from pathlib import Path
+import sys
 
 APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
 SETTINGS_DIR = "settings"
@@ -20,6 +21,10 @@ CONFIG_FILE = "config.json"
 JOBS = {}
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
+WORK_ROOT = Path(os.environ.get("WORK_ROOT", Path(settings.BASE_DIR) / "work")).resolve()
+SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
+PYTHON_EXECUTABLE = os.environ.get("SPINE_PYTHON", sys.executable)
+CONFIG_ROOT = Path(os.environ.get("CONFIG_ROOT", WORK_ROOT / "_config")).resolve()
 
 def get_input_data_path() -> str:
     return str(INPUT_DATA_DIR)
@@ -29,13 +34,10 @@ def get_project_data_path() -> str:
 
 def get_client_work_root(client_id: str) -> str:
     """
-    Returns the root directory containing all work folders
-    for this client (does not create it).
+    Root directory containing all work folders for this client.
+    Must be a path that BOTH backend and spine_engine containers can access.
     """
-    base = platformdirs.user_data_dir()
-    return os.path.abspath(
-        os.path.join(base, APP_DATA_DIR, WORK_DIR, str(client_id)[0:6])
-    )
+    return str((WORK_ROOT / str(client_id)[0:6]).resolve())
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -67,17 +69,18 @@ def get_client_config(client_id):
         config.last_seen = now()
         config.save()
     except ClientConfig.DoesNotExist:
-        base = platformdirs.user_data_dir()  # Win: %APPDATA%/Local
-        config_file_dir = os.path.abspath(os.path.join(base, APP_DATA_DIR, SETTINGS_DIR, str(client_id)[0:6]))
-        config_file_path = os.path.join(config_file_dir, CONFIG_FILE)
-        # Create config dir and default config file if it doesn't exist
-        make_dir(config_file_dir)
-        make_config_file(config_file_path)
+        config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
+        config_file_path = (config_file_dir / CONFIG_FILE).resolve()
+
+        make_dir(str(config_file_dir))
+        make_config_file(str(config_file_path))
+
         config = ClientConfig.objects.create(
             client_id=client_id,
-            config_path=config_file_path,
+            config_path=str(config_file_path),
             last_seen=now()
         )
+
     return config
 
 def remove_work_folder(config_fpath: str, work_folder_name: str):
@@ -199,33 +202,58 @@ def execute(request, job_id):
     print(f"Starting execution of job_id {job_id}")
 
     def event_stream():
-        ppath = JOBS[job_id][0]
-        exec_type = JOBS[job_id][1]
+        job = JOBS.get(job_id)
+        if not job:
+            yield f"event: done\ndata: ERROR: Unknown job_id {job_id}\n\n"
+            return
+
+        ppath = job[0]
+        exec_type = job[1]
+
+        project_path = Path(ppath).resolve()
+
+        if not project_path.exists():
+            JOBS.pop(job_id, None)
+            yield f"event: done\ndata: ERROR: project path does not exist: {project_path}\n\n"
+            return
+
+        if not SERVER_CONFIG_PATH.exists():
+            JOBS.pop(job_id, None)
+            yield f"event: done\ndata: ERROR: server config missing: {SERVER_CONFIG_PATH}\n\n"
+            return
+
         args = [
-            "C:/data/GIT/SITEOPT-WEB-INTERFACE/.venv_st/Scripts/python.exe",
-            "-m",
-            "spinetoolbox",
+            PYTHON_EXECUTABLE,
+            "-m", "spinetoolbox",
             "--execute-only",
-            "--execute-remotely",
-            "server_config.txt",
-            ppath
+            "--execute-remotely", str(SERVER_CONFIG_PATH),
+            str(project_path),
         ]
+
         try:
-            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            for line in iter(proc.stdout.readline, b""):
-                line = line.decode("utf-8", "ignore").strip()
-                yield f"data: {line}\n\n"
-            proc.stdout.close()
-            proc_retval = proc.wait()
-            JOBS.pop(job_id)
-            # Notify frontend that execution is done
-            yield f"event: done\ndata: Execution finished [{proc_retval}]\n\n"
+            proc = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+
+            code = proc.wait()
+            JOBS.pop(job_id, None)
+            yield f"event: done\ndata: Execution finished [{code}]\n\n"
+
         except OSError as e:
-            print(f"[OSError] {e}")
-            yield f"data: [OSError]: {e}\n\n"
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+            JOBS.pop(job_id, None)
+            yield f"event: done\ndata: [OSError]: {e}\n\n"
+
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
     return response
+
 
 
 def validate_input_data_path(p):
@@ -245,28 +273,38 @@ def validate_project_path(p):
 
 
 def make_work_folder(config_fpath, client_id, work_folder_name):
-    configs = read_config_file(config_fpath)
-    idp = get_input_data_path()
-    
+    configs = read_config_file(config_fpath) or {}
+
+    configs.setdefault("input_data_path", get_input_data_path())
+    configs.setdefault("project_data_path", get_project_data_path())
+    if not isinstance(configs.get("work_folders"), dict):
+        configs["work_folders"] = {}
+
+    with open(config_fpath, "w") as fp:
+        json.dump(configs, fp, indent=4)
+
+    idp = configs["input_data_path"]
+    pdp = configs["project_data_path"]
+
     if not validate_input_data_path(idp)["success"]:
         return {"success": False, "error": f"Bundled input data is invalid: '{idp}'"}
-    pdp = configs["project_data_path"]
-    pdp = get_project_data_path()
     if not validate_project_path(pdp)["success"]:
         return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
-    base = platformdirs.user_data_dir()  # Win: %APPDATA%/Local
-    work_dir = os.path.abspath(os.path.join(base, APP_DATA_DIR, WORK_DIR, str(client_id)[0:6], work_folder_name))
+
+    client_root = Path(get_client_work_root(client_id))
+    work_dir = (client_root / work_folder_name).resolve()
+
     try:
-        make_dir(work_dir)
-        # Copy contents of project_data_path to work_dir
-        shutil.copytree(pdp, work_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
-        # Copy contents of input_data_path to 'current_input' folder in the same work_dir
-        shutil.copytree(idp, os.path.join(work_dir, "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+        make_dir(str(work_dir))
+        shutil.copytree(pdp, str(work_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+        shutil.copytree(idp, str(work_dir / "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
     except OSError as e:
         return {"success": False, "error": f"[OSError] [{e}] Creating work dir failed"}
-    work_folders = configs.get("work_folders", {})
-    if work_folder_name not in work_folders.keys():
-        work_folders[work_folder_name] = work_dir
+
+    work_folders = configs["work_folders"]
+    if work_folder_name not in work_folders:
+        work_folders[work_folder_name] = str(work_dir)
+
     edit_config_file(config_fpath, {"work_folders": work_folders})
     return {"success": True}
 
@@ -326,7 +364,7 @@ def fetch_work_folders_tree(request):
     print(f"Client {client_id} is fetching work folder files")
     config = get_client_config(client_id)
     config_d = read_config_file(config.config_path)
-    work_folders_dict = config_d["work_folders"]
+    work_folders_dict = config_d.get("work_folders", {})
     trees = list()
     for name, p in work_folders_dict.items():
         if not os.path.exists(p):
@@ -419,11 +457,13 @@ def read_csv_as_json(p):
 
 
 def download_excel_file(request):
-    fpath = os.path.join("C:\\", "Users", "ttepsa", "temp", "ms-excel-command-test.xlsx")
-    wb = openpyxl.load_workbook(fpath)
-    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheeml.sheet")
+    fpath = (WORK_ROOT / "ms-excel-command-test.xlsx").resolve()
+    if not fpath.exists():
+        return JsonResponse({"success": False, "error": f"Missing file: {fpath}"}, status=404)
+
+    wb = openpyxl.load_workbook(str(fpath))
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = 'attachment; filename="ms-excel-file.xlsx"'
-    # Save the workbook to the response
     wb.save(response)
     return response
 

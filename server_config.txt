@@ -1,0 +1,4 @@
+[server]
+protocol = tcp
+host = spine_engine
+port = 50001
