@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onUnmounted } from 'vue';
+import { ref, onUnmounted, watch } from 'vue';
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { postExecuteRequest } from "@/utils/functions.js";
@@ -14,6 +14,7 @@ const props = defineProps({
 const notify = useNotificationStore();
 const execType = ref("");
 const executionOutput = ref([]);
+const executionFinished = ref(false);
 let eventSource = null;
 
 onUnmounted(() => {
@@ -21,6 +22,13 @@ onUnmounted(() => {
     eventSource.close();
   }
 })
+
+watch(executionFinished, (newExecutionFinished) => {
+  if (executionFinished.value) {
+    // Refetch props.workDirName contents
+  }
+  executionFinished.value = false
+});
 
 async function executeSelected() {
   console.log("executeSelected() called")
@@ -34,7 +42,6 @@ async function executeSelected() {
   if (!jobId) {
     return
   }
-  // TODO: Refetch work dirs
   if (eventSource) {
     eventSource.close();
     eventSource = null;
@@ -47,6 +54,7 @@ async function executeSelected() {
     executionOutput.value.push(`[done] ${event.data}`);
     eventSource.close();
     eventSource = null;
+    executionFinished.value = true;
   });
   eventSource.onmessage = (event) => {
     executionOutput.value.push(event.data)

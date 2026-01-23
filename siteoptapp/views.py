@@ -231,21 +231,15 @@ def execute(request, job_id):
         ]
 
         try:
-            proc = subprocess.Popen(
-                args,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-
-            for line in proc.stdout:
-                yield f"data: {line.rstrip()}\n\n"
-
-            code = proc.wait()
-            JOBS.pop(job_id, None)
-            yield f"event: done\ndata: Execution finished [{code}]\n\n"
-
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            for line in iter(proc.stdout.readline, b""):
+                line = line.decode("utf-8", "replace").strip()
+                yield f"data: {line}\n\n"
+            proc.stdout.close()
+            proc_retval = proc.wait()
+            JOBS.pop(job_id)
+            # Notify frontend that execution is done
+            yield f"event: done\ndata: Execution finished [{proc_retval}]\n\n"
         except OSError as e:
             JOBS.pop(job_id, None)
             yield f"event: done\ndata: [OSError]: {e}\n\n"
