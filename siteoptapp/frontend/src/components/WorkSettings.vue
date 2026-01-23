@@ -4,6 +4,7 @@ import { useNotificationStore } from "@/stores/notificationstore.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { postExecuteRequest } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
+import BaseButton from "@/components/ui/BaseButton.vue";
 
 
 const props = defineProps({
@@ -63,32 +64,45 @@ async function executeSelected() {
 
 <template>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <div class="col-span-1">
-    <!-- Execution Type Selection -->
-    <div class="flex space-x-4 items-center">
-      <label class="flex items-center space-x-2">
-        <input type="radio" value="One" v-model="execType" />
-        <span>Type 1</span>
-      </label>
-      <label class="flex items-center space-x-2">
-        <input type="radio" value="Two" v-model="execType" />
-        <span>Type 2</span>
-      </label>
-    </div>
-    <!-- Execute Button -->
-    <button
-        class="mt-1 px-2 py-1 bg-blue-500 hover:bg-blue-700 text-white rounded shadow flex items-center space-x-2"
+
+    <div class="col-span-1 space-y-3">
+
+      <div class="text-black text-base mb-2 font-bold">
+        Execution
+      </div>
+
+      <div class="flex gap-2">
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt1'"
+        :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
+      >
+        Option 1
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt2'"
+        :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
+      >
+        Option 2
+      </BaseButton>
+      </div>
+      <BaseButton
+        :disabled="!execType"
         @click="executeSelected"
-    >
-      <font-awesome-icon icon="fa-solid fa-play" fixed-width />
-      <span>Execute</span>
-    </button>
+        class="flex items-center gap-2"
+      >
+        <font-awesome-icon icon="fa-solid fa-play" fixed-width />
+        <span>Execute</span>
+      </BaseButton>
     </div>
-    <!-- Execution Output -->
+
     <div class="col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
       <div v-for="(line, index) in executionOutput" :key="index" class="whitespace-pre-wrap">
         {{ line }}
       </div>
     </div>
+
   </div>
 </template>
+

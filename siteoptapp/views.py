@@ -5,18 +5,39 @@ import shutil
 import uuid
 import subprocess
 import openpyxl
-import platformdirs
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.timezone import now
 from siteoptapp.models import ClientConfig
+from pathlib import Path
+from django.conf import settings
+from pathlib import Path
+import sys
 
 APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
 SETTINGS_DIR = "settings"
 WORK_DIR = "work"
 CONFIG_FILE = "config.json"
 JOBS = {}
+INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
+PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
+WORK_ROOT = Path(os.environ.get("WORK_ROOT", Path(settings.BASE_DIR) / "work")).resolve()
+SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
+PYTHON_EXECUTABLE = os.environ.get("SPINE_PYTHON", sys.executable)
+CONFIG_ROOT = Path(os.environ.get("CONFIG_ROOT", WORK_ROOT / "_config")).resolve()
 
+def get_input_data_path() -> str:
+    return str(INPUT_DATA_DIR)
+
+def get_project_data_path() -> str:
+    return str(PROJECT_DATA_DIR)
+
+def get_client_work_root(client_id: str) -> str:
+    """
+    Root directory containing all work folders for this client.
+    Must be a path that BOTH backend and spine_engine containers can access.
+    """
+    return str((WORK_ROOT / str(client_id)[0:6]).resolve())
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -48,18 +69,82 @@ def get_client_config(client_id):
         config.last_seen = now()
         config.save()
     except ClientConfig.DoesNotExist:
-        base = platformdirs.user_data_dir()  # Win: %APPDATA%/Local
-        config_file_dir = os.path.abspath(os.path.join(base, APP_DATA_DIR, SETTINGS_DIR, str(client_id)[0:6]))
-        config_file_path = os.path.join(config_file_dir, CONFIG_FILE)
-        # Create config dir and default config file if it doesn't exist
-        make_dir(config_file_dir)
-        make_config_file(config_file_path)
+        config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
+        config_file_path = (config_file_dir / CONFIG_FILE).resolve()
+
+        make_dir(str(config_file_dir))
+        make_config_file(str(config_file_path))
+
         config = ClientConfig.objects.create(
             client_id=client_id,
-            config_path=config_file_path,
+            config_path=str(config_file_path),
             last_seen=now()
         )
+
     return config
+
+def remove_work_folder(config_fpath: str, work_folder_name: str):
+    if not work_folder_name:
+        return {"success": False, "error": "Missing work_folder"}
+
+    cfg = read_config_file(config_fpath)
+    work_folders = cfg.get("work_folders", {})
+
+    if work_folder_name not in work_folders:
+        return {"success": False, "error": f"Unknown work folder: {work_folder_name}"}
+
+    # Soft remove: only remove from config, keep files on disk
+    work_folders.pop(work_folder_name, None)
+    edit_config_file(config_fpath, {"work_folders": work_folders})
+    return {"success": True}
+
+def list_existing_work_folders(client_id: str, config_fpath: str):
+    root = get_client_work_root(client_id)
+    if not os.path.exists(root):
+        return {"success": True, "data": []}
+
+    cfg = read_config_file(config_fpath)
+    active = cfg.get("work_folders", {})
+    active_paths = set(os.path.abspath(p) for p in active.values())
+
+    out = []
+    for entry in os.listdir(root):
+        p = os.path.join(root, entry)
+        if not os.path.isdir(p):
+            continue
+        # only show projects not currently in view
+        if os.path.abspath(p) in active_paths:
+            continue
+        # (optional) sanity check: looks like a Spine Toolbox project
+        if not validate_project_path(p)["success"]:
+            continue
+
+        out.append({"name": entry, "path": p})
+
+    out.sort(key=lambda x: x["name"].lower())
+    return {"success": True, "data": out}
+
+def add_existing_work_folder(config_fpath: str, js: dict):
+    name = js.get("work_folder")
+    path = js.get("path")
+
+    if not name or not path:
+        return {"success": False, "error": "Missing work_folder or path"}
+
+    if not os.path.exists(path):
+        return {"success": False, "error": f"Path does not exist: {path}"}
+
+    # Ensure this is under the client work root (prevents adding arbitrary dirs)
+    cfg = read_config_file(config_fpath)
+    # You can also pass client_id and check get_client_work_root(client_id)
+    # For now, at least validate it is a project
+    if not validate_project_path(path)["success"]:
+        return {"success": False, "error": "Folder is not a valid Spine Toolbox project"}
+
+    work_folders = cfg.get("work_folders", {})
+    work_folders[name] = path
+    edit_config_file(config_fpath, {"work_folders": work_folders})
+    return {"success": True}
 
 
 @csrf_protect
@@ -72,27 +157,9 @@ def post(request, action):
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     js = json.loads(request.body.decode("utf-8"))  # dict
     if action == "input_data_path":
-        print(f"[{client_id}] setting input data path {js[action]}")
-        # Check if input_data_path is valid
-        if js[action] == "":  # Clears input data path
-            json_response = {"success": True}
-        else:
-            json_response = validate_input_data_path(js[action])
-        if json_response["success"]:
-            config = get_client_config(client_id)
-            edit_config_file(config.config_path, {action: js[action]})
-        return JsonResponse(json_response)
+        return JsonResponse({"success": True})
     elif action == "project_data_path":
-        print(f"[{client_id}] setting project path {js[action]}")
-        # Check if project_path is valid
-        if js[action] == "":  # Clears project path
-            json_response = {"success": True}
-        else:
-            json_response = validate_project_path(js[action])
-        if json_response["success"]:
-            config = get_client_config(client_id)
-            edit_config_file(config.config_path, {action: js[action]})
-        return JsonResponse(json_response)
+        return JsonResponse({"success": True})
     elif action == "make_work_folder":
         print(f"[{client_id}] creating work folder {js['work_folder']}")
         config = get_client_config(client_id)
@@ -112,6 +179,20 @@ def post(request, action):
         job_id = str(uuid.uuid4())
         JOBS[job_id] = [project_path, execution_type]
         return JsonResponse({"success": True, "data": job_id})
+    elif action == "save_file":
+        print(f"[{client_id}] saving {js.get('path')}")
+        config = get_client_config(client_id)
+        return JsonResponse(save_file(config.config_path, js))
+    elif action == "remove_work_folder":
+        config = get_client_config(client_id)
+        name = js.get("work_folder")
+        return JsonResponse(remove_work_folder(config.config_path, name))
+    elif action == "list_existing_work_folders":
+        config = get_client_config(client_id)
+        return JsonResponse(list_existing_work_folders(client_id, config.config_path))
+    elif action == "add_existing_work_folder":
+        config = get_client_config(client_id)
+        return JsonResponse(add_existing_work_folder(config.config_path, js))
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
@@ -121,17 +202,34 @@ def execute(request, job_id):
     print(f"Starting execution of job_id {job_id}")
 
     def event_stream():
-        ppath = JOBS[job_id][0]
-        exec_type = JOBS[job_id][1]
+        job = JOBS.get(job_id)
+        if not job:
+            yield f"event: done\ndata: ERROR: Unknown job_id {job_id}\n\n"
+            return
+
+        ppath = job[0]
+        exec_type = job[1]
+
+        project_path = Path(ppath).resolve()
+
+        if not project_path.exists():
+            JOBS.pop(job_id, None)
+            yield f"event: done\ndata: ERROR: project path does not exist: {project_path}\n\n"
+            return
+
+        if not SERVER_CONFIG_PATH.exists():
+            JOBS.pop(job_id, None)
+            yield f"event: done\ndata: ERROR: server config missing: {SERVER_CONFIG_PATH}\n\n"
+            return
+
         args = [
-            "C:/data/GIT/SITEOPT-WEB-INTERFACE/.venv_st/Scripts/python.exe",
-            "-m",
-            "spinetoolbox",
+            PYTHON_EXECUTABLE,
+            "-m", "spinetoolbox",
             "--execute-only",
-            "--execute-remotely",
-            "server_config.txt",
-            ppath
+            "--execute-remotely", str(SERVER_CONFIG_PATH),
+            str(project_path),
         ]
+
         try:
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             for line in iter(proc.stdout.readline, b""):
@@ -143,11 +241,13 @@ def execute(request, job_id):
             # Notify frontend that execution is done
             yield f"event: done\ndata: Execution finished [{proc_retval}]\n\n"
         except OSError as e:
-            print(f"[OSError] {e}")
-            yield f"data: [OSError]: {e}\n\n"
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+            JOBS.pop(job_id, None)
+            yield f"event: done\ndata: [OSError]: {e}\n\n"
+
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
     return response
+
 
 
 def validate_input_data_path(p):
@@ -167,28 +267,38 @@ def validate_project_path(p):
 
 
 def make_work_folder(config_fpath, client_id, work_folder_name):
-    configs = read_config_file(config_fpath)
+    configs = read_config_file(config_fpath) or {}
+
+    configs.setdefault("input_data_path", get_input_data_path())
+    configs.setdefault("project_data_path", get_project_data_path())
+    if not isinstance(configs.get("work_folders"), dict):
+        configs["work_folders"] = {}
+
+    with open(config_fpath, "w") as fp:
+        json.dump(configs, fp, indent=4)
+
     idp = configs["input_data_path"]
-    if not os.path.exists(idp):
-        # If it exists, it must be a valid input data path already
-        return {"success": False, "error": "Please set the Input data path first"}
     pdp = configs["project_data_path"]
-    if not os.path.exists(pdp):
-        # If it exists, it must be a valid project path already
-        return {"success": False, "error": "Please set the SiteOpt project path first"}
-    base = platformdirs.user_data_dir()  # Win: %APPDATA%/Local
-    work_dir = os.path.abspath(os.path.join(base, APP_DATA_DIR, WORK_DIR, str(client_id)[0:6], work_folder_name))
+
+    if not validate_input_data_path(idp)["success"]:
+        return {"success": False, "error": f"Bundled input data is invalid: '{idp}'"}
+    if not validate_project_path(pdp)["success"]:
+        return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
+
+    client_root = Path(get_client_work_root(client_id))
+    work_dir = (client_root / work_folder_name).resolve()
+
     try:
-        make_dir(work_dir)
-        # Copy contents of project_data_path to work_dir
-        shutil.copytree(pdp, work_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
-        # Copy contents of input_data_path to 'current_input' folder in the same work_dir
-        shutil.copytree(idp, os.path.join(work_dir, "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+        make_dir(str(work_dir))
+        shutil.copytree(pdp, str(work_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+        shutil.copytree(idp, str(work_dir / "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
     except OSError as e:
         return {"success": False, "error": f"[OSError] [{e}] Creating work dir failed"}
-    work_folders = configs.get("work_folders", {})
-    if work_folder_name not in work_folders.keys():
-        work_folders[work_folder_name] = work_dir
+
+    work_folders = configs["work_folders"]
+    if work_folder_name not in work_folders:
+        work_folders[work_folder_name] = str(work_dir)
+
     edit_config_file(config_fpath, {"work_folders": work_folders})
     return {"success": True}
 
@@ -218,13 +328,11 @@ def build_tree(path, exclude_dirs=None):
 def fetch_input_file_tree(request):
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} is fetching input files")
-    config = get_client_config(client_id)
-    config_d = read_config_file(config.config_path)
-    p = config_d["input_data_path"]
-    if p == "":
-        return JsonResponse({"success": True, "data": {}})
+
+    p = get_input_data_path()
     if not validate_input_data_path(p)["success"]:
-        return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
+        return JsonResponse({"success": False, "error": f"Bundled input data is invalid: '{p}'"})
+
     excluded_dirs = [os.path.join(p, ".git")]
     tree = build_tree(p, excluded_dirs)
     tree["name"] = "dummy"  # This name is not rendered anywhere
@@ -234,11 +342,9 @@ def fetch_input_file_tree(request):
 def fetch_project_file_tree(request):
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} is fetching project files")
-    config = get_client_config(client_id)
-    config_d = read_config_file(config.config_path)
-    p = config_d["project_data_path"]
-    if p == "":
-        return JsonResponse({"success": True, "data": {}})
+    p = get_project_data_path()
+    if not validate_project_path(p)["success"]:
+        return JsonResponse({"success": False, "error": f"Bundled project data is invalid: '{p}'"})
     if not validate_project_path(p)["success"]:
         return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
     excluded_dirs = [os.path.join(p, ".git")]
@@ -252,7 +358,7 @@ def fetch_work_folders_tree(request):
     print(f"Client {client_id} is fetching work folder files")
     config = get_client_config(client_id)
     config_d = read_config_file(config.config_path)
-    work_folders_dict = config_d["work_folders"]
+    work_folders_dict = config_d.get("work_folders", {})
     trees = list()
     for name, p in work_folders_dict.items():
         if not os.path.exists(p):
@@ -277,53 +383,81 @@ def fetch_data(fpath):
     elif fpath.endswith(".csv"):
         data = read_csv_as_json(fpath)
         return {"success": True, "data": data}
+    elif fpath.endswith(".json"):
+        try:
+            with open(fpath, "r", encoding="utf-8") as fh:
+                obj = json.load(fh)
+            return {"success": True, "data": {"filetype": "json", "data": obj}}
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"Invalid JSON: {e}"}
+        except OSError as e:
+            return {"success": False, "error": f"[OSError] {e}"}
+    elif fpath.endswith(".md"):
+        try:
+            with open(fpath, "r", encoding="utf-8") as fh:
+                text = fh.read()
+            return {"success": True, "data": {"filetype": "md", "data": {"text": text}}}
+        except OSError as e:
+            return {"success": False, "error": f"[OSError] {e}"}
     else:
         _, ext = os.path.splitext(fpath)
         return {"success": False, "error": f"Reading files with extension '{ext}' not implemented"}
 
 
 def read_excel_as_json(wb):
-    """Reads all sheets, rows, and columns from an Excel workbook object and returns the data in JSON format."""
-    data = {"filetype": "xlsx", "data": {}}
-    for sheet in wb:
-        data["data"][sheet.title] = []
-        rows = sheet.max_row
-        columns = sheet.max_column
-        for i in range(1, columns+1):
-            column_data = []
-            column_name = sheet.cell(row=1, column=i)
-            for j in range(1, rows):
-                row_data = sheet.cell(row=j+1, column=i)
-                column_data.append(row_data.value)
-            data["data"][sheet.title].append({column_name.value: column_data})
-    return data
+    """
+    Return:
+    {
+      "filetype": "xlsx",
+      "data": {
+        "Sheet1": {"columns": [...], "rows": [ {col: val, ...}, ... ]},
+        ...
+      }
+    }
+    Assumes row 1 is header.
+    """
+    out = {"filetype": "xlsx", "data": {}}
+
+    for sheet in wb.worksheets:
+        # Read header row
+        max_col = sheet.max_column
+        max_row = sheet.max_row
+
+        columns = []
+        for c in range(1, max_col + 1):
+            v = sheet.cell(row=1, column=c).value
+            columns.append("" if v is None else str(v))
+
+        # Build rows (row 2..max_row)
+        rows = []
+        for r in range(2, max_row + 1):
+            row_obj = {}
+            for c, col_name in enumerate(columns, start=1):
+                row_obj[col_name] = sheet.cell(row=r, column=c).value
+            rows.append(row_obj)
+
+        out["data"][sheet.title] = {"columns": columns, "rows": rows}
+
+    return out
+
 
 
 def read_csv_as_json(p):
-    """Reads csv data from given path and returns the data in JSON format."""
-    data = {"filetype": "csv", "data": []}
-    l = []
-    with open(p, newline="") as fp:
-        csv_reader = csv.reader(fp)
-        i = 0
-        for row in csv_reader:
-            l.append(row)
-            i += 1
-    # Pivot the table
-    pivoted_list = [[row[i] for row in l] for i in range(len(l[0]))]
-    d = {}
-    for r in pivoted_list:
-        d[r.pop(0)] = r[1:]
-    data["data"] = d
-    return data
+    with open(p, newline="", encoding="utf-8") as fp:
+        reader = csv.DictReader(fp)
+        rows = list(reader)
+        cols = reader.fieldnames or []
+    return {"filetype": "csv", "data": {"columns": cols, "rows": rows}}
 
 
 def download_excel_file(request):
-    fpath = os.path.join("C:\\", "Users", "ttepsa", "temp", "ms-excel-command-test.xlsx")
-    wb = openpyxl.load_workbook(fpath)
-    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheeml.sheet")
+    fpath = (WORK_ROOT / "ms-excel-command-test.xlsx").resolve()
+    if not fpath.exists():
+        return JsonResponse({"success": False, "error": f"Missing file: {fpath}"}, status=404)
+
+    wb = openpyxl.load_workbook(str(fpath))
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = 'attachment; filename="ms-excel-file.xlsx"'
-    # Save the workbook to the response
     wb.save(response)
     return response
 
@@ -346,8 +480,8 @@ def make_config_file(p):
     Args:
         p (str): Full path to config file
     """
-    d = {"input_data_path": "",
-         "project_data_path": "",
+    d = {"input_data_path": get_input_data_path(),
+         "project_data_path": get_project_data_path(),
          "work_folders": {}}
     with open(p, "w") as fp:
         json.dump(d, fp, indent=4)
@@ -378,3 +512,169 @@ def read_config_file(p):
         print(f"[OSError] Config file {p} missing, maybe?")
         return {}
     return config_dict
+
+def is_path_inside_any_work_folder(config_fpath: str, target_path: str) -> bool:
+    cfg = read_config_file(config_fpath)
+    work_folders = cfg.get("work_folders", {})
+    target = os.path.abspath(target_path)
+
+    for wf in work_folders.values():
+        wf_abs = os.path.abspath(wf)
+        try:
+            common = os.path.commonpath([target, wf_abs])
+        except ValueError:
+            continue
+        if common == wf_abs:
+            return True
+    return False
+
+def _save_md(fpath: str, data, meta: dict):
+    # data can be either raw string or {"text": "..."} – allow both for flexibility
+    if isinstance(data, dict):
+        text = data.get("text", "")
+    else:
+        text = "" if data is None else str(data)
+
+    if not fpath.endswith(".md"):
+        return {"success": False, "error": "Not a .md file."}
+
+    with open(fpath, "w", encoding="utf-8", newline="\n") as fp:
+        fp.write(text)
+
+    return {"success": True}
+
+def _save_csv(fpath: str, data, meta: dict):
+    if not isinstance(data, list):
+        return {"success": False, "error": "csv save expects a list of row objects."}
+    if len(data) == 0:
+        return {"success": False, "error": "No data to save."}
+
+    columns = meta.get("columns")
+    if not columns:
+        cols_set = set()
+        for row in data:
+            if isinstance(row, dict):
+                cols_set.update(row.keys())
+        columns = list(cols_set)
+
+    with open(fpath, "w", newline="", encoding="utf-8") as fp:
+        writer = csv.DictWriter(fp, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in data:
+            if not isinstance(row, dict):
+                return {"success": False, "error": "Each CSV row must be an object/dict."}
+            writer.writerow({c: row.get(c, "") for c in columns})
+
+    return {"success": True}
+
+def _save_json(fpath: str, data, meta: dict):
+    if not fpath.endswith(".json"):
+        return {"success": False, "error": "Not a .json file."}
+    obj = None
+
+    if isinstance(data, dict) and "text" in data:
+        try:
+            obj = json.loads(data["text"])
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"Invalid JSON: {e}"}
+    else:
+        obj = data
+
+    try:
+        with open(fpath, "w", encoding="utf-8", newline="\n") as fp:
+            json.dump(obj, fp, ensure_ascii=False, indent=2)
+            fp.write("\n")
+        return {"success": True}
+    except TypeError as e:
+        return {"success": False, "error": f"JSON is not serializable: {e}"}
+
+def _save_xlsx(fpath: str, data, meta: dict):
+    """
+    Expects:
+      data = list of row objects (same as CSV save)
+      meta = {"sheet": "SheetName", "columns": ["A","B",...]}
+    """
+    if not fpath.endswith(".xlsx"):
+        return {"success": False, "error": "Not a .xlsx file."}
+
+    sheet_name = meta.get("sheet")
+    columns = meta.get("columns")
+
+    if not sheet_name:
+        return {"success": False, "error": "Missing meta.sheet for xlsx save."}
+    if not isinstance(data, list):
+        return {"success": False, "error": "xlsx save expects a list of row objects."}
+
+    wb = openpyxl.load_workbook(fpath)
+    if sheet_name not in wb.sheetnames:
+        return {"success": False, "error": f"Sheet not found: {sheet_name}"}
+
+    ws = wb[sheet_name]
+
+    # Determine column order
+    if not columns:
+        # try existing header row
+        columns = []
+        for c in range(1, ws.max_column + 1):
+            v = ws.cell(row=1, column=c).value
+            if v is None:
+                break
+            columns.append(str(v))
+        if not columns:
+            # fallback to union of keys
+            cols_set = set()
+            for row in data:
+                if isinstance(row, dict):
+                    cols_set.update(row.keys())
+            columns = list(cols_set)
+
+    # Clear sheet
+    ws.delete_rows(1, ws.max_row)
+
+    for c, col in enumerate(columns, start=1):
+        ws.cell(row=1, column=c, value=col)
+
+    for r_i, row in enumerate(data, start=2):
+        if not isinstance(row, dict):
+            return {"success": False, "error": "Each XLSX row must be an object/dict."}
+        for c_i, col in enumerate(columns, start=1):
+            ws.cell(row=r_i, column=c_i, value=row.get(col, ""))
+
+    wb.save(fpath)
+    return {"success": True}
+
+def save_file(config_fpath: str, js: dict):
+    fpath = js.get("path")
+    filetype = js.get("filetype")
+    data = js.get("data")
+    meta = js.get("meta", {}) 
+
+    if not fpath or not filetype:
+        return {"success": False, "error": "Missing 'path' or 'filetype'."}
+
+    if not is_path_inside_any_work_folder(config_fpath, fpath):
+        return {"success": False, "error": "Refusing to write outside work folders."}
+
+    if not os.path.exists(fpath):
+        return {"success": False, "error": f"File does not exist: {fpath}"}
+
+    save_handlers = {
+        "md": _save_md,
+        # later:
+        "json": _save_json,
+        "csv": _save_csv,
+        "xlsx": _save_xlsx,
+    }
+
+    handler = save_handlers.get(filetype)
+    if not handler:
+        return {"success": False, "error": f"Saving not implemented for '{filetype}'."}
+
+    try:
+        return handler(fpath, data, meta)
+    except OSError as e:
+        return {"success": False, "error": f"[OSError] {e}"}
+    except Exception as e:
+        return {"success": False, "error": f"[Error] {e}"}
+
+

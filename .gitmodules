@@ -1,0 +1,6 @@
+[submodule "siteopt_data"]
+	path = siteopt_data
+	url = https://extgit.vtt.fi/siteopt/siteopt_data.git
+[submodule "siteopt_toolbox"]
+	path = siteopt_toolbox
+	url = https://github.com/vttresearch/siteopt_toolbox.git

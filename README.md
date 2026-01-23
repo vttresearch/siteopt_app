@@ -7,6 +7,13 @@ versions may work but have not been tested.
 
 ## Setting up the development environment
 
+### Pull Git submodules
+
+Siteopt_data and siteopt_toolbox repositories are under siteopt-web-interface as git submodules. After cloning the repository, pull the submodules:
+
+```commandline
+git submodule update --init --recursive
+```
 
 ### Install Python Packages (requires Python 3.11+)
 
@@ -26,6 +33,10 @@ Install Python requirements
 
 ```commandline
 python install -r requirements.txt
+
+or
+
+python -m pip install -r requirements.txt
 ```
 
 Initialize server database
