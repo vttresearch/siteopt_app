@@ -55,7 +55,6 @@ const fetchInputFiles = async () => {
 const fetchProjectFiles = async () => {
   const data = await fetchFileTree("fetch_project_file_tree", notify)
   projectFiles.value = data.children
-  // settingStore.projectPath.value = data.children
 };
 
 const fetchWorkFolderFiles = async () => {

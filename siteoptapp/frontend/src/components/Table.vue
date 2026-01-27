@@ -307,7 +307,6 @@ async function saveCurrentFile() {
     return;
   }
 
-  // meta is empty for md/csv/json for now (keep minimal changes)
   const meta = {};
   saving.value = true;
   const r = await postSaveFile(data_store.fpath, payloadType, payloadData, meta, notify);
@@ -380,10 +379,6 @@ async function saveCurrentFile() {
     <div v-if="data_store.daata?.filetype === 'xlsx' && currentXlsxDirty" class="text-xs text-gray-500 mb-2">
       Unsaved changes in {{ selectedSheet }}
     </div>
-
-    <!-- ===================== -->
-    <!-- Editor / Plot content  -->
-    <!-- ===================== -->
 
     <!-- EDITOR VIEW -->
     <div v-if="activeView === 'editor'">
