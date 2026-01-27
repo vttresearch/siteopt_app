@@ -194,6 +194,13 @@ import { ref, computed, watch } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import TimeSeriesChart from '@/components/TimeSeriesChart.vue';
 import { detectTimeSeriesStructure } from '@/utils/chartUtils.js';
+import { postSaveFile, postRequestData } from "@/utils/functions.js";
+import { useNotificationStore } from "@/stores/notificationstore.js";
+import { useTableDataStore } from "@/stores/filedatastore.js";
+
+const notify = useNotificationStore();
+const tableDataStore = useTableDataStore();
+
 
 const props = defineProps({
   data: {
@@ -207,10 +214,6 @@ const props = defineProps({
   filePath: {
     type: String,
     default: ''
-  },
-  folderId: {
-    type: Number,
-    default: null
   }
 });
 
@@ -219,12 +222,14 @@ const selectedSheet = ref('');
 const processingData = ref(false); // For Excel files with multiple sheets
 const editMode = ref(false);
 const saving = ref(false);
-const gridRef = ref(null);
+//const gridRef = ref(null);
 const editableRows = ref([]);
 const hasChanges = ref(false);
+const filetype = computed(() => props.data?.filetype);
 
 const canEdit = computed(() => {
-  return props.filePath && (props.fileName.endsWith('.csv') || props.fileName.endsWith('.xlsx'));
+  const ft = props.data?.filetype;
+  return props.filePath && (ft === "csv" || ft === "xlsx");
 });
 
 function enableEditMode() {
@@ -249,8 +254,6 @@ function onCellValueChanged(event) {
   hasChanges.value = true;
 }
 
-import { API_BASE } from '@/config.js';
-
 async function saveChanges() {
   if (!hasChanges.value) {
     editMode.value = false;
@@ -259,61 +262,31 @@ async function saveChanges() {
 
   saving.value = true;
   try {
-    // Construct URL based on whether it's a work folder or data folder
-    let saveUrl;
-    if (props.folderId) {
-      const baseUrl = !API_BASE || API_BASE === '' || API_BASE === '/' ? '' : (API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE);
-      saveUrl = `${baseUrl}/api/work_folders/${props.folderId}/save/`;
-    } else {
-      const baseUrl = !API_BASE || API_BASE === '' || API_BASE === '/' ? '' : (API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE);
-      saveUrl = `${baseUrl}/api/save_file/`;
+    const ft = props.data?.filetype;
+
+    const meta = {};
+    if (ft === "xlsx") {
+      meta.sheet = selectedSheet.value;
+      meta.columns = dataColumns.value;
+    } else if (ft === "csv") {
+      meta.columns = dataColumns.value;
     }
 
-    // Prepare data based on file type
-    let saveData;
-    if (props.fileName.endsWith('.xlsx')) {
-      // For Excel, maintain the original structure
-      if (selectedSheet.value && props.data.sheets) {
-        saveData = {
-          sheets: {
-            ...props.data.sheets,
-            [selectedSheet.value]: editableRows.value
-          }
-        };
-      } else {
-        saveData = editableRows.value;
-      }
-    } else {
-      // For CSV, just the rows
-      saveData = editableRows.value;
-    }
+    const r = await postSaveFile(
+      props.filePath,
+      ft,
+      editableRows.value,
+      meta,
+      notify
+    );
 
-    const response = await fetch(saveUrl, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        file_path: props.filePath,
-        data: saveData,
-        sheet: selectedSheet.value || null
-      })
-    });
-
-    const result = await response.json();
-    if (result.success) {
-      alert('File saved successfully!');
+    if (r?.success) {
+      notify.show("Saved", 2000, "info");
       editMode.value = false;
       hasChanges.value = false;
-      // Update the original data
-      Object.assign(dataRows.value, editableRows.value);
-    } else {
-      alert(`Error saving file: ${result.error}`);
+
+      await postRequestData(props.filePath, props.fileName, tableDataStore, notify);
     }
-  } catch (error) {
-    console.error('Error saving file:', error);
-    alert(`Error saving file: ${error.message}`);
   } finally {
     saving.value = false;
   }
@@ -342,96 +315,22 @@ watch(() => props.data, (newData) => {
   }
 }, { immediate: true });
 
-// Process the data from the file store
 const dataRows = computed(() => {
-  // Handle new API format: {filetype: 'csv'/'xlsx', data: {...}}
-  if (props.data?.data) {
-    const apiData = props.data.data;
-    const filetype = props.data.filetype;
-    
-    if (filetype === 'csv') {
-      // CSV format: {data: {column: [values]}}
-      if (apiData && typeof apiData === 'object') {
-        const columns = Object.keys(apiData);
-        if (columns.length === 0) return [];
-        
-        const rowCount = apiData[columns[0]]?.length || 0;
-        const rows = [];
-        
-        for (let i = 0; i < rowCount; i++) {
-          const row = {};
-          columns.forEach(col => {
-            row[col] = apiData[col]?.[i];
-          });
-          rows.push(row);
-        }
-        return rows;
-      }
-    } else if (filetype === 'xlsx') {
-      // Excel format: {data: {sheet_name: [{column: [values]}]}}
-      if (apiData && typeof apiData === 'object' && selectedSheet.value) {
-        const sheetData = apiData[selectedSheet.value];
-        if (Array.isArray(sheetData) && sheetData.length > 0) {
-          // Merge all objects in the sheet to get all columns
-          const mergedData = {};
-          sheetData.forEach(tableObj => {
-            Object.assign(mergedData, tableObj);
-          });
-          
-          const columns = Object.keys(mergedData);
-          if (columns.length === 0) return [];
-          
-          const rowCount = Math.max(...columns.map(col => mergedData[col]?.length || 0));
-          const rows = [];
-          
-          for (let i = 0; i < rowCount; i++) {
-            const row = {};
-            columns.forEach(col => {
-              row[col] = mergedData[col]?.[i];
-            });
-            rows.push(row);
-          }
-          return rows;
-        }
-      }
-    }
-  }
-  
-  // Handle legacy format: {cols: [...], rows: [...]}
-  if (!props.data || !props.data.rows) return [];
-  return props.data.rows;
+  const ft = props.data?.filetype;
+  const d = props.data?.data;
+
+  if (ft === "csv") return d?.rows ?? [];
+  if (ft === "xlsx") return selectedSheet.value ? (d?.[selectedSheet.value]?.rows ?? []) : [];
+  return [];
 });
 
 const dataColumns = computed(() => {
-  // Handle new API format: {filetype: 'csv'/'xlsx', data: {...}}
-  if (props.data?.data) {
-    const apiData = props.data.data;
-    const filetype = props.data.filetype;
-    
-    if (filetype === 'csv') {
-      // CSV format: {data: {column: [values]}}
-      if (apiData && typeof apiData === 'object') {
-        return Object.keys(apiData);
-      }
-    } else if (filetype === 'xlsx') {
-      // Excel format: {data: {sheet_name: [{column: [values]}]}}
-      if (apiData && typeof apiData === 'object' && selectedSheet.value) {
-        const sheetData = apiData[selectedSheet.value];
-        if (Array.isArray(sheetData) && sheetData.length > 0) {
-          // Merge all objects in the sheet to get all columns
-          const mergedData = {};
-          sheetData.forEach(tableObj => {
-            Object.assign(mergedData, tableObj);
-          });
-          return Object.keys(mergedData);
-        }
-      }
-    }
-  }
-  
-  // Handle legacy format: {cols: [...], rows: [...]}
-  if (!props.data || !props.data.cols) return [];
-  return props.data.cols;
+  const ft = props.data?.filetype;
+  const d = props.data?.data;
+
+  if (ft === "csv") return d?.columns ?? [];
+  if (ft === "xlsx") return selectedSheet.value ? (d?.[selectedSheet.value]?.columns ?? []) : [];
+  return [];
 });
 
 // Check if this is time series data
