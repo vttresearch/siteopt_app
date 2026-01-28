@@ -1,0 +1,15 @@
+{
+    "name": "storage converter",
+    "tooltype": "julia",
+    "includes": [
+        "conv_storage_dir.jl",
+        "db.jl",
+        "common.jl"
+    ],
+    "description": "",
+    "inputfiles": [],
+    "inputfiles_opt": [],
+    "outputfiles": [],
+    "cmdline_args": [],
+    "includes_main_path": "../../../code"
+}
