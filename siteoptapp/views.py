@@ -5,6 +5,8 @@ import shutil
 import uuid
 import subprocess
 import openpyxl
+from openpyxl.utils import range_boundaries
+from openpyxl.utils.cell import coordinate_from_string
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.timezone import now
@@ -410,7 +412,11 @@ def read_excel_as_json(wb):
     {
       "filetype": "xlsx",
       "data": {
-        "Sheet1": {"columns": [...], "rows": [ {col: val, ...}, ... ]},
+        "Sheet1": {
+          "columns": [...],
+          "rows": [ {col: val, ...}, ... ],
+          "validationsByColumn": { "Status": ["A","B"], ... }
+        },
         ...
       }
     }
@@ -419,10 +425,10 @@ def read_excel_as_json(wb):
     out = {"filetype": "xlsx", "data": {}}
 
     for sheet in wb.worksheets:
-        # Read header row
         max_col = sheet.max_column
         max_row = sheet.max_row
 
+        # Read header row
         columns = []
         for c in range(1, max_col + 1):
             v = sheet.cell(row=1, column=c).value
@@ -436,7 +442,13 @@ def read_excel_as_json(wb):
                 row_obj[col_name] = sheet.cell(row=r, column=c).value
             rows.append(row_obj)
 
-        out["data"][sheet.title] = {"columns": columns, "rows": rows}
+        validations_by_column = _extract_validations_by_column(wb, sheet, columns)
+
+        out["data"][sheet.title] = {
+            "columns": columns,
+            "rows": rows,
+            "validationsByColumn": validations_by_column,
+        }
 
     return out
 
@@ -611,9 +623,7 @@ def _save_xlsx(fpath: str, data, meta: dict):
 
     ws = wb[sheet_name]
 
-    # Determine column order
     if not columns:
-        # try existing header row
         columns = []
         for c in range(1, ws.max_column + 1):
             v = ws.cell(row=1, column=c).value
@@ -621,14 +631,12 @@ def _save_xlsx(fpath: str, data, meta: dict):
                 break
             columns.append(str(v))
         if not columns:
-            # fallback to union of keys
             cols_set = set()
             for row in data:
                 if isinstance(row, dict):
                     cols_set.update(row.keys())
             columns = list(cols_set)
 
-    # Clear sheet
     ws.delete_rows(1, ws.max_row)
 
     for c, col in enumerate(columns, start=1):
@@ -676,5 +684,117 @@ def save_file(config_fpath: str, js: dict):
         return {"success": False, "error": f"[OSError] {e}"}
     except Exception as e:
         return {"success": False, "error": f"[Error] {e}"}
+    
+
+def _parse_list_formula(formula1):
+    """
+    Returns either:
+      - list[str] for explicit lists: '"A,B,C"'
+      - {"range": "Sheet2!$A$1:$A$5"} for range-based lists: "=Sheet2!$A$1:$A$5"
+      - None if not recognized
+    """
+    if not formula1:
+        return None
+
+    f = str(formula1).strip()
+
+    if f.startswith('"') and f.endswith('"'):
+        inner = f[1:-1]
+        sep = "," if "," in inner else ";"
+        return [x.strip() for x in inner.split(sep) if x.strip()]
+
+    if f.startswith("="):
+        return {"range": f[1:]}
+
+    return None
+
+
+def _resolve_range_list(wb, range_expr):
+    """
+    range_expr examples:
+      Sheet2!$A$1:$A$5
+      'Sheet 2'!$A$1:$A$5
+    Returns list[str] or None.
+    """
+    if "!" not in range_expr:
+        return None
+
+    sheet_part, addr = range_expr.split("!", 1)
+    sheet_name = sheet_part.strip("'").strip()
+
+    if sheet_name not in wb.sheetnames:
+        return None
+
+    ws2 = wb[sheet_name]
+    values = []
+
+    try:
+        cells = ws2[addr]
+    except Exception:
+        return None
+
+    for row in cells:
+        for cell in row:
+            v = cell.value
+            if v is None:
+                continue
+            s = str(v).strip()
+            if s != "":
+                values.append(s)
+
+    out = []
+    seen = set()
+    for x in values:
+        if x not in seen:
+            out.append(x)
+            seen.add(x)
+    return out
+
+
+def _extract_validations_by_column(wb, ws, columns):
+    """
+    Builds:
+      { "ColumnHeader": ["opt1","opt2",...], ... }
+    Only handles dv.type == "list" for now (dropdowns).
+    Works best when validation applies to an entire column range.
+    """
+    validations = {}
+
+    dvs = getattr(ws, "data_validations", None)
+    if not dvs or not getattr(dvs, "dataValidation", None):
+        return validations
+
+    def header_for_col_index(ci):
+        if 1 <= ci <= len(columns):
+            return columns[ci - 1]
+        return None
+
+    for dv in dvs.dataValidation:
+        if getattr(dv, "type", None) != "list":
+            continue
+
+        parsed = _parse_list_formula(getattr(dv, "formula1", None))
+        options = None
+
+        if isinstance(parsed, list):
+            options = parsed
+        elif isinstance(parsed, dict) and "range" in parsed:
+            options = _resolve_range_list(wb, parsed["range"])
+
+        if not options:
+            continue
+
+        for cell_range in dv.sqref.ranges:
+            min_col, min_row, max_col, max_row = range_boundaries(str(cell_range))
+
+            for col_idx in range(min_col, max_col + 1):
+                header = header_for_col_index(col_idx)
+                if not header:
+                    continue
+
+                if header not in validations:
+                    validations[header] = options
+
+    return validations
 
 

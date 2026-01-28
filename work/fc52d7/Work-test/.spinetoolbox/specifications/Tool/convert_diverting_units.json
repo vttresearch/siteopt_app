@@ -1,0 +1,15 @@
+{
+    "name": "convert diverting units",
+    "tooltype": "julia",
+    "includes": [
+        "conv_divert_units_dir.jl",
+        "db.jl",
+        "common.jl"
+    ],
+    "description": "",
+    "inputfiles": [],
+    "inputfiles_opt": [],
+    "outputfiles": [],
+    "cmdline_args": [],
+    "includes_main_path": "../../../code"
+}
