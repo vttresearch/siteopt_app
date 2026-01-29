@@ -12,7 +12,7 @@ const props = defineProps({
 })
 
 const notify = useNotificationStore();
-const execType = ref("");
+const execType = ref("all");
 const executionOutput = ref([]);
 const executionFinished = ref(false);
 let eventSource = null;
@@ -30,14 +30,22 @@ watch(executionFinished, (newExecutionFinished) => {
   executionFinished.value = false
 });
 
-async function executeSelected() {
+function executeSelectedLocal() {
+  executeSelected(true)
+}
+
+function executeSelectedRemote() {
+  executeSelected(false)
+}
+
+async function executeSelected(local) {
   console.log("executeSelected() called")
   if (execType.value === "") {
     notify.show("Please select execution Type", 1000, "info")
     return
   }
-  notify.show(`Executing ${props.workDirName} ${execType.value}`, 2000, "info")
-  const configs = [props.workDirName, execType.value]
+  notify.show(`Executing ${props.workDirName} ${execType.value} local:${local}`, 2000, "info")
+  const configs = [props.workDirName, execType.value, local]
   const jobId = await postExecuteRequest("execute", configs, notify)
   if (!jobId) {
     return
@@ -74,27 +82,46 @@ async function executeSelected() {
       <div class="flex gap-2">
       <BaseButton
         variant="secondary"
+        @click="execType = 'all'"
+        :class="execType === 'all' && 'ring-2 ring-blue-500'"
+      >
+        All
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
         @click="execType = 'opt1'"
         :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
       >
-        Option 1
+        Load data
       </BaseButton>
       <BaseButton
         variant="secondary"
         @click="execType = 'opt2'"
         :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
       >
-        Option 2
+        Run model
       </BaseButton>
       </div>
+
+      <div class="flex gap-2">
       <BaseButton
         :disabled="!execType"
-        @click="executeSelected"
+        @click="executeSelectedLocal"
         class="flex items-center gap-2"
       >
         <font-awesome-icon icon="fa-solid fa-play" fixed-width />
-        <span>Execute</span>
+        <span>Execute (Local)</span>
       </BaseButton>
+      <BaseButton
+        :disabled="!execType"
+        @click="executeSelectedRemote"
+        class="flex items-center gap-2"
+      >
+        <font-awesome-icon icon="fa-solid fa-play" fixed-width />
+        <span>Execute (Remote)</span>
+      </BaseButton>
+      </div>
+
     </div>
 
     <div class="col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">

@@ -26,11 +26,14 @@ SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BA
 PYTHON_EXECUTABLE = os.environ.get("SPINE_PYTHON", sys.executable)
 CONFIG_ROOT = Path(os.environ.get("CONFIG_ROOT", WORK_ROOT / "_config")).resolve()
 
+
 def get_input_data_path() -> str:
     return str(INPUT_DATA_DIR)
 
+
 def get_project_data_path() -> str:
     return str(PROJECT_DATA_DIR)
+
 
 def get_client_work_root(client_id: str) -> str:
     """
@@ -38,6 +41,7 @@ def get_client_work_root(client_id: str) -> str:
     Must be a path that BOTH backend and spine_engine containers can access.
     """
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
+
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -175,9 +179,10 @@ def post(request, action):
         config = read_config_file(client_config.config_path)
         work_folder_name = js["execute"][0]
         execution_type = js["execute"][1]
+        execute_locally = js["execute"][2]
         project_path = config["work_folders"][work_folder_name]
         job_id = str(uuid.uuid4())
-        JOBS[job_id] = [project_path, execution_type]
+        JOBS[job_id] = [project_path, execution_type, execute_locally]
         return JsonResponse({"success": True, "data": job_id})
     elif action == "save_file":
         print(f"[{client_id}] saving {js.get('path')}")
@@ -209,6 +214,7 @@ def execute(request, job_id):
 
         ppath = job[0]
         exec_type = job[1]
+        exec_locally = job[2]
 
         project_path = Path(ppath).resolve()
 
@@ -222,14 +228,23 @@ def execute(request, job_id):
             yield f"event: done\ndata: ERROR: server config missing: {SERVER_CONFIG_PATH}\n\n"
             return
 
-        args = [
-            PYTHON_EXECUTABLE,
-            "-m", "spinetoolbox",
-            "--execute-only",
-            "--execute-remotely", str(SERVER_CONFIG_PATH),
-            str(project_path),
-        ]
-
+        if exec_locally:
+            args = [
+                PYTHON_EXECUTABLE,
+                "-u", "-m",
+                "spinetoolbox",
+                "--execute-only",
+                str(project_path),
+            ]
+        else:
+            args = [
+                PYTHON_EXECUTABLE,
+                "-u", "-m",
+                "spinetoolbox",
+                "--execute-only",
+                "--execute-remotely", str(SERVER_CONFIG_PATH),
+                str(project_path),
+            ]
         try:
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             for line in iter(proc.stdout.readline, b""):
@@ -247,7 +262,6 @@ def execute(request, job_id):
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
     return response
-
 
 
 def validate_input_data_path(p):
@@ -441,7 +455,6 @@ def read_excel_as_json(wb):
     return out
 
 
-
 def read_csv_as_json(p):
     with open(p, newline="", encoding="utf-8") as fp:
         reader = csv.DictReader(fp)
@@ -513,6 +526,7 @@ def read_config_file(p):
         return {}
     return config_dict
 
+
 def is_path_inside_any_work_folder(config_fpath: str, target_path: str) -> bool:
     cfg = read_config_file(config_fpath)
     work_folders = cfg.get("work_folders", {})
@@ -528,6 +542,7 @@ def is_path_inside_any_work_folder(config_fpath: str, target_path: str) -> bool:
             return True
     return False
 
+
 def _save_md(fpath: str, data, meta: dict):
     # data can be either raw string or {"text": "..."} – allow both for flexibility
     if isinstance(data, dict):
@@ -542,6 +557,7 @@ def _save_md(fpath: str, data, meta: dict):
         fp.write(text)
 
     return {"success": True}
+
 
 def _save_csv(fpath: str, data, meta: dict):
     if not isinstance(data, list):
@@ -567,6 +583,7 @@ def _save_csv(fpath: str, data, meta: dict):
 
     return {"success": True}
 
+
 def _save_json(fpath: str, data, meta: dict):
     if not fpath.endswith(".json"):
         return {"success": False, "error": "Not a .json file."}
@@ -587,6 +604,7 @@ def _save_json(fpath: str, data, meta: dict):
         return {"success": True}
     except TypeError as e:
         return {"success": False, "error": f"JSON is not serializable: {e}"}
+
 
 def _save_xlsx(fpath: str, data, meta: dict):
     """
@@ -642,6 +660,7 @@ def _save_xlsx(fpath: str, data, meta: dict):
 
     wb.save(fpath)
     return {"success": True}
+
 
 def save_file(config_fpath: str, js: dict):
     fpath = js.get("path")
