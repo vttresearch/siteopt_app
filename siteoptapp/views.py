@@ -67,6 +67,13 @@ def get_client_config(client_id):
     try:
         config = ClientConfig.objects.get(client_id=client_id)
         config.last_seen = now()
+        # If config file path is stale, recreate under current CONFIG_ROOT
+        if not os.path.exists(config.config_path):
+            config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
+            config_file_path = (config_file_dir / CONFIG_FILE).resolve()
+            make_dir(str(config_file_dir))
+            make_config_file(str(config_file_path))
+            config.config_path = str(config_file_path)
         config.save()
     except ClientConfig.DoesNotExist:
         config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
@@ -173,11 +180,28 @@ def post(request, action):
         print(f"[{client_id}] executing {js['execute']}")
         client_config = get_client_config(client_id)
         config = read_config_file(client_config.config_path)
-        work_folder_name = js["execute"][0]
-        execution_type = js["execute"][1]
+        execute_payload = js["execute"]
+        if isinstance(execute_payload, dict):
+            work_folder_name = execute_payload.get("workDirName")
+            execution_type = execute_payload.get("execType")
+            exec_mode = (execute_payload.get("mode") or "remote").lower()
+            exec_host = execute_payload.get("host")
+            exec_port = execute_payload.get("port")
+        else:
+            work_folder_name = execute_payload[0]
+            execution_type = execute_payload[1]
+            exec_mode = "remote"
+            exec_host = None
+            exec_port = None
         project_path = config["work_folders"][work_folder_name]
         job_id = str(uuid.uuid4())
-        JOBS[job_id] = [project_path, execution_type]
+        JOBS[job_id] = {
+            "project_path": project_path,
+            "exec_type": execution_type,
+            "mode": exec_mode,
+            "host": exec_host,
+            "port": exec_port,
+        }
         return JsonResponse({"success": True, "data": job_id})
     elif action == "save_file":
         print(f"[{client_id}] saving {js.get('path')}")
@@ -207,8 +231,11 @@ def execute(request, job_id):
             yield f"event: done\ndata: ERROR: Unknown job_id {job_id}\n\n"
             return
 
-        ppath = job[0]
-        exec_type = job[1]
+        ppath = job["project_path"]
+        exec_type = job["exec_type"]
+        exec_mode = job.get("mode", "remote")
+        exec_host = job.get("host")
+        exec_port = job.get("port")
 
         project_path = Path(ppath).resolve()
 
@@ -217,18 +244,38 @@ def execute(request, job_id):
             yield f"event: done\ndata: ERROR: project path does not exist: {project_path}\n\n"
             return
 
-        if not SERVER_CONFIG_PATH.exists():
-            JOBS.pop(job_id, None)
-            yield f"event: done\ndata: ERROR: server config missing: {SERVER_CONFIG_PATH}\n\n"
-            return
-
         args = [
             PYTHON_EXECUTABLE,
             "-m", "spinetoolbox",
             "--execute-only",
-            "--execute-remotely", str(SERVER_CONFIG_PATH),
-            str(project_path),
         ]
+
+        if exec_mode == "remote":
+            # Use per-request host/port when provided; otherwise fall back to server_config.txt
+            server_config_path = None
+            if exec_host and exec_port:
+                server_config_dir = (CONFIG_ROOT / "server_configs").resolve()
+                make_dir(str(server_config_dir))
+                server_config_path = server_config_dir / f"server_config_{job_id}.txt"
+                with open(server_config_path, "w") as fh:
+                    fh.write(f"{exec_host}\n")
+                    fh.write(f"{exec_port}\n")
+                    fh.write("off\n")
+                    fh.write("\n")
+            else:
+                server_config_path = SERVER_CONFIG_PATH
+
+            if not Path(server_config_path).exists():
+                JOBS.pop(job_id, None)
+                yield f"event: done\ndata: ERROR: server config missing: {server_config_path}\n\n"
+                return
+
+            args.extend(["--execute-remotely", str(server_config_path)])
+
+        args.append(str(project_path))
+
+        yield f"data: [exec] mode={exec_mode} host={exec_host or 'server_config'} port={exec_port or 'server_config'}\n\n"
+        yield f"data: [exec] command={' '.join(str(a) for a in args)}\n\n"
 
         try:
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

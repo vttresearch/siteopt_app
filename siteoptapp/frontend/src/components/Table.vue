@@ -220,6 +220,7 @@ async function saveCurrentFile() {
   let payloadType = null
   let payloadData = null
   let dirtyRef = null
+  let meta = {}
 
   if (filetype === "md") {
     payloadType = "md"
@@ -236,6 +237,7 @@ async function saveCurrentFile() {
     const rows = []
     gridApi.value.forEachNode(node => rows.push(node.data))
     payloadData = rows
+    meta = { columns: fileData.value?.columns ?? [] }
     dirtyRef = csvDirty
   } else if (filetype === "json") {
     payloadType = "json"

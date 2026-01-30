@@ -183,6 +183,9 @@ export async function postNewPath(endpointSuffix, pathKey, pathValue, notify) {
 export async function postExecuteRequest(endpointSuffix, options, notify) {
   const csrfToken = getCookie("csrftoken");
   const url = `${API_BASE}api/post/${endpointSuffix}/`;
+  const payload = Array.isArray(options)
+    ? { ["execute"]: options }
+    : { ["execute"]: options };
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -191,7 +194,7 @@ export async function postExecuteRequest(endpointSuffix, options, notify) {
         'X-CSRFToken': csrfToken,
       },
       credentials: 'include',
-      body: JSON.stringify({["execute"]: options}),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) {
       console.error(`Invalid ${options}:`, await response.text());

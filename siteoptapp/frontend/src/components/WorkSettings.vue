@@ -13,6 +13,9 @@ const props = defineProps({
 
 const notify = useNotificationStore();
 const execType = ref("");
+const execMode = ref("remote");
+const remoteHost = ref("127.0.0.1");
+const remotePort = ref("49152");
 const executionOutput = ref([]);
 const executionFinished = ref(false);
 let eventSource = null;
@@ -37,7 +40,13 @@ async function executeSelected() {
     return
   }
   notify.show(`Executing ${props.workDirName} ${execType.value}`, 2000, "info")
-  const configs = [props.workDirName, execType.value]
+  const configs = {
+    workDirName: props.workDirName,
+    execType: execType.value,
+    mode: execMode.value,
+    host: remoteHost.value,
+    port: remotePort.value,
+  }
   const jobId = await postExecuteRequest("execute", configs, notify)
   if (!jobId) {
     return
@@ -56,7 +65,12 @@ async function executeSelected() {
     eventSource = null;
     executionFinished.value = true;
   });
+  eventSource.onerror = (event) => {
+    console.error("Execution stream error:", event);
+    executionOutput.value.push("[error] Execution stream error. Check backend logs.");
+  };
   eventSource.onmessage = (event) => {
+    console.log("Execution output:", event.data);
     executionOutput.value.push(event.data)
   }
 }
@@ -86,6 +100,47 @@ async function executeSelected() {
       >
         Option 2
       </BaseButton>
+      </div>
+
+      <div class="mt-4">
+        <div class="text-black text-sm mb-2 font-semibold">Execution Mode</div>
+        <div class="flex gap-2">
+          <BaseButton
+            variant="secondary"
+            @click="execMode = 'local'"
+            :class="execMode === 'local' && 'ring-2 ring-blue-500'"
+          >
+            Local
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            @click="execMode = 'remote'"
+            :class="execMode === 'remote' && 'ring-2 ring-blue-500'"
+          >
+            Remote
+          </BaseButton>
+        </div>
+
+        <div v-if="execMode === 'remote'" class="mt-3 space-y-2">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-600">Server Host</label>
+            <input
+              v-model="remoteHost"
+              type="text"
+              class="px-2 py-1 border rounded text-sm"
+              placeholder="127.0.0.1"
+            />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-600">Server Port</label>
+            <input
+              v-model="remotePort"
+              type="text"
+              class="px-2 py-1 border rounded text-sm"
+              placeholder="49152"
+            />
+          </div>
+        </div>
       </div>
       <BaseButton
         :disabled="!execType"

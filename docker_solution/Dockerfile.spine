@@ -1,0 +1,189 @@
+# Multi-stage Dockerfile for SiteOpt Web Interface with Spine Toolbox
+# Stage 1: Build Vue.js frontend
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+# Copy package files
+COPY siteoptapp/frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source code
+COPY siteoptapp/frontend/ ./
+
+# Copy Docker environment file
+COPY docker_solution/.env.docker .env.production
+
+# Build the frontend
+RUN npm run build
+
+# Stage 2: Backend with Spine Toolbox (Ubuntu-based)
+FROM ubuntu:24.04
+
+# Set noninteractive mode for apt
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=config.settings
+ENV TZ=Europe/Helsinki
+
+# Headless defaults (important for running Spine Toolbox in Docker)
+ENV QT_QPA_PLATFORM=offscreen \
+    MPLBACKEND=Agg \
+    PYTHONMULTIPROCESSINGSTARTMETHOD=spawn
+
+# Update and install dependencies
+RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    curl \
+    wget \
+    build-essential \
+    libssl-dev \
+    zlib1g-dev \
+    libncurses5-dev \
+    libncursesw5-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libgdbm-dev \
+    libdb5.3-dev \
+    libbz2-dev \
+    libexpat1-dev \
+    liblzma-dev \
+    tk-dev \
+    libffi-dev \
+    libpq-dev \
+    git \
+    tzdata \
+    nano \
+    libegl1 \
+    libgl1 \
+    libxkbcommon-x11-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python 3.11
+RUN add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y python3.11 python3.11-venv python3.11-dev libpython3.11-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.11 as default
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3
+
+# Install pip for Python 3.11
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+# Install Julia 1.11.7
+RUN wget https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.7-linux-x86_64.tar.gz && \
+    tar -xvzf julia-1.11.7-linux-x86_64.tar.gz && \
+    mv julia-1.11.7 /opt/julia && \
+    ln -s /opt/julia/bin/julia /usr/bin/julia && \
+    rm julia-1.11.7-linux-x86_64.tar.gz
+
+# Make Julia packages available for the runtime user as well.
+# Without a shared depot, installing as root would put packages under /root/.julia,
+# and they would not be visible when running as appuser.
+ENV JULIA_PROJECT=/juliaEnv
+ENV JULIA_DEPOT_PATH=/juliaDepot
+RUN mkdir -p /juliaDepot
+
+# Make dir for SiteOpt project Julia environment and copy Project.toml there
+RUN mkdir /juliaEnv
+COPY dockerconfig/Project.toml /juliaEnv/Project.toml
+WORKDIR /juliaEnv
+
+# Set PYTHON env variable to point to Python 3.11 for PyCall and
+# install SpineOpt, SpinePeriods and deps from Project.toml
+RUN julia -e 'ENV["PYTHON"]="/usr/bin/python"; \
+    import Pkg; \
+    Pkg.activate("."); \
+    Pkg.add(url="https://github.com/spine-tools/SpineOpt.jl.git", rev="elexia"); \
+    Pkg.add(url="https://github.com/spine-tools/SpinePeriods.jl.git", rev="clustering"); \
+    Pkg.resolve(); \
+    Pkg.instantiate(); \
+    try; Pkg.precompile(); catch err; @warn("Pkg.precompile failed (continuing)", err); end;'
+
+# Install Julia Jupyter kernel
+RUN julia -e 'import Pkg; \
+    Pkg.activate("."); \
+    Pkg.add("IJulia");'
+RUN julia -e 'import Pkg; \
+    Pkg.activate("."); \
+    import IJulia; \
+    IJulia.installkernel("julia");'
+
+# Clone Spine Toolbox from Git (latest dev version)
+WORKDIR /
+ARG SPINE_TOOLBOX_VERSION=0.10.5
+WORKDIR /
+RUN git clone --branch "${SPINE_TOOLBOX_VERSION}" --depth 1 https://github.com/spine-tools/Spine-Toolbox.git
+
+WORKDIR /Spine-Toolbox/
+RUN python -m pip install -r requirements.txt && \
+    python -m pip install scikit-learn-extra && \
+    python -m pip install "numpy<2" --upgrade
+
+# Install Python Jupyter kernel
+RUN python -m pip install ipykernel
+
+# Set work directory for Django app
+WORKDIR /app
+
+# Install Django app Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Create a non-root user
+RUN adduser --disabled-password --gecos '' appuser
+
+# Preinstall Spine Toolbox plugins (match host ~/.spinetoolbox)
+COPY --chown=appuser:appuser docker/spinetoolbox_plugins/SpineOpt /home/appuser/.spinetoolbox/plugins/SpineOpt
+
+# Copy entire Django project
+COPY --chown=appuser:appuser . .
+
+# Copy container entrypoint scripts
+COPY --chown=appuser:appuser docker_solution/docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --chown=appuser:appuser docker_solution/entrypoint-with-env.sh /app/entrypoint-with-env.sh
+
+# Copy the Spine execution wrapper scripts
+COPY --chown=appuser:appuser docker_solution/spine_execute_wrapper.py /app/spine_execute_wrapper.py
+COPY --chown=appuser:appuser docker_solution/spine_execute_wrapper.sh /app/spine_execute_wrapper.sh
+RUN chmod +x /app/spine_execute_wrapper.sh
+
+# Copy built frontend from the previous stage
+COPY --chown=appuser:appuser --from=frontend-builder /app/frontend/dist ./siteoptapp/frontend/dist
+
+# Copy sample data files
+COPY --chown=appuser:appuser data/ /app/data/
+
+# Create directories for static files and media
+RUN mkdir -p staticfiles media && chown appuser:appuser staticfiles media
+
+# Fix line endings and make entrypoint scripts executable
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh /app/entrypoint-with-env.sh && \
+    chmod +x /app/docker-entrypoint.sh /app/entrypoint-with-env.sh
+
+# Ensure database file exists and has correct permissions
+RUN touch /app/db.sqlite3 && chown appuser:appuser /app /app/db.sqlite3
+
+# Make Spine Toolbox and Julia environment accessible to appuser
+RUN chown -R appuser:appuser /Spine-Toolbox /juliaEnv /juliaDepot
+
+# Switch to non-root user
+USER appuser
+
+# Collect static files
+RUN python manage.py collectstatic --noinput
+
+# Expose port (only Django)
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:5000/api/health/', timeout=5)"
+
+# Run Django app
+CMD ["/app/entrypoint-with-env.sh"]

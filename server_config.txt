@@ -1,4 +1,4 @@
-[server]
-protocol = tcp
-host = spine_engine
-port = 50001
+spine_engine
+50001
+off
+
