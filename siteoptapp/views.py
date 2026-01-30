@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import csv
 import shutil
@@ -9,10 +10,8 @@ from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.timezone import now
 from siteoptapp.models import ClientConfig
-from pathlib import Path
 from django.conf import settings
 from pathlib import Path
-import sys
 
 APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
 SETTINGS_DIR = "settings"
@@ -21,6 +20,7 @@ CONFIG_FILE = "config.json"
 JOBS = {}
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
+TEST_PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "test_spinetoolbox_project").resolve()
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", Path(settings.BASE_DIR) / "work")).resolve()
 SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
 PYTHON_EXECUTABLE = os.environ.get("SPINE_PYTHON", sys.executable)
@@ -33,6 +33,10 @@ def get_input_data_path() -> str:
 
 def get_project_data_path() -> str:
     return str(PROJECT_DATA_DIR)
+
+
+def get_test_project_data_path() -> str:
+    return str(TEST_PROJECT_DATA_DIR)
 
 
 def get_client_work_root(client_id: str) -> str:
@@ -165,9 +169,13 @@ def post(request, action):
     elif action == "project_data_path":
         return JsonResponse({"success": True})
     elif action == "make_work_folder":
-        print(f"[{client_id}] creating work folder {js['work_folder']}")
         config = get_client_config(client_id)
-        json_response = make_work_folder(config.config_path, client_id, js['work_folder'])
+        if "test_work_folder" in js.keys():
+            print(f"[{client_id}] creating test work folder {js['test_work_folder']}")
+            json_response = make_test_work_folder(config.config_path, client_id, js["test_work_folder"])
+        else:
+            print(f"[{client_id}] creating work folder {js['work_folder']}")
+            json_response = make_work_folder(config.config_path, client_id, js['work_folder'])
         return JsonResponse(json_response)
     elif action == "fetch_data":
         print(f"[{client_id}] fetching {js['path']}")
@@ -304,8 +312,9 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
 
     try:
         make_dir(str(work_dir))
-        shutil.copytree(pdp, str(work_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
-        shutil.copytree(idp, str(work_dir / "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+        ignored = (".git", ".idea", ".venv", ".gitignore", ".gitkeep", "*.md", "*.png", "*.yaml", "*.yml", "*.css", ".github", "docs")
+        shutil.copytree(pdp, str(work_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns(*ignored))
+        shutil.copytree(idp, str(work_dir / "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(*ignored))
     except OSError as e:
         return {"success": False, "error": f"[OSError] [{e}] Creating work dir failed"}
 
@@ -313,6 +322,31 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
     if work_folder_name not in work_folders:
         work_folders[work_folder_name] = str(work_dir)
 
+    edit_config_file(config_fpath, {"work_folders": work_folders})
+    return {"success": True}
+
+
+def make_test_work_folder(config_fpath, client_id, work_folder_name):
+    configs = read_config_file(config_fpath) or {}
+    configs.setdefault("test_project_data_path", get_test_project_data_path())
+    if not isinstance(configs.get("work_folders"), dict):
+        configs["work_folders"] = {}
+    with open(config_fpath, "w") as fp:
+        json.dump(configs, fp, indent=4)
+    pdp = configs["test_project_data_path"]
+    if not validate_project_path(pdp)["success"]:
+        return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
+    client_root = Path(get_client_work_root(client_id))
+    work_dir = (client_root / work_folder_name).resolve()
+    try:
+        make_dir(str(work_dir))
+        ignored = (".git", ".idea", ".venv", ".gitignore", ".gitkeep", "*.md", "*.png", "*.yaml", "*.yml", "*.css", ".github", "docs")
+        shutil.copytree(pdp, str(work_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns(*ignored))
+    except OSError as e:
+        return {"success": False, "error": f"[OSError] [{e}] Creating test work dir failed"}
+    work_folders = configs["work_folders"]
+    if work_folder_name not in work_folders:
+        work_folders[work_folder_name] = str(work_dir)
     edit_config_file(config_fpath, {"work_folders": work_folders})
     return {"success": True}
 
@@ -495,6 +529,7 @@ def make_config_file(p):
     """
     d = {"input_data_path": get_input_data_path(),
          "project_data_path": get_project_data_path(),
+         "test_project_data_path": get_test_project_data_path(),
          "work_folders": {}}
     with open(p, "w") as fp:
         json.dump(d, fp, indent=4)

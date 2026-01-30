@@ -2,7 +2,6 @@
 import { ref } from 'vue';
 import { useTableDataStore } from '@/stores/filedatastore.js';
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { postRequestData } from "@/utils/functions.js";
 import OpenButton from "@/components/OpenButton.vue";
 
@@ -44,24 +43,34 @@ function isCSV(fname) {
 </script>
 
 <template>
-  <div class="flex justify-between py-0.5 pl-2">
-    <div class="overflow-hidden overflow-ellipsis hover:bg-indigo-300 cursor-pointer" v-if="isExcel(item_name)">
-      <span class="text-nowrap" @click="fetchFileContents(item_name)">
-        <font-awesome-icon class="pr-1" icon="fa-regular fa-file-excel" fixed-width />{{ item_name }}
-      </span>
+  <div class="flex justify-between items-center">
+    <div class="w-full cursor-pointer hover:bg-gray-200 p-0.5" @click="fetchFileContents(item_name)">
+
+      <div v-if="isExcel(item_name)" class="overflow-hidden overflow-ellipsis">
+        <span class="flex items-baseline justify-start gap-1">
+          <i class="fa-regular fa-file-excel"></i>
+          <span>{{ item_name }}</span>
+        </span>
+      </div>
+
+      <div v-else-if="isCSV(item_name)" class="overflow-hidden overflow-ellipsis">
+        <span class="flex items-baseline justify-start gap-1">
+          <i class="fa-solid fa-file-csv"></i>
+          <span>{{ item_name }}</span>
+        </span>
+      </div>
+
+      <div v-else class="overflow-hidden overflow-ellipsis">
+        <span class="flex items-baseline justify-start gap-1">
+          <i class="fa-regular fa-file"></i>
+          <span>{{ item_name }}</span>
+        </span>
+      </div>
     </div>
-    <div class="overflow-hidden overflow-ellipsis hover:bg-indigo-300 cursor-pointer" v-else-if="isCSV(item_name)">
-      <span class="text-nowrap" @click="fetchFileContents(item_name)">
-        <font-awesome-icon class="pr-1" icon="fa-solid fa-file-csv" fixed-width />{{ item_name }}
-      </span>
-    </div>
-    <div class="overflow-hidden overflow-ellipsis hover:bg-indigo-300 cursor-pointer" v-else>
-      <span class="text-nowrap" @click="fetchFileContents(item_name)">
-        <font-awesome-icon class="pr-1" icon="fa-regular fa-file" fixed-width />{{ item_name }}
-      </span>
-    </div>
+
     <div v-if="props.enableOpen" class="md:ml-auto">
       <OpenButton :root="parent_name" :fname="item_name"/>
     </div>
+
   </div>
 </template>

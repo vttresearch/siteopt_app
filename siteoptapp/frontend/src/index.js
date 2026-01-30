@@ -1,33 +1,17 @@
-import 'vite/modulepreload-polyfill'
-import * as Vue from 'vue';
-import { createPinia } from 'pinia';
-import router from './router.js';
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import './style.css'  // Makes tailwind css available in the app created below
+import router from './router.js'
 import App from './App.vue'
-import './style.css';  // This makes tailwind css available in the app created below
-import { library } from '@fortawesome/fontawesome-svg-core';  /* import the fontawesome core */
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';  /* import font awesome icon component */
-/* import selected icons */
-import { faFileCsv, faDownload, faUpload, faTimes, faPlay } from '@fortawesome/free-solid-svg-icons';
-import { faFolderClosed, faFolderOpen, faFileExcel, faFile, faCircleCheck } from '@fortawesome/free-regular-svg-icons';
+import "@fortawesome/fontawesome-free/css/all.min.css"
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'  /* import font awesome icon component */
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 
-/* add icons to the library */
-library.add(
-    faFileCsv,
-    faDownload,
-    faUpload,
-    faTimes,
-    faPlay,
-    faFolderClosed,
-    faFolderOpen,
-    faFileExcel,
-    faFile,
-    faCircleCheck
-);
+
 ModuleRegistry.registerModules([AllCommunityModule]);
-const app = Vue.createApp(App);
+const app = createApp(App);
 const pinia = createPinia();
 app.use(pinia);
 app.use(router);
-app.component('font-awesome-icon', FontAwesomeIcon);
-app.mount('#app');
+app.component("font-awesome-icon", FontAwesomeIcon);
+app.mount("#app");

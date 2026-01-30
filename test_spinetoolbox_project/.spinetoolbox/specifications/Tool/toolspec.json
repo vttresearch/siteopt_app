@@ -1,0 +1,17 @@
+{
+    "name": "ToolSpec",
+    "tooltype": "python",
+    "includes": [
+        "script.py"
+    ],
+    "description": "",
+    "inputfiles": [
+        "data.csv"
+    ],
+    "inputfiles_opt": [],
+    "outputfiles": [
+        "results.csv"
+    ],
+    "cmdline_args": [],
+    "includes_main_path": "../../.."
+}

@@ -98,11 +98,11 @@ async function postNewInputDataPath(path) {
         />
       </span>
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1 ml-1 mr-1" @click="apply">
-        <font-awesome-icon icon="fa-regular fa-check-circle" fixed-width /></button>
+        <i class="fa-regular fa-circle-check"></i></button>
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1 mr-1" @click="clear">
-        <font-awesome-icon icon="fa-solid fa-times" fixed-width /></button>
+        <i class="fa-solid fa-times"></i></button>
       <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1" @click="selectDir">
-        <font-awesome-icon icon="fa-regular fa-folder-open" fixed-width /></button>
+        <i class="fa-regular fa-folder-open"></i></button>
       </div>
       <div v-if="settings.inputDataPath !== ''" class="text-gray-600 text-xs">
         <span>{{ settings.inputDataPath }}</span>

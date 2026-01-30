@@ -13,7 +13,7 @@
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             ]"
           >
-            <font-awesome-icon icon="fa-regular fa-file" class="mr-2" />
+            <i class="fa-regular fa-file"></i>
             Data Table
           </button>
           
@@ -27,7 +27,7 @@
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             ]"
           >
-            <font-awesome-icon icon="fa-solid fa-chart-line" class="mr-2" />
+            <i class="fa-solid fa-chart-line"></i>
             Time Series Chart
           </button>
           
@@ -40,8 +40,7 @@
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             ]"
           >
-            <font-awesome-icon icon="fa-solid fa-chart-line" class="mr-1" />
-            <font-awesome-icon icon="fa-regular fa-file" class="mr-2" />
+            <i class="fa-regular fa-file"></i>
             Both
           </button>
         </nav>
@@ -89,7 +88,7 @@
               @click="enableEditMode"
               class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
             >
-              <font-awesome-icon icon="fa-solid fa-edit" class="mr-1" />
+              <i class="fa-solid fa-edit"></i>
               Edit
             </button>
             <button
@@ -105,9 +104,12 @@
               :disabled="saving"
               class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50"
             >
-              <font-awesome-icon v-if="!saving" icon="fa-solid fa-save" class="mr-1" />
-              <span v-if="saving">Saving...</span>
+              <span>
+              <i v-if="!saving" class="fa-solid fa-save"></i>
+              <span v-if="saving">
+                Saving...</span>
               <span v-else>Save</span>
+              </span>
             </button>
           </div>
         </div>
@@ -179,7 +181,7 @@
 
       <!-- No Time Series Data Message -->
       <div v-if="activeTab === 'chart' && !isTimeSeriesData" class="text-center py-12">
-        <font-awesome-icon icon="fa-solid fa-chart-line" class="text-4xl text-gray-400 mb-4" />
+        <i class="fa-solid fa-chart-line"></i>  <!-- class="text-4xl text-gray-400 mb-4"-->
         <h3 class="text-lg font-semibold text-gray-900 mb-2">No Time Series Data Detected</h3>
         <p class="text-gray-600">
           This file doesn't appear to contain time series data. Charts are available for CSV files with time/date columns.

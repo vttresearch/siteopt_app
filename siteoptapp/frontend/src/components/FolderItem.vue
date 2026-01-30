@@ -1,6 +1,5 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import FileTree from "@/components/FileTree.vue";
 
 const props = defineProps({
@@ -17,6 +16,8 @@ const props = defineProps({
 
 // Open by default if enableOpen is true
 const isOpen = ref(props.enableOpen && props.depth === 0)
+const whenOpen = ref("fa-regular fa-folder-open")
+const whenClosed = ref("fa-regular fa-folder-closed")
 
 function toggle() {
   isOpen.value = !isOpen.value
@@ -32,19 +33,16 @@ watch(
   },
   { immediate: true }
 )
-
 </script>
 
 <template>
-  <div class="py-0.5 cursor-pointer">
-    <div class="cursor-pointer font-bold flex items-center" @click="toggle">
-      <font-awesome-icon
-        class="pr-1"
-        :icon="isOpen ? 'fa-regular fa-folder-open' : 'fa-regular fa-folder-closed'"
-        fixed-width
-      />
+  <div>
+    <span
+        class="flex items-baseline justify-start gap-1 font-bold hover:bg-gray-200 p-0.5 cursor-pointer"
+        @click="toggle">
+      <i :class="[isOpen ? whenOpen : whenClosed]"></i>
       <span>{{ folderName }}</span>
-    </div>
+    </span>
 
     <div v-show="isOpen" class="pl-4">
       <FileTree

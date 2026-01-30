@@ -3,5 +3,5 @@
 </script>
 
 <template>
-  <p>Copyright&copy; Pekka S.<br>All right reserved.</p>
+  <p class="p-2">Copyright&copy; Pekka S.<br>All rights reserved.</p>
 </template>

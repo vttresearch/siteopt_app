@@ -11,6 +11,8 @@ const workFolderName = ref("")
 const isValidWorkFolderName = ref(false)
 const emit = defineEmits(["created"])
 const creating = ref(false)
+const creatingWork = ref(false)
+const creatingTest = ref(false)
 
 function validFolderName() {
   const folderNameRegex = /^(\/?[a-z0-9A-Z\-]+)+$/  // No special characters allowed
@@ -22,40 +24,57 @@ function workFolderNameTaken() {
   return Object.prototype.hasOwnProperty.call(wf, workFolderName.value)
 }
 
-
 function postNewWorkPath() {
+  if (!validateWorkFolderName()) return
+  creatingWork.value = true
+  makeWorkFolder("work_folder")
+}
+
+function postNewTestWorkPath() {
+  if (!validateWorkFolderName()) return
+  creatingTest.value = true
+  makeWorkFolder("test_work_folder")
+}
+
+function validateWorkFolderName() {
   if (workFolderName.value === "") {
     notify.show("Please enter project name (e.g. work1)", 5000, "info")
-    return
+    return false
   }
   if (workFolderNameTaken()) {
     notify.show("Given project name already exists", 1000, "info")
-    return
+    return false
   }
   if (!validFolderName()) {
     notify.show("Given project name contains invalid characters", 5000, "error")
-    return
+    return false
   }
-  makeWorkFolder()
+  return true
 }
 
-const makeWorkFolder = async () => {
+async function makeWorkFolder(pathKey) {
   creating.value = true
-  const postResult = await postNewPath("make_work_folder", "work_folder", workFolderName.value, notify)
+  const postResult = await postNewPath("make_work_folder", pathKey, workFolderName.value, notify)
   if (!postResult) {
-    creating.value = false
+    clearCreating()
     return
   }
   const fetchSettingsResult = await fetchSettings();
     if (!fetchSettingsResult) {
       notify.show(`Fetching settings failed after making work folder ${workFolderName.value}`, 5000, "error")
-      creating.value = false
+      clearCreating()
       return
     }
   notify.show(`New project ${workFolderName.value} created`, 2000, "info")
   emit("created", workFolderName.value)
   workFolderName.value = ""
+  clearCreating()
+}
+
+function clearCreating() {
   creating.value = false
+  creatingWork.value = false
+  creatingTest.value = false
 }
 
 function clear() {
@@ -77,8 +96,22 @@ function clear() {
             @keyup.enter="postNewWorkPath"
         />
       </span>
-      <button class="text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50" :disabled="creating" @click="postNewWorkPath">
-        <span>Create project</span></button>
-      </div>
-    </section>
+      <button
+          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          :disabled="creating"
+          @click="postNewWorkPath">
+        <i v-if="creatingWork" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+        <i v-else class="fa-solid fa-upload"></i>
+        <span>Create project</span>
+      </button>
+      <button
+          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          :disabled="creating"
+          @click="postNewTestWorkPath">
+        <i v-if="creatingTest" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+        <i v-else class="fa-solid fa-upload"></i>
+        <span>Create test project</span>
+      </button>
+    </div>
+  </section>
 </template>
