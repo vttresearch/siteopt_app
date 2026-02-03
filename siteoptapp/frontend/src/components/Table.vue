@@ -107,8 +107,6 @@ function updateTableFromExcel() {
           cellEditorParams: {
             values: validationOptions,
           },
-          cellEditorPopup: true,
-          cellEditorPopupPosition: "under",
           cellClass: "bg-blue-50 ag-cell-dropdown",
           headerClass: "ag-header-dropdown",
           headerTooltip: "Select from predefined values",
