@@ -76,11 +76,13 @@ function clearXlsxDirty(sheet) {
 }
 
 function updateTableFromExcel() {
-  const sheetObj = fileData.value?.[selectedSheet.value];
-  const cols = sheetObj?.columns ?? [];
-  const rows = sheetObj?.rows ?? [];
+  const sheetObj = fileData.value?.[selectedSheet.value] ?? {};
+  const cols = sheetObj.columns ?? [];
+  const rows = sheetObj.rows ?? [];
+  const validationsByColumn = sheetObj.validationsByColumn ?? {};
 
   columnDefs.value = [
+    // Row index column
     {
       headerName: "#",
       valueGetter: "node.rowIndex + 1",
@@ -89,12 +91,36 @@ function updateTableFromExcel() {
       cellClass: "bg-gray-50 font-medium text-left",
       editable: false,
     },
-    ...cols.map((col) => ({
-      headerName: col,
-      field: col,
-      minWidth: 100,
-      editable: true,
-    })),
+
+    // Data columns
+    ...cols.map((col) => {
+      const validationOptions = validationsByColumn[col];
+
+      // Excel dropdown → AG Grid select editor
+      if (Array.isArray(validationOptions) && validationOptions.length > 0) {
+        return {
+          headerName: col,
+          field: col,
+          minWidth: 120,
+          editable: true,
+          cellEditor: "agSelectCellEditor",
+          cellEditorParams: {
+            values: validationOptions,
+          },
+          cellClass: "bg-blue-50 ag-cell-dropdown",
+          headerClass: "ag-header-dropdown",
+          headerTooltip: "Select from predefined values",
+        };
+      }
+
+      // Normal editable cell
+      return {
+        headerName: col,
+        field: col,
+        minWidth: 100,
+        editable: true,
+      };
+    }),
   ];
 
   rowData.value = rows;
@@ -418,6 +444,8 @@ async function saveCurrentFile() {
           :suppressCellFocus="true"
           :suppressAnimationFrame="true"
           :enableCellTextSelection="false"
+          :singleClickEdit="true"
+          :stopEditingWhenCellsLoseFocus="true"
         />
       </div>
 

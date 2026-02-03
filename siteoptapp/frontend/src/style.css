@@ -1,11 +1,5 @@
-@import "tailwindcss";  /* Below 4 lines does the same */
+@import "tailwindcss";
 
-/*
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/preflight.css" layer(base);  /* This removes all base CSS stylings */
-/*@import "tailwindcss/utilities.css" layer(utilities);
-*/
 
 @layer components {
 
@@ -44,5 +38,68 @@
   .ag-row-selected {
     @apply !bg-blue-100;
   }
+
+  .ag-cell-dropdown {
+    @apply !bg-blue-50;
+  }
+
+  .ag-cell-dropdown::after {
+    content: "▾";
+    float: right;
+    margin-left: 8px;
+    @apply !text-gray-400;
+  }
+  .ag-header-dropdown {
+    @apply bg-blue-100 text-blue-900 font-semibold;
+  }
+  .ag-header-dropdown::after {
+    content: " ▾";
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+
+    .ag-cell-inline-editing.ag-cell {
+    padding: 0 !important;
+    align-items: stretch !important;
+  }
+
+  .ag-cell-inline-editing .ag-cell-wrapper {
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important;
+    align-items: stretch !important;
+  }
+
+    .ag-cell-inline-editing .ag-cell-editor {
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important;
+    display: flex !important;
+    align-items: stretch !important;
+  }
+
+  .ag-cell-inline-editing .ag-cell-editor select,
+  .ag-cell-inline-editing select.ag-cell-editor {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important;
+    box-sizing: border-box !important;
+    border: none !important;
+    background: transparent !important;
+    font: inherit !important;
+
+    padding: 0 1.75rem 0 0.5rem !important;
+  }
+
+    .ag-cell-inline-editing .ag-cell-editor select:focus {
+    outline: none !important;
+  }
+
+  .ag-cell-inline-editing.ag-cell-dropdown::after {
+  content: "" !important;
+}
+
+
 }
 
