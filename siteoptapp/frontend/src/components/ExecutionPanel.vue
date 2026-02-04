@@ -122,33 +122,35 @@ async function executeSelected(local) {
 
       <div class="flex gap-2">
       <button
-        class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-        :disabled="!execType"
-        @click="executeSelectedLocal"
-      >
+          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          :disabled="!execType"
+          @click="executeSelectedLocal">
         <i v-if="localExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
         <i v-else class="fa-solid fa-play"></i>
         <span class="text-nowrap">Execute (Local)</span>
       </button>
       <button
-        class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-        :disabled="!execType"
-        @click="executeSelectedRemote"
-      >
+          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          :disabled="!execType"
+          @click="executeSelectedRemote">
         <i v-if="remoteExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
         <i v-else class="fa-solid fa-play"></i>
         <span class="text-nowrap">Execute (Remote)</span>
       </button>
       </div>
-
     </div>
 
-    <div class="col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
+    <div class="relative col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
+      <!-- Clear button -->
+      <button
+          class="absolute top-4 right-4 text-gray-400 hover:text-gray-200 bg-transparent"
+          @click="executionOutput = []"
+          aria-label="Clear output">
+        ✕
+      </button>
       <div v-for="(line, index) in executionOutput" :key="index" class="whitespace-pre-wrap">
         {{ line }}
       </div>
     </div>
-
   </div>
 </template>
-
