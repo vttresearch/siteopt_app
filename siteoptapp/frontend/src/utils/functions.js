@@ -27,24 +27,26 @@ const fetchWithTimeout = async (url, timeout = 1000) => {
  */
 export const checkBackendReady = async () => {
   const notify = useNotificationStore()
-  let attempts = 0
+  const settingStore = useSettingStore();
+  settingStore.backendAvailable = false;
+  settingStore.backendRetryAttempts = 0;
+  let timeout = 1000
   const maxAttempts = 10
   const url = `${API_BASE}api/health/`
-  while (attempts < maxAttempts) {
+  while (settingStore.backendRetryAttempts < maxAttempts) {
     try {
       const res = await fetchWithTimeout(url, 4000)
       if (res.ok) {
+        settingStore.backendAvailable = true
         return true
       }
     } catch (err) {
-      console.error(`Backend not responding (attempt ${attempts + 1})`)
-      notify.show(`URL: ${url} not responding [attempt ${attempts + 1}/${maxAttempts}]`, 4000, "info")
+      notify.show(`Reconnect attempt ${settingStore.backendRetryAttempts + 1}/${maxAttempts}`, 2000, "info")
     }
-    attempts++
+    settingStore.backendRetryAttempts++
     // This is like python's time.sleep()
-    await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1s before retrying
+    await new Promise(resolve => setTimeout(resolve, timeout)) // Wait 1s before retrying
   }
-  console.error("Backend did not start in time")
   return false
 }
 
@@ -391,4 +393,21 @@ export async function postAddExistingWorkFolder(work_folder, path, notify) {
   }
 }
 
+export async function fetchWorkFolderFiles() {
+  const settingStore = useSettingStore()
+  const notify = useNotificationStore()
+  if (Object.keys(settingStore.workFolders).length === 0) {
+    settingStore.setWorkFolderFiles([])
+    settingStore.setActiveProjectIndex(0)
+    settingStore.loadingProjects = false
+    return
+  }
+  // workFolderFiles.value = await fetchFileTree("fetch_work_folders_tree", notify)
+  let files = await fetchFileTree("fetch_work_folders_tree", notify)
+  settingStore.setWorkFolderFiles(files)
 
+  if (settingStore.activeProjectIndex >= settingStore.workFolderFiles.length) {
+    settingStore.activeProjectIndex = Math.max(0, settingStore.workFolderFiles.length - 1)
+  }
+  settingStore.loadingProjects = false
+}

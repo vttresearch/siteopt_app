@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { saveAs } from 'file-saver';
 import FileTree from '@/components/FileTree.vue';
-import Table from "@/components/Table.vue";
+import Table from "@/components/DataEditorPanel.vue";
 import { API_BASE } from "@/config.js";
 import SelectInputFolder from "@/components/SelectInputFolder.vue";
 
