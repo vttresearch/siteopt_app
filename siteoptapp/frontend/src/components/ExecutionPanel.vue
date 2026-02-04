@@ -58,12 +58,12 @@ async function executeSelected(local) {
     clearExecutionInProgress()
     return
   }
-  if (workDirName === null) {
+  if (workDirName.value === null) {
     notify.show("Please select a project to execute", 5000, "info")
     return
   }
-  notify.show(`Executing ${workDirName} ${execType.value} local:${local}`, 2000, "info")
-  const configs = [workDirName, execType.value, local]
+  notify.show(`Executing ${workDirName.value} ${execType.value} local:${local}`, 2000, "info")
+  const configs = [workDirName.value, execType.value, local]
   const jobId = await postExecuteRequest("execute", configs, notify)
   if (!jobId) {
     clearExecutionInProgress()
