@@ -1,16 +1,14 @@
 <script setup>
-import { ref, onUnmounted, watch } from 'vue';
+import { ref, onUnmounted, watch, computed } from 'vue';
 import { useNotificationStore } from "@/stores/notificationstore.js";
+import { useSettingStore } from "@/stores/settingstore.js";
 import { postExecuteRequest } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 
 
-const props = defineProps({
-  workDirName: String
-})
-
 const notify = useNotificationStore()
+const settingStore = useSettingStore()
 const execType = ref("all")
 const executionOutput = ref([])
 const executionFinished = ref(false)
@@ -24,9 +22,16 @@ onUnmounted(() => {
   }
 })
 
+const workDirName = computed(() => {
+  if (settingStore.activeProjectIndex in Object.keys(settingStore.workFolderFiles)) {
+    return settingStore.workFolderFiles[settingStore.activeProjectIndex][0].name
+  }
+  else return null
+});
+
 watch(executionFinished, (newExecutionFinished) => {
   if (executionFinished.value) {
-    // TODO: Refetch props.workDirName contents
+    // TODO: Refetch workFolderFiles for selected workDirName
   }
   executionFinished.value = false
 });
@@ -53,8 +58,12 @@ async function executeSelected(local) {
     clearExecutionInProgress()
     return
   }
-  notify.show(`Executing ${props.workDirName} ${execType.value} local:${local}`, 2000, "info")
-  const configs = [props.workDirName, execType.value, local]
+  if (workDirName === null) {
+    notify.show("Please select a project to execute", 5000, "info")
+    return
+  }
+  notify.show(`Executing ${workDirName} ${execType.value} local:${local}`, 2000, "info")
+  const configs = [workDirName, execType.value, local]
   const jobId = await postExecuteRequest("execute", configs, notify)
   if (!jobId) {
     clearExecutionInProgress()
@@ -82,13 +91,10 @@ async function executeSelected(local) {
 </script>
 
 <template>
+  <div class="mb-3 text-lg font-semibold text-gray-800">Execution [{{ workDirName }}]</div>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
     <div class="col-span-1 space-y-3">
-
-      <div class="text-black text-base mb-2 font-bold">
-        Execution
-      </div>
 
       <div class="flex gap-2">
       <BaseButton
