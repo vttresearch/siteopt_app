@@ -5,7 +5,7 @@ import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import Spinner from "@/components/Spinner.vue";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postSaveFile } from "@/utils/functions.js";
+import { postData } from "@/utils/functions.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import TimeSeriesChart from "@/components/TimeSeriesChart.vue";
 import { detectTimeSeriesStructure } from "@/utils/chartUtils.js";
@@ -314,34 +314,29 @@ async function saveCurrentFile() {
     const cols = sheetObj?.columns ?? [];
 
     saving.value = true;
-    const r = await postSaveFile(
-      data_store.fpath,
-      payloadType,
-      payloadData,
-      { sheet: selectedSheet.value, columns: cols },
-      notify
-    );
+    const configs = { path: data_store.fpath, filetype: payloadType, payloadData: payloadData, meta: { sheet: selectedSheet.value, columns: cols } }
+    const response = await postData("save_file", configs, notify)
     saving.value = false;
-
-    if (r?.success) {
-      clearXlsxDirty(selectedSheet.value);
-      notify.show("Saved", 2000, "info");
+    if (!response.success) {
+      return
     }
-    return;
+    clearXlsxDirty(selectedSheet.value);
+    notify.show("Saved", 2000, "info");
+    return
   } else {
     notify.show(`Save not implemented for ${filetype}`, 3000, "error");
-    return;
+    return
   }
 
-  const meta = {};
   saving.value = true;
-  const r = await postSaveFile(data_store.fpath, payloadType, payloadData, meta, notify);
+  const configs = { path: data_store.fpath, filetype: payloadType, payloadData: payloadData, meta: {} }
+  const response = await postData("save_file", configs, notify)
   saving.value = false;
-
-  if (r?.success) {
-    if (dirtyRef) dirtyRef.value = false;
-    notify.show("Saved", 2000, "info");
+  if (!response.success) {
+    return
   }
+  if (dirtyRef) dirtyRef.value = false;
+  notify.show("Saved", 2000, "info");
 }
 </script>
 

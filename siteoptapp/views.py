@@ -93,6 +93,7 @@ def get_client_config(client_id):
 
     return config
 
+
 def remove_work_folder(config_fpath: str, work_folder_name: str):
     if not work_folder_name:
         return {"success": False, "error": "Missing work_folder"}
@@ -106,7 +107,8 @@ def remove_work_folder(config_fpath: str, work_folder_name: str):
     # Soft remove: only remove from config, keep files on disk
     work_folders.pop(work_folder_name, None)
     edit_config_file(config_fpath, {"work_folders": work_folders})
-    return {"success": True}
+    return {"success": True, "data": {}}
+
 
 def list_existing_work_folders(client_id: str, config_fpath: str):
     root = get_client_work_root(client_id)
@@ -134,10 +136,8 @@ def list_existing_work_folders(client_id: str, config_fpath: str):
     out.sort(key=lambda x: x["name"].lower())
     return {"success": True, "data": out}
 
-def add_existing_work_folder(config_fpath: str, js: dict):
-    name = js.get("work_folder")
-    path = js.get("path")
 
+def add_existing_work_folder(config_fpath: str, name: str, path: str):
     if not name or not path:
         return {"success": False, "error": "Missing work_folder or path"}
 
@@ -154,7 +154,7 @@ def add_existing_work_folder(config_fpath: str, js: dict):
     work_folders = cfg.get("work_folders", {})
     work_folders[name] = path
     edit_config_file(config_fpath, {"work_folders": work_folders})
-    return {"success": True}
+    return {"success": True, "data": {}}
 
 
 @csrf_protect
@@ -166,48 +166,43 @@ def post(request, action):
     """
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     js = json.loads(request.body.decode("utf-8"))  # dict
-    if action == "input_data_path":
-        return JsonResponse({"success": True})
-    elif action == "project_data_path":
-        return JsonResponse({"success": True})
-    elif action == "make_work_folder":
+    data = js["data"]
+    if action == "make_work_folder":
         config = get_client_config(client_id)
-        if "test_work_folder" in js.keys():
-            print(f"[{client_id}] creating test work folder {js['test_work_folder']}")
-            json_response = make_test_work_folder(config.config_path, client_id, js["test_work_folder"])
+        if "test_work_folder" in data.keys():
+            print(f"[{client_id}] creating test work folder {data['test_work_folder']}")
+            json_response = make_test_work_folder(config.config_path, client_id, data["test_work_folder"])
         else:
-            print(f"[{client_id}] creating work folder {js['work_folder']}")
-            json_response = make_work_folder(config.config_path, client_id, js['work_folder'])
+            print(f"[{client_id}] creating work folder {data['work_folder']}")
+            json_response = make_work_folder(config.config_path, client_id, data['work_folder'])
         return JsonResponse(json_response)
     elif action == "fetch_data":
-        print(f"[{client_id}] fetching {js['path']}")
-        response = fetch_data(js["path"])
+        print(f"[{client_id}] fetching {data['full_path']}")
+        response = fetch_data(data["full_path"])
         return JsonResponse(response)
     elif action == "execute":
-        print(f"[{client_id}] executing {js['execute']}")
+        print(f"[{client_id}] executing {data['work_dir_name']}")
         client_config = get_client_config(client_id)
         config = read_config_file(client_config.config_path)
-        work_folder_name = js["execute"][0]
-        execution_type = js["execute"][1]
-        execute_locally = js["execute"][2]
-        project_path = config["work_folders"][work_folder_name]
+        project_path = config["work_folders"][data["work_dir_name"]]
+        if not os.path.exists(project_path):
+            return JsonResponse({"success": False, "error": f"Path {project_path} does not exist"})
         job_id = str(uuid.uuid4())
-        JOBS[job_id] = [project_path, execution_type, execute_locally]
-        return JsonResponse({"success": True, "data": job_id})
+        JOBS[job_id] = [project_path, data["execution_type"], data["local_execution"]]
+        return JsonResponse({"success": True, "data": {"job_id": job_id}})
     elif action == "save_file":
-        print(f"[{client_id}] saving {js.get('path')}")
+        print(f"[{client_id}] saving {data['path']}")
         config = get_client_config(client_id)
-        return JsonResponse(save_file(config.config_path, js))
+        return JsonResponse(save_file(config.config_path, data["path"], data["filetype"], data["payloadData"], data["meta"]))
     elif action == "remove_work_folder":
         config = get_client_config(client_id)
-        name = js.get("work_folder")
-        return JsonResponse(remove_work_folder(config.config_path, name))
+        return JsonResponse(remove_work_folder(config.config_path, data["folder_name"]))
     elif action == "list_existing_work_folders":
         config = get_client_config(client_id)
         return JsonResponse(list_existing_work_folders(client_id, config.config_path))
     elif action == "add_existing_work_folder":
         config = get_client_config(client_id)
-        return JsonResponse(add_existing_work_folder(config.config_path, js))
+        return JsonResponse(add_existing_work_folder(config.config_path, data["name"], data["path"]))
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
@@ -325,7 +320,7 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
         work_folders[work_folder_name] = str(work_dir)
 
     edit_config_file(config_fpath, {"work_folders": work_folders})
-    return {"success": True}
+    return {"success": True, "data": {}}
 
 
 def make_test_work_folder(config_fpath, client_id, work_folder_name):
@@ -350,7 +345,7 @@ def make_test_work_folder(config_fpath, client_id, work_folder_name):
     if work_folder_name not in work_folders:
         work_folders[work_folder_name] = str(work_dir)
     edit_config_file(config_fpath, {"work_folders": work_folders})
-    return {"success": True}
+    return {"success": True, "data": {}}
 
 
 def build_tree(path, exclude_dirs=None):
@@ -705,12 +700,7 @@ def _save_xlsx(fpath: str, data, meta: dict):
     return {"success": True}
 
 
-def save_file(config_fpath: str, js: dict):
-    fpath = js.get("path")
-    filetype = js.get("filetype")
-    data = js.get("data")
-    meta = js.get("meta", {}) 
-
+def save_file(config_fpath: str, fpath: str, filetype: str, data, meta: dict):
     if not fpath or not filetype:
         return {"success": False, "error": "Missing 'path' or 'filetype'."}
 

@@ -2,14 +2,7 @@
 import { ref, watch } from 'vue';
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import {
-  fetchSettings,
-  fetchWorkFolderFiles,
-  postAddExistingWorkFolder,
-  postListExistingWorkFolders,
-  postNewPath,
-  postRemoveWorkFolder
-} from "@/utils/functions.js";
+import { fetchSettings, fetchWorkFolderFiles, postData } from "@/utils/functions.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 import Spinner from "@/components/Spinner.vue";
 
@@ -47,16 +40,16 @@ function workFolderNameTaken() {
   return Object.prototype.hasOwnProperty.call(wf, workFolderName.value)
 }
 
-function postNewWorkPath() {
+function makeNewProject() {
   if (!validateWorkFolderName()) return
   settingStore.creatingProjectFolder = true
-  makeWorkFolder("work_folder")
+  postMakeWorkFolder("work_folder")
 }
 
-function postNewTestWorkPath() {
+function makeNewTestProject() {
   if (!validateWorkFolderName()) return
   settingStore.creatingTestProjectFolder = true
-  makeWorkFolder("test_work_folder")
+  postMakeWorkFolder("test_work_folder")
 }
 
 function validateWorkFolderName() {
@@ -75,10 +68,10 @@ function validateWorkFolderName() {
   return true
 }
 
-async function makeWorkFolder(pathKey) {
+async function postMakeWorkFolder(pathKey) {
   creating.value = true
-  const postResult = await postNewPath("make_work_folder", pathKey, workFolderName.value, notify)
-  if (!postResult) {
+  const response = await postData("make_work_folder", {[pathKey]: workFolderName.value}, notify)
+  if (!response.success) {
     clearCreating()
     return
   }
@@ -108,11 +101,10 @@ function clear() {
 
 async function openRestore() {
   restoring.value = true
-  const r = await postListExistingWorkFolders(notify)
+  const response = await postData("list_existing_work_folders", {}, notify)
   restoring.value = false
-
-  if (r?.success) {
-    restoreCandidates.value = r.data ?? []
+  if (response.success) {
+    restoreCandidates.value = response.data ?? []
     restoreOpen.value = true
   }
 }
@@ -122,8 +114,8 @@ async function removeProject(name) {
   const ok = confirm(`Remove "${name}" from view? Files stay on disk.`)
   if (!ok) return
 
-  const r = await postRemoveWorkFolder(name, notify)
-  if (r?.success) {
+  const response = await postData("remove_work_folder", {"folder_name": name}, notify)
+  if (response.success) {
     await fetchSettings()
     await fetchWorkFolderFiles()
     notify.show("Removed from view", 2000, "info")
@@ -131,8 +123,8 @@ async function removeProject(name) {
 }
 
 async function restoreProject(c) {
-  const r = await postAddExistingWorkFolder(c.name, c.path, notify)
-  if (r?.success) {
+  const response = await postData("add_existing_work_folder", {"name": c.name, "path": c.path}, notify)
+  if (response.success) {
     restoreOpen.value = false
     await fetchSettings()
     await fetchWorkFolderFiles()
@@ -152,13 +144,13 @@ async function restoreProject(c) {
           v-model="workFolderName"
           :disabled="creating"
           placeholder="Enter project name (e.g. work1)"
-          @keyup.enter="postNewWorkPath"
+          @keyup.enter="makeNewProject"
       />
     </span>
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
         :disabled="creating"
-        @click="postNewWorkPath">
+        @click="makeNewProject">
       <i v-if="settingStore.creatingProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
       <i v-else class="fa-solid fa-square-plus"></i>
       <span>Create project</span>
@@ -166,7 +158,7 @@ async function restoreProject(c) {
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
         :disabled="creating"
-        @click="postNewTestWorkPath">
+        @click="makeNewTestProject">
       <i v-if="settingStore.creatingTestProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
       <i v-else class="fa-solid fa-square-plus"></i>
       <span>Create test project</span>

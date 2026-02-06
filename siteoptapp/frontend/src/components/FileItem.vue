@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { useTableDataStore } from '@/stores/filedatastore.js';
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postRequestData } from "@/utils/functions.js";
+import { postData } from "@/utils/functions.js";
 import OpenButton from "@/components/OpenButton.vue";
 
 
@@ -29,7 +29,11 @@ async function fetchFileContents(fname) {
   console.log(`Requesting file: ${full_path}`)
   store.clear()
   store.toggleLoading()
-  fdata.value = await postRequestData(full_path, fname, store, notify)
+  const response = await postData("fetch_data", {full_path: full_path}, notify)
+  if (!response.success) {
+    return
+  }
+  store.addData(fname, full_path, response.data)
   store.toggleLoading()
 }
 

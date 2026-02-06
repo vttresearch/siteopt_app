@@ -2,7 +2,7 @@
 import { ref, onUnmounted, watch, computed } from 'vue';
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
-import { postExecuteRequest } from "@/utils/functions.js";
+import { postData } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 
@@ -63,9 +63,9 @@ async function executeSelected(local) {
     return
   }
   notify.show(`Executing ${workDirName.value} ${execType.value} local:${local}`, 2000, "info")
-  const configs = [workDirName.value, execType.value, local]
-  const jobId = await postExecuteRequest("execute", configs, notify)
-  if (!jobId) {
+  const configs = {work_dir_name: workDirName.value, execution_type: execType.value, local_execution: local}
+  const response = await postData("execute", configs, notify)
+  if (!response.success) {
     clearExecutionInProgress()
     return
   }
@@ -73,6 +73,7 @@ async function executeSelected(local) {
     eventSource.close();
     eventSource = null;
   }
+  const jobId = response.data.job_id
   console.log(`Got job_id:${jobId}`)
   const streamUrl = `${API_BASE}api/stream/execute/${jobId}`;
   eventSource = new EventSource(streamUrl);

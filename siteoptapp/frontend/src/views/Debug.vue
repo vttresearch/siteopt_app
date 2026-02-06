@@ -4,7 +4,6 @@ import { saveAs } from 'file-saver';
 import FileTree from '@/components/FileTree.vue';
 import Table from "@/components/DataEditorPanel.vue";
 import { API_BASE } from "@/config.js";
-import SelectInputFolder from "@/components/SelectInputFolder.vue";
 
 const count = ref(0);
 const tasks = ref(["Task 1", "Task 2", "Task 3"])
@@ -80,7 +79,6 @@ const dl_excel_file = async () => {
   >Count is {{ count }}
   </button>
 
-  <SelectInputFolder />
 
   <div>
     <Table />
