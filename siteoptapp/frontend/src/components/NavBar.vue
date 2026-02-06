@@ -18,8 +18,6 @@
                   >Home</RouterLink>
                 <RouterLink to="/about/" class="text-white hover:bg-blue-900 hover:text-white rounded-md px-3 py-2" :class="{ 'bg-indigo-500': $route.path === '/about/' }"
                   >About</RouterLink>
-                <RouterLink to="/debug/" class="text-white hover:bg-blue-900 hover:text-white rounded-md px-3 py-2" :class="{ 'bg-indigo-500': $route.path === '/debug/' }"
-                  >Debug</RouterLink>
               </div>
             </div>
           </div>
