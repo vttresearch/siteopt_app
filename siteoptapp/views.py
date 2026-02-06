@@ -65,7 +65,7 @@ def settings(request):
     client_config = get_client_config(client_id)
     config_dict = read_config_file(client_config.config_path)
     print(f"[{new_client}] Responding with configs: {config_dict}")
-    response = JsonResponse({"client_id": str(client_config.client_id), "configs": config_dict})
+    response = JsonResponse({"success": True, "data": {"client_id": str(client_config.client_id), "configs": config_dict}})
     if new_client:
         # httponly=False makes sure that we can access it from JavaScript
         response.set_cookie("client_id", client_id, httponly=False, samesite="Lax", max_age=31536000)  # 1 year
@@ -370,34 +370,6 @@ def build_tree(path, exclude_dirs=None):
     return tree
 
 
-def fetch_input_file_tree(request):
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    print(f"Client {client_id} is fetching input files")
-
-    p = get_input_data_path()
-    if not validate_input_data_path(p)["success"]:
-        return JsonResponse({"success": False, "error": f"Bundled input data is invalid: '{p}'"})
-
-    excluded_dirs = [os.path.join(p, ".git")]
-    tree = build_tree(p, excluded_dirs)
-    tree["name"] = "dummy"  # This name is not rendered anywhere
-    return JsonResponse({"success": True, "data": tree})
-
-
-def fetch_project_file_tree(request):
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    print(f"Client {client_id} is fetching project files")
-    p = get_project_data_path()
-    if not validate_project_path(p)["success"]:
-        return JsonResponse({"success": False, "error": f"Bundled project data is invalid: '{p}'"})
-    if not validate_project_path(p)["success"]:
-        return JsonResponse({"success": False, "error": f"Invalid path '{p}'"})
-    excluded_dirs = [os.path.join(p, ".git")]
-    tree = build_tree(p, excluded_dirs)
-    tree["name"] = "project"  # "project" is not rendered anywhere
-    return JsonResponse({"success": True, "data": tree})
-
-
 def fetch_work_folders_tree(request):
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} is fetching work folder files")
@@ -502,18 +474,6 @@ def read_csv_as_json(p):
         rows = list(reader)
         cols = reader.fieldnames or []
     return {"filetype": "csv", "data": {"columns": cols, "rows": rows}}
-
-
-def download_excel_file(request):
-    fpath = (WORK_ROOT / "ms-excel-command-test.xlsx").resolve()
-    if not fpath.exists():
-        return JsonResponse({"success": False, "error": f"Missing file: {fpath}"}, status=404)
-
-    wb = openpyxl.load_workbook(str(fpath))
-    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    response["Content-Disposition"] = 'attachment; filename="ms-excel-file.xlsx"'
-    wb.save(response)
-    return response
 
 
 def make_dir(p):
@@ -840,5 +800,3 @@ def _extract_validations_by_column(wb, ws, columns):
                     validations[header] = options
 
     return validations
-
-

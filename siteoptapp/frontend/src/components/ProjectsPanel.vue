@@ -18,14 +18,6 @@ const restoring = ref(false)
 const restoreOpen = ref(false)
 const restoreCandidates = ref([])
 
-watch(() => [settingStore.workFolders], ([newworkFolders], [prevworkFolders]) => {
-  if (newworkFolders !== prevworkFolders) {
-    settingStore.loadingProjects = true
-    fetchWorkFolderFiles();
-    clearCreating();
-  }
-});
-
 function setActiveProject(i) {
   settingStore.activeProjectIndex = i
 }
@@ -75,18 +67,13 @@ async function postMakeWorkFolder(pathKey) {
     clearCreating()
     return
   }
-  const fetchSettingsResult = await fetchSettings();
-    if (!fetchSettingsResult) {
-      notify.show(`Fetching settings failed after making work folder ${workFolderName.value}`, 5000, "error")
-      clearCreating()
-      return
-    }
+  await fetchSettings();
+  await fetchWorkFolderFiles();
   notify.show(`New project ${workFolderName.value} created`, 2000, "info")
-
-  // emit("created", workFolderName.value)
-  // await fetchWorkFolderFiles()
+  const index = Object.keys(settingStore.workFolders).indexOf(workFolderName.value);
+  settingStore.setActiveProjectIndex(index)
   workFolderName.value = ""
-  // clearCreating()
+  clearCreating()
 }
 
 function clearCreating() {
@@ -165,10 +152,9 @@ async function restoreProject(c) {
     </button>
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-        :disabled="restoring"
+        :disabled="creating || restoring"
         @click="openRestore">
-      <i v-if="settingStore.creatingTestProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-      <i v-else class="fa-solid fa-folder-open"></i>
+      <i class="fa-solid fa-folder-open"></i>
       <span>{{ restoring ? "Checking..." : "Open existing project" }}</span>
     </button>
   </div>

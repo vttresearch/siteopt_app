@@ -1,39 +1,23 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import { useSettingStore } from "@/stores/settingstore.js";
-import { useNotificationStore } from "@/stores/notificationstore.js";
 import Notification from "@/components/Notification.vue";
 import DataEditorPanel from "@/components/DataEditorPanel.vue";
 import ProjectsPanel from "@/components/ProjectsPanel.vue";
 import ExecutionPanel from "@/components/ExecutionPanel.vue"
-import { checkBackendReady, fetchSettings, fetchFileTree, fetchWorkFolderFiles } from "@/utils/functions.js";
 import BackendConnectionStatusPanel from "@/components/BackendConnectionStatusPanel.vue";
 import FileSelectorPanel from "@/components/FileSelectorPanel.vue";
+import { checkBackendReady, fetchSettings, fetchWorkFolderFiles } from "@/utils/functions.js";
 
-const notify = useNotificationStore()
 const settingStore = useSettingStore()
-const inputFiles = ref({});
-const projectFiles = ref([]);
 
 onMounted(async () => {
   const ready = await checkBackendReady()
   if (ready) {
     await fetchSettings()
-    await fetchInputFiles()
-    await fetchProjectFiles()
     await fetchWorkFolderFiles()
   }
 })
-
-const fetchInputFiles = async () => {
-  const data = await fetchFileTree("fetch_input_file_tree", notify)
-  inputFiles.value = data.children
-};
-
-const fetchProjectFiles = async () => {
-  const data = await fetchFileTree("fetch_project_file_tree", notify)
-  projectFiles.value = data.children
-};
 </script>
 
 <template>

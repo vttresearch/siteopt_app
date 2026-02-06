@@ -44,44 +44,14 @@ export async function postData(endpointSuffix, data, notify) {
 }
 
 
-export const fetchSettings = async () => {
-  const settingStore = useSettingStore()
-  const url = `${API_BASE}api/settings/`
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-    })
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`Server ${url} error. status: [${response.status}] error: ${errorText}`)
-      return false
-    }
-    const parsed = await response.json();
-    settingStore.setSettings(parsed["configs"])
-    console.log("Settings updated")
-    return true
-  }
-  catch (err) {
-    console.error(`[${url} Error in fetching Settings: ${err}`)
-    return false
-  }
-};
-
-
 /**
- * Fetches a file tree from the specified API endpoint and updates the given reactive reference.
+ * Fetches data using GET from the specified API endpoint.
  *
- * @param {string} endpoint - The API endpoint suffix (e.g., "fetch_input_file_tree").
+ * @param {string} endpoint - The API endpoint suffix.
  * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
  *
- * The function handles:
- * - Making a GET request to the API.
- * - Error handling for network and server issues.
- * - Updating the target ref with the file tree data if successful.
- * - Displaying notifications for errors or unsuccessful responses.
  */
-export const fetchFileTree = async (endpoint, notify) => {
+export const getData = async (endpoint, notify) => {
   const url = `${API_BASE}api/${endpoint}/`;
   try {
     const response = await fetch(url, {
@@ -94,11 +64,7 @@ export const fetchFileTree = async (endpoint, notify) => {
       notify.show(`Server ${url} responded with error: ${errorText}`, 10000, "error");
       return;
     }
-    const r = await response.json();
-    if (!r.success) {
-      return {}
-    }
-    return r.data
+    return await response.json();
   } catch (err) {
     notify.show(`[${err}] in fetching url: ${url}`, "5000", "error");
     console.error(`Error fetching from ${url}:`, err);
@@ -106,16 +72,35 @@ export const fetchFileTree = async (endpoint, notify) => {
 };
 
 
+export const fetchSettings = async () => {
+  const settingStore = useSettingStore()
+  const notify = useNotificationStore()
+  const response = await getData("settings", notify)
+  if (!response.success) {
+    return
+  }
+  settingStore.setSettings(response.data.configs)
+  console.log("Settings updated")
+}
+
+
 export async function fetchWorkFolderFiles() {
   const settingStore = useSettingStore()
   const notify = useNotificationStore()
+  settingStore.loadingProjects = true
   if (Object.keys(settingStore.workFolders).length === 0) {
     settingStore.setWorkFolderFiles([])
     settingStore.setActiveProjectIndex(0)
     settingStore.loadingProjects = false
     return
   }
-  let files = await fetchFileTree("fetch_work_folders_tree", notify)
+  const response = await getData("fetch_work_folders_tree", notify)
+  if (!response.success) {
+    notify.show(`${response.error}`)
+    settingStore.loadingProjects = false
+    return
+  }
+  const files = response.data
   settingStore.setWorkFolderFiles(files)
 
   if (settingStore.activeProjectIndex >= settingStore.workFolderFiles.length) {
