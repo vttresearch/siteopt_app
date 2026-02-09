@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { fetchSettings, fetchWorkFolderFiles, postData } from "@/utils/functions.js";
@@ -162,19 +162,19 @@ async function restoreProject(c) {
   <!-- Tabs row -->
   <div v-if="!settingStore.loadingProjects" class="my-3">
     <div v-if="Array.isArray(settingStore.workFolderFiles) && settingStore.workFolderFiles.length" class="flex flex-wrap gap-2">
-      <div v-for="(tree, i) in settingStore.workFolderFiles" :key="tree?.[0]?.name ?? i" class="flex items-stretch">
+      <div v-for="(tree, i) in settingStore.workFolderFiles" :key="tree?.name ?? i" class="flex items-stretch">
       <BaseButton
         variant="secondary"
         class="relative pr-8"
         :class="i === settingStore.activeProjectIndex && 'ring-2 ring-blue-500'"
         @click="setActiveProject(i)"
       >
-        {{ tree?.[0]?.name ?? `Project ${i + 1}` }}
+        {{ tree?.name ?? `Project ${i + 1}` }}
         <span
           class="absolute right-2 top-1/2 -translate-y-1/2
                 text-red-600 hover:text-red-800 cursor-pointer"
           title="Remove from view"
-          @click.stop="removeProject(tree?.[0]?.name)"
+          @click.stop="removeProject(tree?.name)"
         >
           ✕
         </span>

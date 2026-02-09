@@ -5,7 +5,7 @@ export const useSettingStore = defineStore('settingsData', () => {
   const inputDataPath = ref(null);  // Initial value must be something else than the default value in config file
   const projectPath = ref(null);
   const workFolders = ref({});
-  const workFolderFiles = ref({});
+  const workFolderFiles = ref([]);
   const activeProjectIndex = ref(0);
   const creatingProjectFolder = ref(false);
   const creatingTestProjectFolder = ref(false);

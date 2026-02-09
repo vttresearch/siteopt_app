@@ -214,7 +214,6 @@ def post(request, action):
 
 
 def execute(request, job_id):
-    print(f"Starting execution of job_id {job_id}")
 
     def event_stream():
         timeout = 5
@@ -231,6 +230,7 @@ def execute(request, job_id):
         exec_type = job["exec_type"]
         exec_locally = job["local"]
         project_path = Path(ppath).resolve()
+        print(f"Executing project {project_path}")
         # Check that server config file exists if executing remotely.
         # TODO: These should be included in the execute request
         if not exec_locally and not SERVER_CONFIG_PATH.exists():
@@ -264,9 +264,11 @@ def execute(request, job_id):
             proc_retval = proc.wait()
             cache.delete(job_id)
             # Notify frontend that execution is done (send process exit code)
+            print("Execution finished")
             yield f"event: done\ndata: {proc_retval}\n\n"
         except OSError as e:
             cache.delete(job_id)
+            print(f"Execution failed: [OSError]: {e}")
             yield f"event: error\ndata: Execution error: [OSError]: {e}\n\n"
 
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
@@ -376,6 +378,7 @@ def build_tree(path, exclude_dirs=None):
 
 
 def fetch_work_folders_tree(request):
+    """Builds and returns the directory tree of all available work (project) folders."""
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} is fetching work folder files")
     config = get_client_config(client_id)
@@ -391,8 +394,27 @@ def fetch_work_folders_tree(request):
         base_path, dirname = os.path.split(p)
         tree["name"] = dirname  # same as 'name'
         tree["path"] = base_path
-        trees.append([tree])
+        trees.append(tree)
     return JsonResponse({"success": True, "data": trees})
+
+
+def fetch_work_folder(request, folder_name):
+    """Returns the directory tree of a single work folder."""
+    print(f"Returning directory tree of {folder_name}")
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    config = get_client_config(client_id)
+    config_d = read_config_file(config.config_path)
+    work_folders_dict = config_d.get("work_folders", {})
+    print(f"work_folders_dict:{work_folders_dict.items()}")
+    p = work_folders_dict.get(folder_name)
+    if not os.path.exists(p):
+        return JsonResponse({"success": False, "error": f"Updating project {folder_name} failed"})
+    excluded_dirs = [os.path.join(p, ".git")]
+    tree = build_tree(p, excluded_dirs)
+    base_path, dirname = os.path.split(p)
+    tree["name"] = dirname  # same as 'name'
+    tree["path"] = base_path
+    return JsonResponse({"success": True, "data": tree})
 
 
 def fetch_data(fpath):
@@ -482,7 +504,7 @@ def read_csv_as_json(p):
 
 
 def make_dir(p):
-    """Create directory if it doesn't exist.
+    """Creates a directory if it doesn't exist.
 
     Args:
         p: Absolute path to wanted dir

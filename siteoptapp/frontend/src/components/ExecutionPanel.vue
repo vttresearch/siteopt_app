@@ -2,7 +2,7 @@
 import { ref, onUnmounted, watch, computed } from 'vue';
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
-import { postData } from "@/utils/functions.js";
+import { postData, fetchWorkFolder } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 
@@ -24,16 +24,18 @@ onUnmounted(() => {
 
 const workDirName = computed(() => {
   if (settingStore.activeProjectIndex in Object.keys(settingStore.workFolderFiles)) {
-    return settingStore.workFolderFiles[settingStore.activeProjectIndex][0].name
+    return settingStore.workFolderFiles[settingStore.activeProjectIndex].name
   }
   else return null
 });
 
-watch(executionFinished, (newExecutionFinished) => {
-  if (executionFinished.value) {
-    // TODO: Refetch workFolderFiles for selected workDirName
+watch(executionFinished, async (newExecutionFinished) => {
+  if (newExecutionFinished) {
+    if (workDirName.value !== null) {
+      // Fetch project folder files again to see output files
+      await fetchWorkFolder(workDirName.value)
+    }
   }
-  executionFinished.value = false
 });
 
 function executeSelectedLocal() {

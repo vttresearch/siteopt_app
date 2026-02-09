@@ -23,6 +23,7 @@ urlpatterns = [
     path('admin/doc/', include('django.contrib.admindocs.urls')),
     path("admin/", admin.site.urls),
     path("api/fetch_work_folders_tree/", views.fetch_work_folders_tree, name="fetch_work_folders_tree"),
+    path("api/fetch_work_folder/<str:folder_name>/", views.fetch_work_folder, name="fetch_work_folder"),
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
