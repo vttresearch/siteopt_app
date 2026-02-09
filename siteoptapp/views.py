@@ -5,21 +5,22 @@ import csv
 import shutil
 import uuid
 import subprocess
+import time
 import openpyxl
-from openpyxl.utils import range_boundaries
-from openpyxl.utils.cell import coordinate_from_string
-from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
+from pathlib import Path
+from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.timezone import now
-from siteoptapp.models import ClientConfig
 from django.conf import settings
-from pathlib import Path
+from django.core.cache import cache
+from openpyxl.utils import range_boundaries
+from siteoptapp.models import ClientConfig
+
 
 APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
 SETTINGS_DIR = "settings"
 WORK_DIR = "work"
 CONFIG_FILE = "config.json"
-JOBS = {}
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
 TEST_PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "test_spinetoolbox_project").resolve()
@@ -188,7 +189,11 @@ def post(request, action):
         if not os.path.exists(project_path):
             return JsonResponse({"success": False, "error": f"Path {project_path} does not exist"})
         job_id = str(uuid.uuid4())
-        JOBS[job_id] = [project_path, data["execution_type"], data["local_execution"]]
+        cache.set(
+            job_id,
+            {"path": project_path, "exec_type": data["execution_type"], "local": data["local_execution"]},
+            timeout=300
+        )
         return JsonResponse({"success": True, "data": {"job_id": job_id}})
     elif action == "save_file":
         print(f"[{client_id}] saving {data['path']}")
@@ -212,27 +217,27 @@ def execute(request, job_id):
     print(f"Starting execution of job_id {job_id}")
 
     def event_stream():
-        job = JOBS.get(job_id)
+        timeout = 5
+        start = time.time()
+        job = cache.get(job_id)
+        while not job and time.time() - start < timeout:
+            time.sleep(0.1)
+            job = cache.get(job_id)
         if not job:
-            yield f"event: done\ndata: ERROR: Unknown job_id {job_id}\n\n"
+            cache.delete(job_id)
+            yield f"event: error\ndata: Execution failed. Job {job_id} not ready after {timeout}s.\n\n"
             return
-
-        ppath = job[0]
-        exec_type = job[1]
-        exec_locally = job[2]
-
+        ppath = job["path"]
+        exec_type = job["exec_type"]
+        exec_locally = job["local"]
         project_path = Path(ppath).resolve()
-
-        if not project_path.exists():
-            JOBS.pop(job_id, None)
-            yield f"event: done\ndata: ERROR: project path does not exist: {project_path}\n\n"
+        # Check that server config file exists if executing remotely.
+        # TODO: These should be included in the execute request
+        if not exec_locally and not SERVER_CONFIG_PATH.exists():
+            cache.delete(job_id)
+            yield (f"event: error\ndata: Execution failed. Config file "
+                   f"(server_config.txt) for remote execution missing: {SERVER_CONFIG_PATH}\n\n")
             return
-
-        if not SERVER_CONFIG_PATH.exists():
-            JOBS.pop(job_id, None)
-            yield f"event: done\ndata: ERROR: server config missing: {SERVER_CONFIG_PATH}\n\n"
-            return
-
         if exec_locally:
             args = [
                 PYTHON_EXECUTABLE,
@@ -257,12 +262,12 @@ def execute(request, job_id):
                 yield f"data: {line}\n\n"
             proc.stdout.close()
             proc_retval = proc.wait()
-            JOBS.pop(job_id)
-            # Notify frontend that execution is done
-            yield f"event: done\ndata: Execution finished [{proc_retval}]\n\n"
+            cache.delete(job_id)
+            # Notify frontend that execution is done (send process exit code)
+            yield f"event: done\ndata: {proc_retval}\n\n"
         except OSError as e:
-            JOBS.pop(job_id, None)
-            yield f"event: done\ndata: [OSError]: {e}\n\n"
+            cache.delete(job_id)
+            yield f"event: error\ndata: Execution error: [OSError]: {e}\n\n"
 
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"

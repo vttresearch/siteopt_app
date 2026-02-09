@@ -37,22 +37,24 @@ watch(executionFinished, (newExecutionFinished) => {
 });
 
 function executeSelectedLocal() {
+  executionFinished.value = false
   localExecutionInProgress.value = true
   executeSelected(true)
 }
 
 function executeSelectedRemote() {
+  executionFinished.value = false
   remoteExecutionInProgress.value = true
   executeSelected(false)
 }
 
 function clearExecutionInProgress() {
+  executionFinished.value = true
   localExecutionInProgress.value = false
   remoteExecutionInProgress.value = false
 }
 
 async function executeSelected(local) {
-  console.log("executeSelected() called")
   if (execType.value === "") {
     notify.show("Please select execution Type", 1000, "info")
     clearExecutionInProgress()
@@ -62,7 +64,7 @@ async function executeSelected(local) {
     notify.show("Please select a project to execute", 5000, "info")
     return
   }
-  notify.show(`Executing ${workDirName.value} ${execType.value} local:${local}`, 2000, "info")
+  notify.show(`Executing ${workDirName.value} ${execType.value}`, 2000, "info")
   const configs = {work_dir_name: workDirName.value, execution_type: execType.value, local_execution: local}
   const response = await postData("execute", configs, notify)
   if (!response.success) {
@@ -74,17 +76,24 @@ async function executeSelected(local) {
     eventSource = null;
   }
   const jobId = response.data.job_id
-  console.log(`Got job_id:${jobId}`)
   const streamUrl = `${API_BASE}api/stream/execute/${jobId}`;
   eventSource = new EventSource(streamUrl);
   eventSource.addEventListener("done", (event) => {
-    console.log("Final message:", event.data);
-    executionOutput.value.push(`[done] ${event.data}`);
+    if (event.data !== "0") {
+      notify.show(`Executing project ${workDirName.value} failed`, 10000, "error")
+      executionOutput.value.push("Execution failed");
+    }
+    console.log("Execution process exit code:", event.data);
     eventSource.close();
     eventSource = null;
-    executionFinished.value = true;
     clearExecutionInProgress()
   });
+  eventSource.addEventListener("error", (event) => {
+    executionOutput.value.push(`[error event] ${event.data}`)
+    eventSource.close();
+    eventSource = null;
+    clearExecutionInProgress()
+  })
   eventSource.onmessage = (event) => {
     executionOutput.value.push(event.data)
   }
