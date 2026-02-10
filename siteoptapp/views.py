@@ -65,7 +65,6 @@ def settings(request):
         new_client = True
     client_config = get_client_config(client_id)
     config_dict = read_config_file(client_config.config_path)
-    print(f"[{new_client}] Responding with configs: {config_dict}")
     response = JsonResponse({"success": True, "data": {"client_id": str(client_config.client_id), "configs": config_dict}})
     if new_client:
         # httponly=False makes sure that we can access it from JavaScript
@@ -228,6 +227,12 @@ def execute(request, job_id):
             return
         ppath = job["path"]
         exec_type = job["exec_type"]
+        try:
+            items_to_execute = get_items_to_execute(exec_type)
+        except NotImplementedError:
+            yield (f"event: error\ndata: Execution failed to start. Support "
+                   f"for execution type {exec_type} not implemented.")
+            return
         exec_locally = job["local"]
         project_path = Path(ppath).resolve()
         print(f"Executing project {project_path}")
@@ -255,6 +260,9 @@ def execute(request, job_id):
                 "--execute-remotely", str(SERVER_CONFIG_PATH),
                 str(project_path),
             ]
+        item_args = [] if not items_to_execute else ["-s"] + items_to_execute
+        if item_args:
+            args += item_args
         try:
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             for line in iter(proc.stdout.readline, b""):
@@ -405,7 +413,6 @@ def fetch_work_folder(request, folder_name):
     config = get_client_config(client_id)
     config_d = read_config_file(config.config_path)
     work_folders_dict = config_d.get("work_folders", {})
-    print(f"work_folders_dict:{work_folders_dict.items()}")
     p = work_folders_dict.get(folder_name)
     if not os.path.exists(p):
         return JsonResponse({"success": False, "error": f"Updating project {folder_name} failed"})
@@ -827,3 +834,49 @@ def _extract_validations_by_column(wb, ws, columns):
                     validations[header] = options
 
     return validations
+
+
+def get_items_to_execute(exec_type):
+    if exec_type == "all":
+        return []
+    elif exec_type == "opt1":
+        # Load data into input data DS (20 items)
+        return [
+            "connections input",
+            "diverting units",
+            "storage input data",
+            "nodes",
+            "pv unit input",
+            "model specification",
+            "hp units input",
+            "Existing load",
+            "scenarios",
+            "convert connections",
+            "Load template",
+            "convert diverting units (1)",
+            "convert storages",
+            "convert nodes",
+            "convert VRE units",
+            "convert hp units",
+            "model spec importer",
+            "import object parameters wide",
+            "scenario importer",
+            "Input data",
+        ]
+    elif exec_type == "opt2":
+        # Run Optimize and connect results (10 items)
+        return [
+            "Input data",
+            "repr periods template",
+            "repr period selection settings",
+            "Select repr periods",
+            "Copy DB",
+            "input with repr periods",
+            "Optimize",
+            "output db",
+            "Output recipe",
+            "Extract results",
+        ]
+    else:
+        print(f"Unknown execution type: {exec_type}")
+        raise NotImplementedError()
