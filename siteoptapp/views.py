@@ -300,6 +300,8 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
     if not isinstance(configs.get("work_folders"), dict):
         configs["work_folders"] = {}
 
+    config_dir = Path(config_fpath).parent
+    make_dir(str(config_dir))
     with open(config_fpath, "w") as fp:
         json.dump(configs, fp, indent=4)
 
