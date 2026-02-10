@@ -2,7 +2,6 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { useSettingStore } from "@/stores/settingstore.js";
 
 
@@ -33,14 +32,14 @@ const openFile = async () => {
     console.error(`Error [[${err}]] Opening file ${full_path}`);
   }
 };
-
 </script>
 
 <template>
   <button
-      class="flex-nowrap whitespace-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-0.5"
+      class="flex items-baseline justify-start gap-1 text-white bg-blue-500 hover:bg-blue-700 rounded-sm py-0.25 px-1"
       @click="openFile"
   >
-    <font-awesome-icon class="pr-1" icon="fa-solid fa-download" fixed-width />Open
+    <i class="fa-solid fa-download"></i>
+    <span>Open</span>
   </button>
 </template>

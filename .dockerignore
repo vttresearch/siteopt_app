@@ -1,0 +1,28 @@
+# VCS
+.git
+.gitmodules
+
+# Python
+.venv
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+siteoptapp/frontend/node_modules/
+siteoptapp/frontend/dist/
+
+# Build/artifacts
+staticfiles/
+work/
+*.log
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

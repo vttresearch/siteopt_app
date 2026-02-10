@@ -15,6 +15,12 @@ Siteopt_data and siteopt_toolbox repositories are under siteopt-web-interface as
 git submodule update --init --recursive
 ```
 
+Later, if the submodules have been updated to point to a newer commit, do
+
+```commandline
+git pull --recurse-submodules
+```
+
 ### Install Python Packages (requires Python 3.11+)
 
 Make Python virtual environment. Open Command prompt and type

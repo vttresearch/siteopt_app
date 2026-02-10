@@ -1,7 +1,6 @@
 <script setup>
 import { watch, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 
 
@@ -72,7 +71,7 @@ function close() {
         class="text-white hover:text-gray-200 focus:outline-none"
         aria-label="Close"
       >
-        <font-awesome-icon class="pr-1" icon="fa-solid fa-times" fixed-width />
+        <i class="fa-solid fa-times"></i>
       </button>
     </div>
   </transition>

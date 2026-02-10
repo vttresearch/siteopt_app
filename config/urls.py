@@ -24,14 +24,12 @@ urlpatterns = [
     path('', RedirectView.as_view(url='/static/index.html'), name='home'),
     path('admin/doc/', include('django.contrib.admindocs.urls')),
     path("admin/", admin.site.urls),
-    path("api/fetch_input_file_tree/", views.fetch_input_file_tree, name="fetch_input_file_tree"),
-    path("api/fetch_project_file_tree/", views.fetch_project_file_tree, name="fetch_project_file_tree"),
     path("api/fetch_work_folders_tree/", views.fetch_work_folders_tree, name="fetch_work_folders_tree"),
+    path("api/fetch_work_folder/<str:folder_name>/", views.fetch_work_folder, name="fetch_work_folder"),
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
     path("api/stream/execute/<str:job_id>", views.execute, name="execute"),
-    path("debug/api/download_excel_file/", views.download_excel_file, name="dl_excel_file"),
     path("__reload__/", include("django_browser_reload.urls")),
 ]
 

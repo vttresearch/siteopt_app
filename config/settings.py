@@ -10,27 +10,34 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _split_csv(name: str, default: str = "") -> list[str]:
+    raw = os.getenv(name, default)
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+# Debug
+DEBUG = env_bool("DJANGO_DEBUG", default=True)
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-9(_#f2mnwmohr%v$xb8d_k6xf&**os=fr2%t)9g)-#!hww=vc&"
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-# When DEBUG is True and ALLOWED_HOSTS is empty, the host is validated against ['.localhost', '127.0.0.1', '[::1]'].
-ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost",
-    "0.0.0.0",
-]
+# Secret
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-9(_#f2mnwmohr%v$xb8d_k6xf&**os=fr2%t)9g)-#!hww=vc&")
 
-# Application definition
+ALLOWED_HOSTS = _split_csv("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1")
 
+# Apps
 INSTALLED_APPS = [
     "django_browser_reload",
     "django.contrib.admin",
@@ -41,7 +48,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admindocs",
     "corsheaders",
-    "django_vite",
     "siteoptapp",
 ]
 
@@ -78,8 +84,6 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -87,22 +91,30 @@ DATABASES = {
     }
 }
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+if DEBUG:
+    # Dev: use in-memory cache
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake",
+        }
+    }
+else:
+    # Production: use Redis
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
+        }
+    }
 
+
+# Password validation
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 # Internationalization
@@ -119,7 +131,7 @@ USE_TZ = True
 
 # See e.g. STATIC_URL documentation in https://docs.djangoproject.com/en/5.2/ref/settings/#settings-staticfiles
 # django.contrib.staticfiles app automatically serves files from the 'static' folder of installed Apps
-STATIC_URL = "/static/"
+STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # where collectstatic gathers files for production
 STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist"]  # Path to the Vue.js build directory
 
@@ -128,34 +140,71 @@ STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist"]  # Path to the Vue.js
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Allow all origins (for development)
-# CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5000",
-    "http://localhost:5000",
-]
+# ===== CORS =====
+if DEBUG:
+    # Dev: allow Vite and localhost variants
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost",
+        "http://localhost:80",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5000",
+        "http://127.0.0.1",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5000",
+    ]
+else:
+    # Prod: prefer explicit env; fall back to ALLOWED_HOSTS as http/https
+    explicit = _split_csv("DJANGO_CORS_ALLOWED_ORIGINS")
+    if explicit:
+        CORS_ALLOWED_ORIGINS = explicit
+    else:
+        derived = []
+        for host in ALLOWED_HOSTS:
+            if not host or host == "*":
+                continue
+            derived.append(f"http://{host}")
+            derived.append(f"https://{host}")
+        # de-duplicate
+        seen = set()
+        CORS_ALLOWED_ORIGINS = [x for x in derived if not (x in seen or seen.add(x))]
+
 CORS_ALLOW_CREDENTIALS = True
-# Enable receiving POSTs from frontend
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5000",
-    "http://localhost:5000",
-]
+
+# ===== CSRF =====
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost",
+        "http://localhost:80",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5000",
+        "http://127.0.0.1",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5000",
+    ]
+else:
+    explicit = _split_csv("DJANGO_CSRF_TRUSTED_ORIGINS")
+    if explicit:
+        CSRF_TRUSTED_ORIGINS = explicit
+    else:
+        derived = []
+        for host in ALLOWED_HOSTS:
+            if not host or host == "*":
+                continue
+            derived.append(f"http://{host}")
+            derived.append(f"https://{host}")
+        seen = set()
+        CSRF_TRUSTED_ORIGINS = [x for x in derived if not (x in seen or seen.add(x))]
 CSRF_COOKIE_NAME = "csrftoken"
-CSRF_COOKIE_HTTPONLY = False  # False enables the frontend to read it
-CSRF_COOKIE_SAMESITE = "Lax"  # "None for cross-origin but then you must do SECURE=True
-CSRF_COOKIE_SECURE = False  # Only True if using HTTPS
-
-
-# Set dev_mode to True for development, False for production
-DJANGO_VITE = {
-    "default": {
-        "dev_mode": True,
-        "static_url_prefix": "",  # Already set by STATIC_URL above to '/static/'
-        "manifest_path": BASE_DIR / "siteoptapp/frontend/dist/.vite/manifest.json",
-    }
-}
+# For dev with Vite cross-origin fetch, keeping this False is normal.
+CSRF_COOKIE_HTTPONLY = False
+# In prod behind HTTPS, prefer "Lax" (or "None" if truly cross-site + HTTPS):
+CSRF_COOKIE_SAMESITE = "Lax"
+# Switch to True when you terminate TLS in front of Django:
+CSRF_COOKIE_SECURE = env_bool("DJANGO_USE_HTTPS", default=False)
 
 INTERNAL_IPS = [
     "127.0.0.1",

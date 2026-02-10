@@ -141,8 +141,15 @@ RUN adduser --disabled-password --gecos '' appuser
 # Preinstall Spine Toolbox plugins (match host ~/.spinetoolbox)
 COPY --chown=appuser:appuser docker/spinetoolbox_plugins/SpineOpt /home/appuser/.spinetoolbox/plugins/SpineOpt
 
-# Copy entire Django project
-COPY --chown=appuser:appuser . .
+# Copy only required project files
+COPY --chown=appuser:appuser manage.py /app/manage.py
+COPY --chown=appuser:appuser config /app/config
+COPY --chown=appuser:appuser siteoptapp /app/siteoptapp
+COPY --chown=appuser:appuser siteopt_data /app/siteopt_data
+COPY --chown=appuser:appuser siteopt_toolbox /app/siteopt_toolbox
+COPY --chown=appuser:appuser test_spinetoolbox_project /app/test_spinetoolbox_project
+COPY --chown=appuser:appuser dockerconfig /app/dockerconfig
+COPY --chown=appuser:appuser server_config.txt /app/server_config.txt
 
 # Copy container entrypoint scripts
 COPY --chown=appuser:appuser docker_solution/docker-entrypoint.sh /app/docker-entrypoint.sh
