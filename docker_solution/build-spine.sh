@@ -117,12 +117,9 @@ echo "Step 2: Building frontend..."
 echo "----------------------------------------------------------------"
 cd "$ROOT_DIR/siteoptapp/frontend"
 
-if [ ! -d "node_modules" ]; then
-    echo "Installing npm packages..."
-    npm install
-else
-    echo "node_modules exists, skipping npm install (use --clean to force reinstall)"
-fi
+echo "Installing npm packages (npm ci)..."
+# Use "npm ci" for reproducible installs; run it every time to avoid missing deps
+npm ci --silent
 
 echo "Running npm build..."
 npm run build
