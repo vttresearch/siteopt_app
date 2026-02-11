@@ -138,9 +138,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Create a non-root user
 RUN adduser --disabled-password --gecos '' appuser
 
-# Preinstall Spine Toolbox plugins (match host ~/.spinetoolbox)
-COPY --chown=appuser:appuser docker/spinetoolbox_plugins/SpineOpt /home/appuser/.spinetoolbox/plugins/SpineOpt
-
 # Copy only required project files
 COPY --chown=appuser:appuser manage.py /app/manage.py
 COPY --chown=appuser:appuser config /app/config

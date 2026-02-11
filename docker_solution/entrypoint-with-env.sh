@@ -17,4 +17,5 @@ python /app/dockerconfig/start_server_docker.py "$SPINE_ENGINE_PORT" &
 python manage.py migrate --noinput
 
 # Start Django server
+echo "Access the web interface at: http://localhost:${DJANGO_PORT}/"
 exec python manage.py runserver 0.0.0.0:"$DJANGO_PORT" --noreload
