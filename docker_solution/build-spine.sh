@@ -50,6 +50,8 @@ CLEAN=false
 CLEAN_ONLY=false
 NO_CACHE=false
 SPINE_TOOLBOX_VERSION="0.10.5"
+CONTAINER_NAME="siteopt-web-spine"
+IMAGE_NAME="siteopt-web-spine:latest"
 
 for arg in "$@"
 do
@@ -145,7 +147,21 @@ if [ "$NO_CACHE" = true ]; then
     DOCKER_ARGS="${DOCKER_ARGS} --no-cache"
 fi
 
-docker build $DOCKER_ARGS -f "$ROOT_DIR/docker_solution/Dockerfile.spine" -t siteopt-web-spine:latest "$ROOT_DIR"
+echo "Removing existing image \"$IMAGE_NAME\" if present..."
+docker rmi -f "$IMAGE_NAME" >/dev/null 2>&1 || true
+
+docker build $DOCKER_ARGS -f "$ROOT_DIR/docker_solution/Dockerfile.spine" -t "$IMAGE_NAME" "$ROOT_DIR"
+
+echo "----------------------------------------------------------------"
+echo "Step 5: Starting container..."
+echo "----------------------------------------------------------------"
+echo "Removing existing container \"$CONTAINER_NAME\" if present..."
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+echo "Opening browser at http://localhost:5000 ..."
+(sleep 5; xdg-open "http://localhost:5000" >/dev/null 2>&1 || \
+    gio open "http://localhost:5000" >/dev/null 2>&1 || \
+    sensible-browser "http://localhost:5000" >/dev/null 2>&1 || true) &
+docker run -p 5000:5000 --name "$CONTAINER_NAME" "$IMAGE_NAME"
 
 echo "----------------------------------------------------------------"
 echo "Build complete!"
@@ -154,7 +170,7 @@ echo "To run with docker-compose:"
 echo "  docker-compose -f docker_solution/docker-compose.spine.yml up -d"
 echo ""
 echo "Or run manually:"
-echo "  docker run -d --init --shm-size=2g -p 5000:5000 --name siteopt-web-spine siteopt-web-spine:latest"
+echo "  docker run -d -p 5000:5000 --name $CONTAINER_NAME $IMAGE_NAME"
 echo ""
 echo "Access the web interface at: http://localhost:5000"
 echo "----------------------------------------------------------------"
