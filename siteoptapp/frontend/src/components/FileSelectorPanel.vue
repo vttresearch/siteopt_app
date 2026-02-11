@@ -6,7 +6,12 @@ import { useSettingStore } from "@/stores/settingstore.js";
 
 const settingStore = useSettingStore()
 const selectedProjectPath = computed(() => {
-  return settingStore.workFolderFiles[settingStore.activeProjectIndex].path + "\\" + settingStore.workFolderFiles[settingStore.activeProjectIndex].name
+  const basePath = settingStore.workFolderFiles[settingStore.activeProjectIndex].path || ""
+  const name = settingStore.workFolderFiles[settingStore.activeProjectIndex].name || ""
+  if (!basePath) {
+    return name
+  }
+  return `${basePath.replace(/\/+$/, "")}/${name}`
 });
 
 </script>

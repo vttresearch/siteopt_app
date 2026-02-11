@@ -147,8 +147,12 @@ if DEBUG:
         "http://localhost",
         "http://localhost:80",
         "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5000",
         "http://127.0.0.1",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5000",
     ]
 else:
     # Prod: prefer explicit env; fall back to ALLOWED_HOSTS as http/https
@@ -174,8 +178,12 @@ if DEBUG:
         "http://localhost",
         "http://localhost:80",
         "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5000",
         "http://127.0.0.1",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5000",
     ]
 else:
     explicit = _split_csv("DJANGO_CSRF_TRUSTED_ORIGINS")
@@ -190,7 +198,6 @@ else:
             derived.append(f"https://{host}")
         seen = set()
         CSRF_TRUSTED_ORIGINS = [x for x in derived if not (x in seen or seen.add(x))]
-
 CSRF_COOKIE_NAME = "csrftoken"
 # For dev with Vite cross-origin fetch, keeping this False is normal.
 CSRF_COOKIE_HTTPONLY = False

@@ -77,6 +77,13 @@ def get_client_config(client_id):
     try:
         config = ClientConfig.objects.get(client_id=client_id)
         config.last_seen = now()
+        # If config file path is stale, recreate under current CONFIG_ROOT
+        if not os.path.exists(config.config_path):
+            config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
+            config_file_path = (config_file_dir / CONFIG_FILE).resolve()
+            make_dir(str(config_file_dir))
+            make_config_file(str(config_file_path))
+            config.config_path = str(config_file_path)
         config.save()
     except ClientConfig.DoesNotExist:
         config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
@@ -308,6 +315,8 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
     if not isinstance(configs.get("work_folders"), dict):
         configs["work_folders"] = {}
 
+    config_dir = Path(config_fpath).parent
+    make_dir(str(config_dir))
     with open(config_fpath, "w") as fp:
         json.dump(configs, fp, indent=4)
 

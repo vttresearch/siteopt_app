@@ -9,10 +9,12 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const INPUT_DIR = './src';
   const OUTPUT_DIR = './dist';
+  const apiBase = env.VITE_API_BASE || '/';
+  const backendUrl = env.VITE_BACKEND_URL || env.VITE_API_BASE || 'http://localhost:8000';
 
   return {
     define: {
-      'import.meta.env.VITE_API_BASE': JSON.stringify(env.VITE_API_BASE),  // Add variable to env vars manually
+      'import.meta.env.VITE_API_BASE': JSON.stringify(apiBase),  // Add variable to env vars manually
     },
     plugins: [
         vue(),
@@ -29,6 +31,20 @@ export default defineConfig(({ mode }) => {
     server: {
       host: env.DJANGO_VITE_DEV_SERVER_HOST,  // TODO: undefined. set in .env.development
       port: env.DJANGO_VITE_DEV_SERVER_PORT,  // TODO: undefined. set in .env.development
+      proxy: {
+        '/api': {
+          target: backendUrl,
+          changeOrigin: true,
+        },
+        '/static': {
+          target: backendUrl,
+          changeOrigin: true,
+        },
+        '/__reload__': {
+          target: backendUrl,
+          changeOrigin: true,
+        },
+      },
     },
     build: {
       manifest: true,
