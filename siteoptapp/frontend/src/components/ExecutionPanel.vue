@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onUnmounted, watch, computed } from 'vue';
+import AnsiToHtml from "ansi-to-html"
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { postData, fetchWorkFolder } from "@/utils/functions.js";
@@ -15,6 +16,7 @@ const executionFinished = ref(false)
 const localExecutionInProgress = ref(false)
 const remoteExecutionInProgress = ref(false)
 let eventSource = null
+const converter = new AnsiToHtml();
 
 onUnmounted(() => {
   if (eventSource) {
@@ -28,6 +30,10 @@ const workDirName = computed(() => {
   }
   else return null
 });
+
+const coloredOutput = computed(() => {
+  return executionOutput.value.map(line => converter.toHtml(line))
+})
 
 watch(executionFinished, async (newExecutionFinished) => {
   if (newExecutionFinished) {
@@ -128,7 +134,7 @@ async function executeSelected(local) {
         @click="execType = 'opt2'"
         :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
       >
-        Run model
+        Optimize
       </BaseButton>
       </div>
 
@@ -160,9 +166,7 @@ async function executeSelected(local) {
           aria-label="Clear output">
         ✕
       </button>
-      <div v-for="(line, index) in executionOutput" :key="index" class="whitespace-pre-wrap">
-        {{ line }}
-      </div>
+      <div v-for="(line, index) in coloredOutput" :key="index" v-html="line" class="whitespace-pre-wrap"></div>
     </div>
   </div>
 </template>
