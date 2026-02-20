@@ -1,0 +1,52 @@
+# Dockerfile.backend-dev
+FROM python:3.11
+
+# Environment
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TZ=Europe/Helsinki \
+    QT_QPA_PLATFORM=offscreen \
+    MPLBACKEND=Agg \
+    PYTHONMULTIPROCESSINGSTARTMETHOD=spawn \
+    VENV_PATH=/opt/venv
+
+WORKDIR /app
+
+# System deps for Python builds and runtime performance
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gfortran \
+    libopenblas-dev liblapack-dev \
+    libffi-dev libpq-dev git nano curl wget tzdata \
+    libegl1 libgl1 libxkbcommon-x11-0 \
+    libglib2.0-0 libfontconfig1 libdbus-1-3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create and use venv
+RUN python -m venv $VENV_PATH
+ENV PATH="$VENV_PATH/bin:$PATH" \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Upgrade pip and install requirements
+COPY requirements.txt /app/requirements.txt
+RUN python -m pip install --upgrade pip && \
+    python -m pip install --no-cache-dir -r /app/requirements.txt
+
+# Install Julia
+RUN wget https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.7-linux-x86_64.tar.gz && \
+    tar -xvzf julia-1.11.7-linux-x86_64.tar.gz && \
+    mv julia-1.11.7 /opt/julia && \
+    ln -s /opt/julia/bin/julia /usr/bin/julia && \
+    rm julia-1.11.7-linux-x86_64.tar.gz
+
+# Install Julia packages
+COPY julia-setup.jl /app/julia-setup.jl
+# Copy siteopt_toolbox SpineToolbox project, which contains the Sines_additional package
+COPY siteopt_toolbox /app/siteopt_toolbox
+RUN julia /app/julia-setup.jl
+
+EXPOSE 8000
+
+# Default command for dev (Overridden in docker-compose.yml to add migrations)
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

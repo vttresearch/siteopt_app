@@ -16,18 +16,17 @@ from django.core.cache import cache
 from openpyxl.utils import range_boundaries
 from siteoptapp.models import ClientConfig
 
-
-APP_DATA_DIR = "siteopt-app"  # The same as 'identifier' in tauri.conf.json
-SETTINGS_DIR = "settings"
-WORK_DIR = "work"
+IN_CONTAINER = os.environ.get("RUNNING_IN_CONTAINER", False)
+WORK_DIR = "work_container" if IN_CONTAINER else "work"
 CONFIG_FILE = "config.json"
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
 TEST_PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "test_spinetoolbox_project").resolve()
-WORK_ROOT = Path(os.environ.get("WORK_ROOT", Path(settings.BASE_DIR) / "work")).resolve()
 SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
-PYTHON_EXECUTABLE = os.environ.get("SPINE_PYTHON", sys.executable)
-CONFIG_ROOT = Path(os.environ.get("CONFIG_ROOT", WORK_ROOT / "_config")).resolve()
+WORK_ROOT = Path(Path(settings.BASE_DIR) / WORK_DIR).resolve()
+CONFIG_ROOT = Path(settings.BASE_DIR / "_config").resolve()
+print(f"In container: {IN_CONTAINER} WORK_ROOT:{WORK_ROOT} CONFIG_ROOT:{CONFIG_ROOT}")
+PYTHON_EXECUTABLE = sys.executable
 
 
 def get_input_data_path() -> str:
@@ -40,6 +39,10 @@ def get_project_data_path() -> str:
 
 def get_test_project_data_path() -> str:
     return str(TEST_PROJECT_DATA_DIR)
+
+
+def get_config_file_dir(client_id) -> Path:
+    return (CONFIG_ROOT / str(client_id)[0:6]).resolve()
 
 
 def get_client_work_root(client_id: str) -> str:
@@ -64,8 +67,7 @@ def settings(request):
         client_id = uuid.uuid4()
         new_client = True
     client_config = get_client_config(client_id)
-    config_dict = read_config_file(client_config.config_path)
-    response = JsonResponse({"success": True, "data": {"client_id": str(client_config.client_id), "configs": config_dict}})
+    response = JsonResponse({"success": True, "data": {"client_id": client_id, "configs": client_config}})
     if new_client:
         # httponly=False makes sure that we can access it from JavaScript
         response.set_cookie("client_id", client_id, httponly=False, samesite="Lax", max_age=31536000)  # 1 year
@@ -73,39 +75,25 @@ def settings(request):
 
 
 def get_client_config(client_id):
-    """Returns ClientConfig model for given client id if available or a fresh one for new clients."""
-    try:
-        config = ClientConfig.objects.get(client_id=client_id)
-        config.last_seen = now()
-        # If config file path is stale, recreate under current CONFIG_ROOT
-        if not os.path.exists(config.config_path):
-            config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
-            config_file_path = (config_file_dir / CONFIG_FILE).resolve()
-            make_dir(str(config_file_dir))
-            make_config_file(str(config_file_path))
-            config.config_path = str(config_file_path)
-        config.save()
-    except ClientConfig.DoesNotExist:
-        config_file_dir = (CONFIG_ROOT / SETTINGS_DIR / str(client_id)[0:6]).resolve()
-        config_file_path = (config_file_dir / CONFIG_FILE).resolve()
+    """Returns config dict from the config file for given client id."""
+    config_file_dir = get_config_file_dir(client_id)
+    config_file_path = config_file_dir / CONFIG_FILE
 
+    if not os.path.exists(str(config_file_dir)):
         make_dir(str(config_file_dir))
+        print(f"Created directory:{str(config_file_dir)}")
         make_config_file(str(config_file_path))
-
-        config = ClientConfig.objects.create(
-            client_id=client_id,
-            config_path=str(config_file_path),
-            last_seen=now()
-        )
-
-    return config
+    else:
+        if not os.path.exists(str(config_file_path)):
+            make_config_file(str(config_file_path))
+    return read_config_file(str(config_file_path))
 
 
-def remove_work_folder(config_fpath: str, work_folder_name: str):
+def remove_work_folder(client_id: str, work_folder_name: str):
     if not work_folder_name:
         return {"success": False, "error": "Missing work_folder"}
-
-    cfg = read_config_file(config_fpath)
+    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
+    cfg = read_config_file(str(config_fpath))
     work_folders = cfg.get("work_folders", {})
 
     if work_folder_name not in work_folders:
@@ -117,12 +105,14 @@ def remove_work_folder(config_fpath: str, work_folder_name: str):
     return {"success": True, "data": {}}
 
 
-def list_existing_work_folders(client_id: str, config_fpath: str):
+def list_existing_work_folders(client_id: str):
+    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
+    print(f"config_fpath:{str(config_fpath)}")
     root = get_client_work_root(client_id)
     if not os.path.exists(root):
         return {"success": True, "data": []}
 
-    cfg = read_config_file(config_fpath)
+    cfg = read_config_file(str(config_fpath))
     active = cfg.get("work_folders", {})
     active_paths = set(os.path.abspath(p) for p in active.values())
 
@@ -144,20 +134,18 @@ def list_existing_work_folders(client_id: str, config_fpath: str):
     return {"success": True, "data": out}
 
 
-def add_existing_work_folder(config_fpath: str, name: str, path: str):
+def add_existing_work_folder(client_id: str, name: str, path: str):
     if not name or not path:
         return {"success": False, "error": "Missing work_folder or path"}
-
     if not os.path.exists(path):
         return {"success": False, "error": f"Path does not exist: {path}"}
-
+    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
     # Ensure this is under the client work root (prevents adding arbitrary dirs)
-    cfg = read_config_file(config_fpath)
+    cfg = read_config_file(str(config_fpath))
     # You can also pass client_id and check get_client_work_root(client_id)
     # For now, at least validate it is a project
     if not validate_project_path(path)["success"]:
         return {"success": False, "error": "Folder is not a valid Spine Toolbox project"}
-
     work_folders = cfg.get("work_folders", {})
     work_folders[name] = path
     edit_config_file(config_fpath, {"work_folders": work_folders})
@@ -175,13 +163,12 @@ def post(request, action):
     js = json.loads(request.body.decode("utf-8"))  # dict
     data = js["data"]
     if action == "make_work_folder":
-        config = get_client_config(client_id)
         if "test_work_folder" in data.keys():
             print(f"[{client_id}] creating test work folder {data['test_work_folder']}")
-            json_response = make_test_work_folder(config.config_path, client_id, data["test_work_folder"])
+            json_response = make_test_work_folder(client_id, data["test_work_folder"])
         else:
             print(f"[{client_id}] creating work folder {data['work_folder']}")
-            json_response = make_work_folder(config.config_path, client_id, data['work_folder'])
+            json_response = make_work_folder(client_id, data["work_folder"])
         return JsonResponse(json_response)
     elif action == "fetch_data":
         print(f"[{client_id}] fetching {data['full_path']}")
@@ -189,8 +176,7 @@ def post(request, action):
         return JsonResponse(response)
     elif action == "execute":
         print(f"[{client_id}] executing {data['work_dir_name']}")
-        client_config = get_client_config(client_id)
-        config = read_config_file(client_config.config_path)
+        config = get_client_config(client_id)
         project_path = config["work_folders"][data["work_dir_name"]]
         if not os.path.exists(project_path):
             return JsonResponse({"success": False, "error": f"Path {project_path} does not exist"})
@@ -203,17 +189,13 @@ def post(request, action):
         return JsonResponse({"success": True, "data": {"job_id": job_id}})
     elif action == "save_file":
         print(f"[{client_id}] saving {data['path']}")
-        config = get_client_config(client_id)
-        return JsonResponse(save_file(config.config_path, data["path"], data["filetype"], data["payloadData"], data["meta"]))
+        return JsonResponse(save_file(client_id, data["path"], data["filetype"], data["payloadData"], data["meta"]))
     elif action == "remove_work_folder":
-        config = get_client_config(client_id)
-        return JsonResponse(remove_work_folder(config.config_path, data["folder_name"]))
+        return JsonResponse(remove_work_folder(client_id, data["folder_name"]))
     elif action == "list_existing_work_folders":
-        config = get_client_config(client_id)
-        return JsonResponse(list_existing_work_folders(client_id, config.config_path))
+        return JsonResponse(list_existing_work_folders(client_id))
     elif action == "add_existing_work_folder":
-        config = get_client_config(client_id)
-        return JsonResponse(add_existing_work_folder(config.config_path, data["name"], data["path"]))
+        return JsonResponse(add_existing_work_folder(client_id, data["name"], data["path"]))
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
@@ -307,30 +289,18 @@ def validate_project_path(p):
     return {"success": False, "error": "Path does not contain a Spine Toolbox project."}
 
 
-def make_work_folder(config_fpath, client_id, work_folder_name):
-    configs = read_config_file(config_fpath) or {}
-
-    configs.setdefault("input_data_path", get_input_data_path())
-    configs.setdefault("project_data_path", get_project_data_path())
-    if not isinstance(configs.get("work_folders"), dict):
-        configs["work_folders"] = {}
-
-    config_dir = Path(config_fpath).parent
-    make_dir(str(config_dir))
-    with open(config_fpath, "w") as fp:
-        json.dump(configs, fp, indent=4)
-
-    idp = configs["input_data_path"]
-    pdp = configs["project_data_path"]
-
+def make_work_folder(client_id, work_folder_name):
+    configs = get_client_config(client_id) or {}
+    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
+    idp = get_input_data_path()
+    pdp = get_project_data_path()
     if not validate_input_data_path(idp)["success"]:
         return {"success": False, "error": f"Bundled input data is invalid: '{idp}'"}
     if not validate_project_path(pdp)["success"]:
         return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
-
     client_root = Path(get_client_work_root(client_id))
     work_dir = (client_root / work_folder_name).resolve()
-
+    print(f"new work_dir path:{work_dir}")
     try:
         make_dir(str(work_dir))
         ignored = (".git", ".idea", ".venv", ".gitignore", ".gitkeep", "*.md", "*.png", "*.yaml", "*.yml", "*.css", ".github", "docs")
@@ -338,23 +308,17 @@ def make_work_folder(config_fpath, client_id, work_folder_name):
         shutil.copytree(idp, str(work_dir / "current_input"), dirs_exist_ok=True, ignore=shutil.ignore_patterns(*ignored))
     except OSError as e:
         return {"success": False, "error": f"[OSError] [{e}] Creating work dir failed"}
-
     work_folders = configs["work_folders"]
     if work_folder_name not in work_folders:
         work_folders[work_folder_name] = str(work_dir)
-
     edit_config_file(config_fpath, {"work_folders": work_folders})
     return {"success": True, "data": {}}
 
 
-def make_test_work_folder(config_fpath, client_id, work_folder_name):
-    configs = read_config_file(config_fpath) or {}
-    configs.setdefault("test_project_data_path", get_test_project_data_path())
-    if not isinstance(configs.get("work_folders"), dict):
-        configs["work_folders"] = {}
-    with open(config_fpath, "w") as fp:
-        json.dump(configs, fp, indent=4)
-    pdp = configs["test_project_data_path"]
+def make_test_work_folder(client_id, work_folder_name):
+    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
+    configs = get_client_config(client_id) or {}
+    pdp = get_test_project_data_path()
     if not validate_project_path(pdp)["success"]:
         return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
     client_root = Path(get_client_work_root(client_id))
@@ -398,8 +362,8 @@ def fetch_work_folders_tree(request):
     """Builds and returns the directory tree of all available work (project) folders."""
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} is fetching work folder files")
-    config = get_client_config(client_id)
-    config_d = read_config_file(config.config_path)
+    config_d = get_client_config(client_id)
+    # config_d = read_config_file(config.config_path)
     work_folders_dict = config_d.get("work_folders", {})
     trees = list()
     for name, p in work_folders_dict.items():
@@ -419,8 +383,8 @@ def fetch_work_folder(request, folder_name):
     """Returns the directory tree of a single work folder."""
     print(f"Returning directory tree of {folder_name}")
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    config = get_client_config(client_id)
-    config_d = read_config_file(config.config_path)
+    config_d = get_client_config(client_id)
+    # config_d = read_config_file(config.config_path)
     work_folders_dict = config_d.get("work_folders", {})
     p = work_folders_dict.get(folder_name)
     if not os.path.exists(p):
@@ -703,11 +667,11 @@ def _save_xlsx(fpath: str, data, meta: dict):
     return {"success": True}
 
 
-def save_file(config_fpath: str, fpath: str, filetype: str, data, meta: dict):
+def save_file(client_id: str, fpath: str, filetype: str, data, meta: dict):
     if not fpath or not filetype:
         return {"success": False, "error": "Missing 'path' or 'filetype'."}
-
-    if not is_path_inside_any_work_folder(config_fpath, fpath):
+    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
+    if not is_path_inside_any_work_folder(str(config_fpath), fpath):
         return {"success": False, "error": "Refusing to write outside work folders."}
 
     if not os.path.exists(fpath):
@@ -873,19 +837,33 @@ def get_items_to_execute(exec_type):
             "Input data",
         ]
     elif exec_type == "opt2":
-        # Run Optimize and connect results (10 items)
+        # Run 'Optimize full period' (5 items)
+        return [
+            "Input data",
+            "Copy DB",
+            "input with repr periods",
+            "Optimize",
+            "output db",
+            "Output recipe"
+            "Extract results",
+        ]
+    elif exec_type == "opt3":
+        # Run 'Optimize with representative periods' (8 items)
         return [
             "Input data",
             "repr periods template",
             "repr period selection settings",
             "Select repr periods",
-            "Copy DB",
             "input with repr periods",
             "Optimize",
             "output db",
             "Output recipe",
             "Extract results",
         ]
+    elif exec_type == "opt4":
+        # Purges output db
+        # TODO: Not implemented
+        return ["Purge output db"]
     else:
         print(f"Unknown execution type: {exec_type}")
         raise NotImplementedError()

@@ -8,3 +8,4 @@ staticfiles
 build
 dist
 work
+_config

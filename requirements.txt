@@ -1,9 +1,8 @@
 Django >= 5.2
-docutils >= 0.21
 django-tailwind >=4.0
-django-browser-reload >=1.18
 django-cors-headers >= 4.7
 django-redis >= 6.0
+docutils >= 0.21
 openpyxl >=3.1.5
 pyinstaller >= 6.15
 platformdirs >= 4.4.0

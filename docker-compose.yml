@@ -1,27 +1,56 @@
 services:
-  spine_engine:
-    build:
-      context: .
-      dockerfile: dockerconfig/spine-engine.Dockerfile
-    ports:
-      - "50001:50001"
-    volumes:
-      - workdata:/work
 
-  backend:
+  backend-dev:
     build:
       context: .
-      dockerfile: dockerconfig/backend.Dockerfile
+      dockerfile: Dockerfile.backend-dev
+    container_name: backend-dev
+    working_dir: /app
+    environment:
+      DJANGO_DEBUG: "True"
+      PYTHONUNBUFFERED: "1"
+      RUNNING_IN_CONTAINER: "True"
+    volumes:
+      - .:/app
+      # Linux-only work directory (Docker named volume)
+      - siteopt_work:/app/work_container
+      # Mask frontend from backend
+      - type: tmpfs
+        target: /app/siteoptatpp/frontend
     ports:
       - "8000:8000"
-    environment:
-      WORK_ROOT: /work
-      SPINE_ENGINE_HOST: spine_engine
-      SPINE_ENGINE_PORT: "50001"
+    networks:
+      - docker_network
+    command: >
+      bash -lc "
+        source /opt/venv/bin/activate &&
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    profiles: ["dev"]
+
+  frontend-dev:
+    image: node:22.15
+    container_name: frontend-dev
+    working_dir: /app
     volumes:
-      - workdata:/work
+      - ./siteoptapp/frontend:/app:rw
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      NPM_CONFIG_CACHE: /root/.npm
+    command: /bin/sh -c "npm install && npm run dev"
+    networks:
+      - docker_network
     depends_on:
-      - spine_engine
+      - backend-dev
+    profiles: ["dev"]
 
 volumes:
-  workdata:
+  frontend_node_modules: {}
+  siteopt_work: {}
+
+networks:
+  docker_network:
+    driver: bridge
