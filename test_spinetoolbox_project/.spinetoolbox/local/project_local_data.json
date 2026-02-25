@@ -1,8 +1,30 @@
 {
+    "project": {
+        "settings": {
+            "mode": "author"
+        },
+        "connections": {
+            "Source": {
+                "Python Tool": {
+                    "filter_settings": {
+                        "known_filters": {}
+                    }
+                }
+            },
+            "Python Tool": {
+                "Julia Tool": {
+                    "filter_settings": {
+                        "known_filters": {}
+                    }
+                }
+            }
+        }
+    },
     "items": {
         "Source": {
             "db_credentials": {}
         },
-        "Python Tool": {}
+        "Python Tool": {},
+        "Julia Tool": {}
     }
 }

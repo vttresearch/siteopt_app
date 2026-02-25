@@ -4,6 +4,8 @@
 
 # Python
 .venv
+.venv_st
+build
 __pycache__/
 **/__pycache__/
 *.pyc

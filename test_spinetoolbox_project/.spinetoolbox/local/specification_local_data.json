@@ -1,20 +1,20 @@
 {
     "Tool": {
-        "Run SpineOpt": {
-            "execution_settings": {}
-        },
-        "Load template": {
-            "execution_settings": {}
-        },
-        "Run SpineOpt detached": {
-            "execution_settings": {}
-        },
         "ToolSpec": {
             "execution_settings": {
                 "kernel_spec_name": "",
                 "env": "",
                 "use_jupyter_console": false,
                 "executable": ""
+            }
+        },
+        "Julia using SpineOpt": {
+            "execution_settings": {
+                "kernel_spec_name": "",
+                "env": "",
+                "use_jupyter_console": false,
+                "executable": "",
+                "project": ""
             }
         }
     }

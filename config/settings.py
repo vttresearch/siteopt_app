@@ -27,6 +27,7 @@ def _split_csv(name: str, default: str = "") -> list[str]:
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+# BASE_DIR == '/app' when in container, otherwise it's the repo root
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Debug
@@ -39,7 +40,6 @@ ALLOWED_HOSTS = _split_csv("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1"
 
 # Apps
 INSTALLED_APPS = [
-    "django_browser_reload",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -53,7 +53,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-    "django_browser_reload.middleware.BrowserReloadMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -147,11 +146,9 @@ if DEBUG:
         "http://localhost",
         "http://localhost:80",
         "http://localhost:5173",
-        "http://localhost:5174",
         "http://localhost:5000",
         "http://127.0.0.1",
         "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
         "http://127.0.0.1:5000",
     ]
 else:
@@ -178,11 +175,9 @@ if DEBUG:
         "http://localhost",
         "http://localhost:80",
         "http://localhost:5173",
-        "http://localhost:5174",
         "http://localhost:5000",
         "http://127.0.0.1",
         "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
         "http://127.0.0.1:5000",
     ]
 else:
@@ -205,7 +200,3 @@ CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = "Lax"
 # Switch to True when you terminate TLS in front of Django:
 CSRF_COOKIE_SECURE = env_bool("DJANGO_USE_HTTPS", default=False)
-
-INTERNAL_IPS = [
-    "127.0.0.1",
-]

@@ -37,6 +37,7 @@ const coloredOutput = computed(() => {
 
 watch(executionFinished, async (newExecutionFinished) => {
   if (newExecutionFinished) {
+    console.log("Execution finished")
     if (workDirName.value !== null) {
       // Fetch project folder files again to see output files
       await fetchWorkFolder(workDirName.value)
@@ -110,63 +111,76 @@ async function executeSelected(local) {
 
 <template>
   <div class="mb-3 text-lg font-semibold text-gray-800">Execution [{{ workDirName }}]</div>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-    <div class="col-span-1 space-y-3">
+    <div>
+      <div class="flex justify-start items-center gap-4 py-2">
+        <span class="text-gray-800 italic">Select execution type</span>
 
-      <div class="flex gap-2">
-      <BaseButton
-        variant="secondary"
-        @click="execType = 'all'"
-        :class="execType === 'all' && 'ring-2 ring-blue-500'"
-      >
-        All
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        @click="execType = 'opt1'"
-        :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
-      >
-        Load data
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        @click="execType = 'opt2'"
-        :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
-      >
-        Optimize
-      </BaseButton>
+        <BaseButton
+          variant="secondary"
+          @click="execType = 'opt1'"
+          :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
+        >
+          Prepare input data
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          @click="execType = 'opt2'"
+          :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
+        >
+          Optimize full period
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          @click="execType = 'opt3'"
+          :class="execType === 'opt3' && 'ring-2 ring-blue-500'"
+        >
+          Optimize with representative periods
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          @click="execType = 'all'"
+          :class="execType === 'all' && 'ring-2 ring-blue-500'"
+        >
+          Complete workflow
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          @click="execType = 'opt4'"
+          :class="execType === 'opt4' && 'ring-2 ring-blue-500'"
+        >
+          Purge output Db
+        </BaseButton>
       </div>
 
-      <div class="flex gap-2">
-      <button
-          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-          :disabled="!execType"
-          @click="executeSelectedLocal">
-        <i v-if="localExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-        <i v-else class="fa-solid fa-play"></i>
-        <span class="text-nowrap">Execute (Local)</span>
-      </button>
-      <button
-          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-          :disabled="!execType"
-          @click="executeSelectedRemote">
-        <i v-if="remoteExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-        <i v-else class="fa-solid fa-play"></i>
-        <span class="text-nowrap">Execute (Remote)</span>
-      </button>
+      <div class="flex justify-start gap-4 py-2">
+        <button
+            class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+            :disabled="!execType"
+            @click="executeSelectedLocal">
+          <i v-if="localExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+          <i v-else class="fa-solid fa-play"></i>
+          <span class="text-nowrap">Execute (Local)</span>
+        </button>
+        <button
+            class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+            :disabled="!execType"
+            @click="executeSelectedRemote">
+          <i v-if="remoteExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+          <i v-else class="fa-solid fa-play"></i>
+          <span class="text-nowrap">Execute (Remote)</span>
+        </button>
       </div>
-    </div>
+  </div>
 
-    <div class="relative col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
-      <!-- Clear button -->
-      <button
-          class="absolute top-4 right-4 text-gray-400 hover:text-gray-200 bg-transparent"
-          @click="executionOutput = []"
-          aria-label="Clear output">
-        ✕
-      </button>
-      <div v-for="(line, index) in coloredOutput" :key="index" v-html="line" class="whitespace-pre-wrap"></div>
-    </div>
+  <div class="col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
+    <!-- Clear button -->
+    <button
+        class="absolute top-4 right-4 text-gray-400 hover:text-gray-200 bg-transparent"
+        @click="executionOutput = []"
+        aria-label="Clear output">
+      ✕
+    </button>
+    <div v-for="(line, index) in coloredOutput" :key="index" v-html="line" class="whitespace-pre-wrap"></div>
   </div>
 </template>

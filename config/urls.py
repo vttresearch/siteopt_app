@@ -21,7 +21,6 @@ from django.views.generic import RedirectView
 from siteoptapp import views
 
 urlpatterns = [
-    path('', RedirectView.as_view(url='/static/index.html'), name='home'),
     path('admin/doc/', include('django.contrib.admindocs.urls')),
     path("admin/", admin.site.urls),
     path("api/fetch_work_folders_tree/", views.fetch_work_folders_tree, name="fetch_work_folders_tree"),
@@ -30,7 +29,6 @@ urlpatterns = [
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
     path("api/stream/execute/<str:job_id>", views.execute, name="execute"),
-    path("__reload__/", include("django_browser_reload.urls")),
 ]
 
 # http://127.0.0.1:8000/admin/doc/ provides docs for the custom tag libraries that can be used

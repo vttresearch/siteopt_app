@@ -1,0 +1,13 @@
+{
+    "name": "Julia using SpineOpt",
+    "tooltype": "julia",
+    "includes": [
+        "julia_script.jl"
+    ],
+    "description": "",
+    "inputfiles": [],
+    "inputfiles_opt": [],
+    "outputfiles": [],
+    "cmdline_args": [],
+    "includes_main_path": "../../.."
+}
