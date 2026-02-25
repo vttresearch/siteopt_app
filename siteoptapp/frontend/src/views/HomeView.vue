@@ -16,6 +16,7 @@ onMounted(async () => {
   if (ready) {
     await fetchSettings()
     await fetchWorkFolderFiles()
+    settingStore.setActiveProjectIndex(0)
   }
 })
 </script>

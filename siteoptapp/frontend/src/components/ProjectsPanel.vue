@@ -38,6 +38,12 @@ function makeNewProject() {
   postMakeWorkFolder("work_folder")
 }
 
+function makeNewProjectWithExampleData() {
+  if (!validateWorkFolderName()) return
+  settingStore.creatingProjectFolderWithExampleData = true
+  postMakeWorkFolder("work_folder_with_example_data")
+}
+
 function makeNewTestProject() {
   if (!validateWorkFolderName()) return
   settingStore.creatingTestProjectFolder = true
@@ -71,7 +77,7 @@ async function postMakeWorkFolder(pathKey) {
   await fetchWorkFolderFiles();
   notify.show(`New project ${workFolderName.value} created`, 2000, "info")
   const index = Object.keys(settingStore.workFolders).indexOf(workFolderName.value);
-  settingStore.setActiveProjectIndex(index)
+  settingStore.setActiveProjectIndex(index-1)
   workFolderName.value = ""
   clearCreating()
 }
@@ -79,6 +85,7 @@ async function postMakeWorkFolder(pathKey) {
 function clearCreating() {
   creating.value = false
   settingStore.creatingProjectFolder = false
+  settingStore.creatingProjectFolderWithExampleData = false
   settingStore.creatingTestProjectFolder = false
 }
 
@@ -141,6 +148,14 @@ async function restoreProject(c) {
       <i v-if="settingStore.creatingProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
       <i v-else class="fa-solid fa-square-plus"></i>
       <span>Create project</span>
+    </button>
+    <button
+        class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+        :disabled="creating"
+        @click="makeNewProjectWithExampleData">
+      <i v-if="settingStore.creatingProjectFolderWithExampleData" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+      <i v-else class="fa-solid fa-square-plus"></i>
+      <span>Create project (example data)</span>
     </button>
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"

@@ -14,23 +14,26 @@ from django.utils.timezone import now
 from django.conf import settings
 from django.core.cache import cache
 from openpyxl.utils import range_boundaries
-from siteoptapp.models import ClientConfig
 
 IN_CONTAINER = os.environ.get("RUNNING_IN_CONTAINER", False)
 WORK_DIR = "work_container" if IN_CONTAINER else "work"
 CONFIG_FILE = "config.json"
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
+EXAMPLE_INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox" / "example_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
 TEST_PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "test_spinetoolbox_project").resolve()
 SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
 WORK_ROOT = Path(Path(settings.BASE_DIR) / WORK_DIR).resolve()
 CONFIG_ROOT = Path(settings.BASE_DIR / "_config").resolve()
-print(f"In container: {IN_CONTAINER} WORK_ROOT:{WORK_ROOT} CONFIG_ROOT:{CONFIG_ROOT}")
 PYTHON_EXECUTABLE = sys.executable
 
 
 def get_input_data_path() -> str:
     return str(INPUT_DATA_DIR)
+
+
+def get_example_input_data_path() -> str:
+    return str(EXAMPLE_INPUT_DATA_DIR)
 
 
 def get_project_data_path() -> str:
@@ -164,10 +167,13 @@ def post(request, action):
     data = js["data"]
     if action == "make_work_folder":
         if "test_work_folder" in data.keys():
-            print(f"[{client_id}] creating test work folder {data['test_work_folder']}")
+            print(f"[{client_id}] creating test project")
             json_response = make_test_work_folder(client_id, data["test_work_folder"])
+        elif "work_folder_with_example_data" in data.keys():
+            print(f"[{client_id}] creating SiteOpt project with example data")
+            json_response = make_work_folder(client_id, data["work_folder_with_example_data"], use_example_data=True)
         else:
-            print(f"[{client_id}] creating work folder {data['work_folder']}")
+            print(f"[{client_id}] creating SiteOpt project")
             json_response = make_work_folder(client_id, data["work_folder"])
         return JsonResponse(json_response)
     elif action == "fetch_data":
@@ -289,10 +295,13 @@ def validate_project_path(p):
     return {"success": False, "error": "Path does not contain a Spine Toolbox project."}
 
 
-def make_work_folder(client_id, work_folder_name):
+def make_work_folder(client_id, work_folder_name, use_example_data=False):
     configs = get_client_config(client_id) or {}
     config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
-    idp = get_input_data_path()
+    if use_example_data:
+        idp = get_example_input_data_path()
+    else:
+        idp = get_input_data_path()
     pdp = get_project_data_path()
     if not validate_input_data_path(idp)["success"]:
         return {"success": False, "error": f"Bundled input data is invalid: '{idp}'"}
@@ -300,7 +309,7 @@ def make_work_folder(client_id, work_folder_name):
         return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
     client_root = Path(get_client_work_root(client_id))
     work_dir = (client_root / work_folder_name).resolve()
-    print(f"new work_dir path:{work_dir}")
+    print(f"Creating project to {work_dir}")
     try:
         make_dir(str(work_dir))
         ignored = (".git", ".idea", ".venv", ".gitignore", ".gitkeep", "*.md", "*.png", "*.yaml", "*.yml", "*.css", ".github", "docs")

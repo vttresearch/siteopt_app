@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onUnmounted, watch, computed } from 'vue';
+import { ref, onUnmounted, watch, computed, nextTick } from 'vue';
 import AnsiToHtml from "ansi-to-html"
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
@@ -17,12 +17,15 @@ const localExecutionInProgress = ref(false)
 const remoteExecutionInProgress = ref(false)
 let eventSource = null
 const converter = new AnsiToHtml();
+const outputEl = ref(null)
+let shouldAutoScroll = true
 
 onUnmounted(() => {
   if (eventSource) {
     eventSource.close();
   }
 })
+
 
 const workDirName = computed(() => {
   if (settingStore.activeProjectIndex in Object.keys(settingStore.workFolderFiles)) {
@@ -33,6 +36,26 @@ const workDirName = computed(() => {
 
 const coloredOutput = computed(() => {
   return executionOutput.value.map(line => converter.toHtml(line))
+})
+
+/* Returns true when user has scrolled the output log to the bottom, return false otherwise */
+function handleScroll() {
+  const el = outputEl.value
+  if (!el) return
+  const threshold = 20 // px tolerance
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+  shouldAutoScroll = atBottom
+}
+
+/* Smooth auto-scroll when new text appears and the user is scrolled to the bottom of the log */
+watch(coloredOutput, async () => {
+  await nextTick()
+  if (shouldAutoScroll && outputEl.value) {
+    outputEl.value.scrollTo({
+      top: outputEl.value.scrollHeight,
+      behavior: 'smooth'
+    })
+  }
 })
 
 watch(executionFinished, async (newExecutionFinished) => {
@@ -111,72 +134,74 @@ async function executeSelected(local) {
 
 <template>
   <div class="mb-3 text-lg font-semibold text-gray-800">Execution [{{ workDirName }}]</div>
+  <div>
+    <div class="flex justify-start items-center gap-4 pb-4">
+      <span class="text-gray-800 italic">Select execution type</span>
 
-    <div>
-      <div class="flex justify-start items-center gap-4 py-2">
-        <span class="text-gray-800 italic">Select execution type</span>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt1'"
+        :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
+      >
+        Prepare input data
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt2'"
+        :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
+      >
+        Optimize full period
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt3'"
+        :class="execType === 'opt3' && 'ring-2 ring-blue-500'"
+      >
+        Optimize with representative periods
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'all'"
+        :class="execType === 'all' && 'ring-2 ring-blue-500'"
+      >
+        Complete workflow
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        @click="execType = 'opt4'"
+        :class="execType === 'opt4' && 'ring-2 ring-blue-500'"
+      >
+        Purge output Db
+      </BaseButton>
+    </div>
 
-        <BaseButton
-          variant="secondary"
-          @click="execType = 'opt1'"
-          :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
-        >
-          Prepare input data
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          @click="execType = 'opt2'"
-          :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
-        >
-          Optimize full period
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          @click="execType = 'opt3'"
-          :class="execType === 'opt3' && 'ring-2 ring-blue-500'"
-        >
-          Optimize with representative periods
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          @click="execType = 'all'"
-          :class="execType === 'all' && 'ring-2 ring-blue-500'"
-        >
-          Complete workflow
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          @click="execType = 'opt4'"
-          :class="execType === 'opt4' && 'ring-2 ring-blue-500'"
-        >
-          Purge output Db
-        </BaseButton>
-      </div>
-
-      <div class="flex justify-start gap-4 py-2">
-        <button
-            class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-            :disabled="!execType"
-            @click="executeSelectedLocal">
-          <i v-if="localExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-          <i v-else class="fa-solid fa-play"></i>
-          <span class="text-nowrap">Execute (Local)</span>
-        </button>
-        <button
-            class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-            :disabled="!execType"
-            @click="executeSelectedRemote">
-          <i v-if="remoteExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-          <i v-else class="fa-solid fa-play"></i>
-          <span class="text-nowrap">Execute (Remote)</span>
-        </button>
-      </div>
+    <div class="flex justify-start gap-4 pb-4">
+      <button
+          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          :disabled="!execType"
+          @click="executeSelectedLocal">
+        <i v-if="localExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+        <i v-else class="fa-solid fa-play"></i>
+        <span class="text-nowrap">Execute (Local)</span>
+      </button>
+      <button
+          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          :disabled="!execType"
+          @click="executeSelectedRemote">
+        <i v-if="remoteExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+        <i v-else class="fa-solid fa-play"></i>
+        <span class="text-nowrap">Execute (Remote)</span>
+      </button>
+    </div>
   </div>
 
-  <div class="col-span-2 bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner">
+  <div
+      class="relative bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner"
+      ref="outputEl"
+      @scroll="handleScroll">
     <!-- Clear button -->
     <button
-        class="absolute top-4 right-4 text-gray-400 hover:text-gray-200 bg-transparent"
+        class="absolute top-4 right-4 text-gray-300 hover:text-gray-100 bg-transparent"
         @click="executionOutput = []"
         aria-label="Clear output">
       ✕

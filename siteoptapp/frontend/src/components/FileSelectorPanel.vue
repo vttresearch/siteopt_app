@@ -1,18 +1,24 @@
 <script setup>
-import { computed } from "vue"
+import { ref, watch } from "vue"
 import FileTree from "@/components/FileTree.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 
 
 const settingStore = useSettingStore()
-const selectedProjectPath = computed(() => {
-  const basePath = settingStore.workFolderFiles[settingStore.activeProjectIndex].path || ""
-  const name = settingStore.workFolderFiles[settingStore.activeProjectIndex].name || ""
-  if (!basePath) {
-    return name
+const selectedProjectPath = ref("")
+const fileTreeModel = ref({})
+
+watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
+  if (newVal !== oldVal) {
+    const basePath = settingStore.workFolderFiles[newVal].path
+    const name = settingStore.workFolderFiles[newVal].name
+    if (!basePath) {
+      selectedProjectPath.value = name
+    }
+    selectedProjectPath.value = `${basePath.replace(/\/+$/, "")}/${name}`
+    fileTreeModel.value = settingStore.workFolderFiles[newVal].children
   }
-  return `${basePath.replace(/\/+$/, "")}/${name}`
-});
+})
 
 </script>
 
@@ -24,7 +30,7 @@ const selectedProjectPath = computed(() => {
     </div>
     <FileTree
       class="bg-blue-50 rounded-l shadow-md relative p-2 text-sm"
-      :model="settingStore.workFolderFiles[settingStore.activeProjectIndex].children"
+      :model="fileTreeModel"
       :path="selectedProjectPath"
       :enableOpen="true"
       :depth="1"

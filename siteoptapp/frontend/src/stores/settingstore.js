@@ -6,8 +6,9 @@ export const useSettingStore = defineStore('settingsData', () => {
   const projectPath = ref(null);
   const workFolders = ref({});
   const workFolderFiles = ref([]);
-  const activeProjectIndex = ref(0);
+  const activeProjectIndex = ref(null);
   const creatingProjectFolder = ref(false);
+  const creatingProjectFolderWithExampleData = ref(false);
   const creatingTestProjectFolder = ref(false);
   const loadingProjects = ref(false);
   const backendAvailable = ref(false);
@@ -43,6 +44,7 @@ export const useSettingStore = defineStore('settingsData', () => {
     workFolderFiles,
     activeProjectIndex,
     creatingProjectFolder,
+    creatingProjectFolderWithExampleData,
     creatingTestProjectFolder,
     loadingProjects,
     backendAvailable,
