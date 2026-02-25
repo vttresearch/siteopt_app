@@ -853,7 +853,7 @@ def get_items_to_execute(exec_type):
             "input with repr periods",
             "Optimize",
             "output db",
-            "Output recipe"
+            "Output recipe",
             "Extract results",
         ]
     elif exec_type == "opt3":
