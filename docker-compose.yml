@@ -10,6 +10,14 @@ services:
       DJANGO_DEBUG: "True"
       PYTHONUNBUFFERED: "1"
       RUNNING_IN_CONTAINER: "True"
+      # Julia threading control
+      JULIA_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      "MKL_NUM_THREADS": "1"
+      # Allocator tuning
+      JULIA_JEMALLOC_CONF: "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
+      MALLOC_ARENA_MAX: "2"
     volumes:
       - .:/app
       # Linux-only work directory (Docker named volume)

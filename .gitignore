@@ -9,3 +9,5 @@ build
 dist
 work
 _config
+test_spinetoolbox_project/results.csv
+test_spinetoolbox_project/.spinetoolbox/items/python_tool/output
