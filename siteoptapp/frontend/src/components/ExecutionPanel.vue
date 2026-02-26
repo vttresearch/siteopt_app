@@ -208,9 +208,10 @@ async function executeSelected(local) {
       @scroll="handleScroll">
     <!-- Clear button -->
     <button
-        class="absolute top-4 right-4 text-gray-300 hover:text-gray-100 bg-transparent"
+        class="sticky top-1 z-10 ml-auto block text-gray-300 hover:text-gray-100 bg-transparent"
         @click="executionOutput = []"
-        aria-label="Clear output">
+        aria-label="Clear output"
+        title="Clear output">
       ✕
     </button>
     <div v-for="(line, index) in coloredOutput" :key="index" v-html="line" class="whitespace-pre-wrap"></div>

@@ -368,7 +368,9 @@ def build_tree(path, exclude_dirs=None):
 
 
 def fetch_work_folders_tree(request):
-    """Builds and returns the directory tree of all available work (project) folders."""
+    """Builds and returns the directory tree of available work (project) folders in current context.
+    i.e. When in container, host work folders are not shown. When running on host, container work
+    folders are not shown."""
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} is fetching work folder files")
     config_d = get_client_config(client_id)
@@ -376,8 +378,11 @@ def fetch_work_folders_tree(request):
     work_folders_dict = config_d.get("work_folders", {})
     trees = list()
     for name, p in work_folders_dict.items():
+        if not p.startswith(str(WORK_ROOT)):
+            # Skip folders not in current context
+            continue
         if not os.path.exists(p):
-            print(f"Skipping {p}. Doesn't exist in current context.")
+            print(f"Skipping {p}. Doesn't exist.")
             continue
         excluded_dirs = [os.path.join(p, ".git")]
         tree = build_tree(p, excluded_dirs)
