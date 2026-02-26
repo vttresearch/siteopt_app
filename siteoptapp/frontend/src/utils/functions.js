@@ -137,6 +137,8 @@ export async function fetchWorkFolder(workFolderName) {
   if (idx !== -1) {
     // preserve reactivity by using splice
     settingStore.workFolderFiles.splice(idx, 1, updatedTree);
+    // Let FileSelectorPanel know that folder structure has been updated
+    settingStore.projectIndexUpdated = idx
   }
   settingStore.loadingProjects = false
 }

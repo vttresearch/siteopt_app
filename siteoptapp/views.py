@@ -377,7 +377,7 @@ def fetch_work_folders_tree(request):
     trees = list()
     for name, p in work_folders_dict.items():
         if not os.path.exists(p):
-            print(f"Error building work folder tree: path:'{p}' does not exist")
+            print(f"Skipping {p}. Doesn't exist in current context.")
             continue
         excluded_dirs = [os.path.join(p, ".git")]
         tree = build_tree(p, excluded_dirs)

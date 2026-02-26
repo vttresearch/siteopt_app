@@ -10,7 +10,7 @@ import BaseButton from "@/components/ui/BaseButton.vue";
 
 const notify = useNotificationStore()
 const settingStore = useSettingStore()
-const execType = ref("all")
+const execType = ref("")
 const executionOutput = ref([])
 const executionFinished = ref(false)
 const localExecutionInProgress = ref(false)
@@ -19,6 +19,13 @@ let eventSource = null
 const converter = new AnsiToHtml();
 const outputEl = ref(null)
 let shouldAutoScroll = true
+const execTypes = {
+  "all": "Complete workflow",
+  "opt1": "Prepare input data",
+  "opt2": "Optimize full period",
+  "opt3": "Optimize with representative periods",
+  "opt4": "Purge output Db",
+  }
 
 onUnmounted(() => {
   if (eventSource) {
@@ -42,7 +49,7 @@ const coloredOutput = computed(() => {
 function handleScroll() {
   const el = outputEl.value
   if (!el) return
-  const threshold = 20 // px tolerance
+  const threshold = 80 // px tolerance
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
   shouldAutoScroll = atBottom
 }
@@ -96,7 +103,7 @@ async function executeSelected(local) {
     notify.show("Please select a project to execute", 5000, "info")
     return
   }
-  notify.show(`Executing ${workDirName.value} ${execType.value}`, 2000, "info")
+  notify.show(`Executing ${execTypes[execType.value]} for project ${workDirName.value}`, 5000, "info")
   const configs = {work_dir_name: workDirName.value, execution_type: execType.value, local_execution: local}
   const response = await postData("execute", configs, notify)
   if (!response.success) {
@@ -143,35 +150,35 @@ async function executeSelected(local) {
         @click="execType = 'opt1'"
         :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
       >
-        Prepare input data
+        {{ execTypes["opt1"] }}
       </BaseButton>
       <BaseButton
         variant="secondary"
         @click="execType = 'opt2'"
         :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
       >
-        Optimize full period
+        {{ execTypes["opt2"] }}
       </BaseButton>
       <BaseButton
         variant="secondary"
         @click="execType = 'opt3'"
         :class="execType === 'opt3' && 'ring-2 ring-blue-500'"
       >
-        Optimize with representative periods
+        {{ execTypes["opt3"] }}
       </BaseButton>
       <BaseButton
         variant="secondary"
         @click="execType = 'all'"
         :class="execType === 'all' && 'ring-2 ring-blue-500'"
       >
-        Complete workflow
+        {{ execTypes["all"] }}
       </BaseButton>
       <BaseButton
         variant="secondary"
         @click="execType = 'opt4'"
         :class="execType === 'opt4' && 'ring-2 ring-blue-500'"
       >
-        Purge output Db
+        {{ execTypes["opt4"] }}
       </BaseButton>
     </div>
 

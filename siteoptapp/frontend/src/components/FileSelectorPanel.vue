@@ -8,17 +8,30 @@ const settingStore = useSettingStore()
 const selectedProjectPath = ref("")
 const fileTreeModel = ref({})
 
+/* Refreshes file tree when user selects a project */
 watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
   if (newVal !== oldVal) {
-    const basePath = settingStore.workFolderFiles[newVal].path
-    const name = settingStore.workFolderFiles[newVal].name
-    if (!basePath) {
-      selectedProjectPath.value = name
-    }
-    selectedProjectPath.value = `${basePath.replace(/\/+$/, "")}/${name}`
-    fileTreeModel.value = settingStore.workFolderFiles[newVal].children
+    refresh(newVal)
   }
 })
+
+/* Refreshes file tree when execution has finished */
+watch (() => settingStore.projectIndexUpdated, (newVal, oldVal) => {
+  if (newVal) {
+    refresh(newVal)
+  }
+})
+
+function refresh(index) {
+  const basePath = settingStore.workFolderFiles[index].path
+  const name = settingStore.workFolderFiles[index].name
+  if (!basePath) {
+    selectedProjectPath.value = name
+  }
+  selectedProjectPath.value = `${basePath.replace(/\/+$/, "")}/${name}`
+  fileTreeModel.value = settingStore.workFolderFiles[index].children
+  settingStore.projectIndexUpdated = null
+}
 
 </script>
 
