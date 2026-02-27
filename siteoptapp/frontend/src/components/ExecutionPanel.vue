@@ -15,9 +15,11 @@ const executionOutput = ref([])
 const executionFinished = ref(false)
 const localExecutionInProgress = ref(false)
 const remoteExecutionInProgress = ref(false)
+const refreshingScenarios = ref(false)
 let eventSource = null
 const converter = new AnsiToHtml();
 const outputEl = ref(null)
+const selectedScenarios = ref([])
 let shouldAutoScroll = true
 const execTypes = {
   "all": "Complete workflow",
@@ -26,6 +28,17 @@ const execTypes = {
   "opt3": "Optimize with representative periods",
   "opt4": "Purge output Db",
   }
+const scenarios = ref([])
+
+/* Refreshes file tree when user selects a project */
+watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
+  if (newVal !== oldVal) {
+    refreshScenarios()
+    selectedScenarios.value = []
+    execType.value = ""
+  }
+})
+
 
 onUnmounted(() => {
   if (eventSource) {
@@ -75,6 +88,19 @@ watch(executionFinished, async (newExecutionFinished) => {
   }
 });
 
+async function refreshScenarios() {
+  refreshingScenarios.value = true
+  const configs = {db_key: "scenario", work_folder: workDirName.value}
+  const response = await postData("fetch_input_db_data", configs, notify)
+  if (!response.success) {
+    console.error("fetching input db data failed")
+    refreshingScenarios.value = false
+    return
+  }
+  scenarios.value = response.data.scenarios
+  refreshingScenarios.value = false
+}
+
 function executeSelectedLocal() {
   executionFinished.value = false
   localExecutionInProgress.value = true
@@ -93,6 +119,11 @@ function clearExecutionInProgress() {
   remoteExecutionInProgress.value = false
 }
 
+/* Returns true if selected execution type should have at least one scenario selected, false otherwise. */
+function execTypeNeedsScenario() {
+  return execType.value === "all" || execType.value === "opt2" || execType.value === "opt3"
+}
+
 async function executeSelected(local) {
   if (execType.value === "") {
     notify.show("Please select execution Type", 1000, "info")
@@ -101,10 +132,21 @@ async function executeSelected(local) {
   }
   if (workDirName.value === null) {
     notify.show("Please select a project to execute", 5000, "info")
+    clearExecutionInProgress()
+    return
+  }
+  if (execTypeNeedsScenario() && selectedScenarios.value.length === 0) {
+    notify.show("Please select scenario(s) to execute", 5000, "info")
+    clearExecutionInProgress()
     return
   }
   notify.show(`Executing ${execTypes[execType.value]} for project ${workDirName.value}`, 5000, "info")
-  const configs = {work_dir_name: workDirName.value, execution_type: execType.value, local_execution: local}
+  const configs = {
+    work_dir_name: workDirName.value,
+    execution_type: execType.value,
+    local_execution: local,
+    scenarios: selectedScenarios.value
+  }
   const response = await postData("execute", configs, notify)
   if (!response.success) {
     clearExecutionInProgress()
@@ -137,6 +179,7 @@ async function executeSelected(local) {
     executionOutput.value.push(event.data)
   }
 }
+
 </script>
 
 <template>
@@ -180,6 +223,30 @@ async function executeSelected(local) {
       >
         {{ execTypes["opt4"] }}
       </BaseButton>
+    </div>
+
+    <div class="flex justify-start items-center pb-4">
+      <span class="pr-4 text-gray-800 italic">Select scenarios</span>
+
+      <template v-if="refreshingScenarios">
+        <div>Loading scenarios...</div>
+      </template>
+      <template v-else-if="scenarios.length === 0">
+        <span>No scenarios found. Please execute 'Prepare input data'</span>
+      </template>
+      <template v-else>
+        <div v-for="(scenario, i) in scenarios" :key="scenario">
+          <input
+              type="checkbox"
+              class="bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-blue-500"
+              :id="`scenario-${i}`"
+              name="scenario"
+              :value="scenario"
+              v-model="selectedScenarios" />
+          <label class=px-2 :for="`scenario-${i}`">{{ scenario }}</label>
+        </div>
+      </template>
+
     </div>
 
     <div class="flex justify-start gap-4 pb-4">

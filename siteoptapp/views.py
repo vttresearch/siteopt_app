@@ -6,14 +6,16 @@ import shutil
 import uuid
 import subprocess
 import time
-import openpyxl
 from pathlib import Path
+from tempfile import TemporaryDirectory
+import openpyxl
+from openpyxl.utils import range_boundaries
+from spinedb_api import DatabaseMapping
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
-from django.utils.timezone import now
 from django.conf import settings
 from django.core.cache import cache
-from openpyxl.utils import range_boundaries
+
 
 IN_CONTAINER = os.environ.get("RUNNING_IN_CONTAINER", False)
 WORK_DIR = "work_container" if IN_CONTAINER else "work"
@@ -26,6 +28,8 @@ SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BA
 WORK_ROOT = Path(Path(settings.BASE_DIR) / WORK_DIR).resolve()
 CONFIG_ROOT = Path(settings.BASE_DIR / "_config").resolve()
 PYTHON_EXECUTABLE = sys.executable
+INPUT_DATA_SQLITE_FILE = Path(".spinetoolbox", "items", "input_data", "elexia_input.sqlite")
+_MOD_SCRIPT_NAME = "mod_script.py"
 
 
 def get_input_data_path() -> str:
@@ -155,6 +159,22 @@ def add_existing_work_folder(client_id: str, name: str, path: str):
     return {"success": True, "data": {}}
 
 
+def fetch_scenarios_from_input_db(client_id, configs):
+    db_key = configs["db_key"]
+    client_root = Path(get_client_work_root(client_id))
+    sqlite_fpath = (client_root / configs["work_folder"] / INPUT_DATA_SQLITE_FILE).resolve()
+    if not os.path.exists(sqlite_fpath):
+        return JsonResponse({"success": False, "error": f"SQLite file {sqlite_fpath} doesn't exist"})
+    scenario_names = list()
+    with DatabaseMapping("sqlite:///" + str(sqlite_fpath)) as db_map:
+        # Adding a scenario
+        # items, errors = db_map.add_items("scenario", {"name": "my_scenario"})
+        scenarios = db_map.find_by_type(db_key)  # scenarios is a list-of-PublicItems
+        for scenario in scenarios:
+            scenario_names.append(scenario["name"])
+    return JsonResponse({"success": True, "data": {"scenarios": scenario_names}})
+
+
 @csrf_protect
 def post(request, action):
     """Handles data posted by the frontend.
@@ -182,17 +202,7 @@ def post(request, action):
         return JsonResponse(response)
     elif action == "execute":
         print(f"[{client_id}] executing {data['work_dir_name']}")
-        config = get_client_config(client_id)
-        project_path = config["work_folders"][data["work_dir_name"]]
-        if not os.path.exists(project_path):
-            return JsonResponse({"success": False, "error": f"Path {project_path} does not exist"})
-        job_id = str(uuid.uuid4())
-        cache.set(
-            job_id,
-            {"path": project_path, "exec_type": data["execution_type"], "local": data["local_execution"]},
-            timeout=300
-        )
-        return JsonResponse({"success": True, "data": {"job_id": job_id}})
+        return prepare_execution(client_id, data)
     elif action == "save_file":
         print(f"[{client_id}] saving {data['path']}")
         return JsonResponse(save_file(client_id, data["path"], data["filetype"], data["payloadData"], data["meta"]))
@@ -202,9 +212,36 @@ def post(request, action):
         return JsonResponse(list_existing_work_folders(client_id))
     elif action == "add_existing_work_folder":
         return JsonResponse(add_existing_work_folder(client_id, data["name"], data["path"]))
+    elif action == "fetch_input_db_data":
+        print(f"fetching key:{data['db_key']} from input db's sqlite file")
+        if data["db_key"] == "scenario":
+            response = fetch_scenarios_from_input_db(client_id, data)
+        else:
+            print(f"Not implemented db_key:{data['db_key']}")
+            response = JsonResponse({"success": False, "error": f"Fetching db_key {data['db_key']} not Implemented"})
+        return response
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
+
+
+def prepare_execution(client_id, data):
+    config = get_client_config(client_id)
+    project_path = config["work_folders"][data["work_dir_name"]]
+    if not os.path.exists(project_path):
+        return JsonResponse({"success": False, "error": f"Path {project_path} does not exist"})
+    job_id = str(uuid.uuid4())
+    cache.set(
+        job_id,
+        {
+            "path": project_path,
+            "exec_type": data["execution_type"],
+            "local": data["local_execution"],
+            "scenarios": data["scenarios"]
+        },
+        timeout=300
+    )
+    return JsonResponse({"success": True, "data": {"job_id": job_id}})
 
 
 def execute(request, job_id):
@@ -230,7 +267,9 @@ def execute(request, job_id):
             return
         exec_locally = job["local"]
         project_path = Path(ppath).resolve()
-        print(f"Executing project {project_path}")
+        scenarios = job["scenarios"]
+        temp_dir, script_path = _make_solve_model_mod_script(scenarios)
+        print(f"Executing project {project_path} with scenarios {scenarios}")
         # Check that server config file exists if executing remotely.
         # TODO: These should be included in the execute request
         if not exec_locally and not SERVER_CONFIG_PATH.exists():
@@ -243,6 +282,8 @@ def execute(request, job_id):
                 PYTHON_EXECUTABLE,
                 "-u", "-m",
                 "spinetoolbox",
+                "--mod-script",
+                str(script_path),
                 "--execute-only",
                 str(project_path),
             ]
@@ -277,6 +318,29 @@ def execute(request, job_id):
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
     return response
+
+
+def _make_solve_model_mod_script(scenarios):
+    """Writes project modification script for solve model to a temporary file.
+
+    Args:
+        scenarios (list of str): active scenario names
+
+    Returns:
+        tuple: temporary directory containing the script file and path to the file
+    """
+    quoted_scenarios = (f"'{s}'" for s in scenarios)
+    template_path = Path(__file__).parent / "project_modification_script_template.py"
+    with open(template_path) as template_file:
+        template = template_file.read()
+    script_contents = template.format(scenarios=", ".join(quoted_scenarios))
+    temp_dir = TemporaryDirectory()  # pylint: disable=consider-using-with
+    script_path = WORK_ROOT / _MOD_SCRIPT_NAME
+    # TODO: Once this works reliably, we should create the mod_script.py into temp_dir
+    # script_path = Path(temp_dir.name) / _MOD_SCRIPT_NAME
+    with open(script_path, "w", encoding="utf-8") as script_file:
+        script_file.write(script_contents)
+    return temp_dir, script_path
 
 
 def validate_input_data_path(p):
