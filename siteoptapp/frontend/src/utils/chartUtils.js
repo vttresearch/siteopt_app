@@ -189,3 +189,205 @@ export function generateColorPalette(count) {
   
   return colors;
 }
+
+function normalizeStr(s) {
+  return String(s ?? '').trim();
+}
+
+/**
+ * Detect scenario comparison structure from results data (array of row objects).
+ * @param {Array} data - Rows from xlsx/csv (array of objects)
+ * @returns {Object|null} - { scenarios, items, hasSummaries, summaries, summaryItemMap, hasEntities, itemEntityMap }
+ */
+export function detectScenarioStructure(data) {
+  if (!data || data.length === 0) return null;
+
+  const columns = Object.keys(data[0]);
+  if (!columns.length) return null;
+
+  const scenarioKeywords = ['scenario', 'alternative', 'case', 'run', 'variant'];
+  const scenarioCol = columns.find(c => scenarioKeywords.some(k => c.toLowerCase().includes(k)));
+  const itemCol = columns.find(c => /^(item|parameter|variable|metric|name)$/i.test(c));
+  const valueCol = columns.find(c => /^(value|values?|result|total)$/i.test(c));
+  const categoryCol = columns.find(c => /^(category|summary|group|type)$/i.test(c));
+  const entityCol = columns.find(c => /^(entity|entityid|object)$/i.test(c));
+
+  const scenarioColumn = scenarioCol || (columns.length > 1 ? columns[0] : null);
+  const scenarios = scenarioColumn
+    ? [...new Set(data.map(r => normalizeStr(r[scenarioColumn])).filter(Boolean))].sort()
+    : [];
+
+  let items = [];
+  let hasSummaries = false;
+  let summaries = [];
+  const summaryItemMap = {};
+  let hasEntities = false;
+  const itemEntityMap = {};
+
+  if (itemCol && valueCol) {
+    items = [...new Set(data.map(r => normalizeStr(r[itemCol])).filter(Boolean))].sort();
+    if (categoryCol) {
+      hasSummaries = true;
+      const byCat = {};
+      data.forEach(r => {
+        const cat = normalizeStr(r[categoryCol]) || 'Other';
+        const item = normalizeStr(r[itemCol]);
+        if (!item) return;
+        if (!byCat[cat]) byCat[cat] = new Set();
+        byCat[cat].add(item);
+      });
+      summaries = Object.keys(byCat).sort();
+      summaries.forEach(cat => {
+        summaryItemMap[cat] = [...byCat[cat]].sort();
+      });
+    }
+    if (entityCol) {
+      hasEntities = true;
+      const byItem = {};
+      data.forEach(r => {
+        const item = normalizeStr(r[itemCol]);
+        const entity = normalizeStr(r[entityCol]);
+        if (!item) return;
+        if (!byItem[item]) byItem[item] = new Set();
+        if (entity) byItem[item].add(entity);
+      });
+      Object.keys(byItem).forEach(item => {
+        itemEntityMap[item] = [...byItem[item]].sort();
+      });
+    }
+  } else {
+    const numericCols = columns.filter(c => {
+      if (c === scenarioColumn) return false;
+      const v = data[0][c];
+      return v !== undefined && v !== null && (typeof v === 'number' || !isNaN(parseFloat(v)));
+    });
+    items = numericCols;
+    if (items.length > 0) {
+      hasSummaries = true;
+      summaries = [...items];
+      items.forEach(i => { summaryItemMap[i] = [i]; });
+    }
+  }
+
+  return {
+    scenarios,
+    items,
+    hasSummaries,
+    summaries,
+    summaryItemMap,
+    hasEntities,
+    itemEntityMap
+  };
+}
+
+/**
+ * Build category-totals chart config (grouped bar: categories on x-axis, one series per scenario).
+ */
+export function processCategorySummedData(data, scenarioStructure, scenarios, chartType, yAxisScale, useMinBarHeight, hideZeroValues) {
+  if (!data?.length || !scenarioStructure || !scenarios?.length) return null;
+
+  const categories = scenarioStructure.summaries?.length ? scenarioStructure.summaries : scenarioStructure.items;
+  if (!categories?.length) return null;
+
+  const scenarioColumn = Object.keys(data[0]).find(c => /^(scenario|alternative|case|run)$/i.test(c)) || Object.keys(data[0])[0];
+  const itemCol = Object.keys(data[0]).find(c => /^(item|parameter|variable)$/i.test(c));
+  const valueCol = Object.keys(data[0]).find(c => /^(value|values?|result|total)$/i.test(c));
+  const categoryCol = Object.keys(data[0]).find(c => /^(category|summary|group|type)$/i.test(c));
+
+  const getValue = (row, cat) => {
+    if (valueCol) return parseFloat(row[valueCol]) || 0;
+    const v = row[cat];
+    return v !== undefined && v !== null ? (typeof v === 'number' ? v : parseFloat(v) || 0) : 0;
+  };
+
+  const sums = {};
+  scenarios.forEach(s => { sums[s] = {}; categories.forEach(c => { sums[s][c] = 0; }); });
+
+  if (itemCol && valueCol && categoryCol) {
+    data.forEach(row => {
+      const sc = normalizeStr(row[scenarioColumn]);
+      const cat = normalizeStr(row[categoryCol]) || 'Other';
+      if (!scenarios.includes(sc) || !categories.includes(cat)) return;
+      sums[sc][cat] += parseFloat(row[valueCol]) || 0;
+    });
+  } else {
+    data.forEach(row => {
+      const sc = normalizeStr(row[scenarioColumn]);
+      if (!scenarios.includes(sc)) return;
+      categories.forEach(cat => {
+        const v = getValue(row, cat);
+        if (hideZeroValues && v === 0) return;
+        sums[sc][cat] += v;
+      });
+    });
+  }
+
+  const series = scenarios.map(name => ({
+    name,
+    type: 'bar',
+    data: categories.map(cat => sums[name][cat] ?? 0)
+  }));
+
+  const colors = generateColorPalette(series.length);
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: scenarios, bottom: 0 },
+    grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+    xAxis: { type: 'category', data: categories },
+    yAxis: { type: 'value', scale: yAxisScale === 'log' },
+    series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
+  };
+}
+
+/**
+ * Build scenario comparison chart (items vs scenarios, grouped or horizontal bar).
+ */
+export function processScenarioComparisonData(data, scenarioStructure, items, scenarios, chartType, showEntities, entities, yAxisScale, useMinBarHeight, hideZeroValues) {
+  if (!data?.length || !scenarioStructure || !items?.length || !scenarios?.length) return null;
+
+  const scenarioColumn = Object.keys(data[0]).find(c => /^(scenario|alternative|case|run)$/i.test(c)) || Object.keys(data[0])[0];
+  const itemCol = Object.keys(data[0]).find(c => /^(item|parameter|variable)$/i.test(c));
+  const valueCol = Object.keys(data[0]).find(c => /^(value|values?|result|total)$/i.test(c));
+
+  const getValue = (row, itemKey) => {
+    if (valueCol && itemCol) {
+      if (normalizeStr(row[itemCol]) !== normalizeStr(itemKey)) return 0;
+      return parseFloat(row[valueCol]) || 0;
+    }
+    const v = row[itemKey];
+    return v !== undefined && v !== null ? (typeof v === 'number' ? v : parseFloat(v) || 0) : 0;
+  };
+
+  const series = scenarios.map(scenarioName => ({
+    name: scenarioName,
+    type: 'bar',
+    data: items.map(item => {
+      if (itemCol && valueCol) {
+        const rows = data.filter(r => normalizeStr(r[scenarioColumn]) === scenarioName && normalizeStr(r[itemCol]) === item);
+        return rows.reduce((sum, row) => sum + (parseFloat(row[valueCol]) || 0), 0);
+      }
+      const row = data.find(r => normalizeStr(r[scenarioColumn]) === scenarioName);
+      return row ? getValue(row, item) : 0;
+    })
+  }));
+
+  const colors = generateColorPalette(series.length);
+  const axisCategories = items;
+
+  const base = {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: scenarios, bottom: 0 },
+    grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+    series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
+  };
+
+  if (chartType === 'horizontalBar') {
+    base.yAxis = { type: 'category', data: axisCategories, inverse: true };
+    base.xAxis = { type: 'value', scale: yAxisScale === 'log' };
+  } else {
+    base.xAxis = { type: 'category', data: axisCategories };
+    base.yAxis = { type: 'value', scale: yAxisScale === 'log' };
+  }
+
+  return base;
+}
