@@ -58,125 +58,6 @@
         autoresize
       />
     </div>
-    
-    <!-- Controls Section (Scenarios + Items only; chart options are per-plot via Settings) -->
-    <div class="chart-controls mb-4 p-4 bg-gray-50 rounded-lg border">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <!-- Scenarios Selection -->
-        <div class="flex-1">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Select Scenarios ({{ selectedScenarios.length }}/{{ availableScenarios.length }} selected)
-          </label>
-          <div class="max-h-96 overflow-y-auto border border-gray-300 rounded p-2 bg-white">
-            <div class="mb-2 flex gap-2">
-              <button @click="selectAllScenarios" class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                Select All
-              </button>
-              <button @click="deselectAllScenarios" class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
-                Deselect All
-              </button>
-            </div>
-            <div v-for="scenario in availableScenarios" :key="scenario" class="mb-1">
-              <button
-                @click="toggleScenario(scenario, !isScenarioSelected(scenario))"
-                type="button"
-                :class="[
-                  'w-full text-left px-3 py-2 rounded text-sm transition-colors',
-                  isScenarioSelected(scenario) 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                ]"
-                :title="scenario"
-              >
-                <span class="flex items-center justify-between">
-                  <span class="truncate flex-1">{{ scenario }}</span>
-                  <span v-if="isScenarioSelected(scenario)" class="ml-2">✓</span>
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Items Selection -->
-        <div class="flex-1">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Select Items ({{ selectedItems.length }}/{{ filteredItems.length }} selected)
-          </label>
-          <div class="max-h-96 overflow-y-auto border border-gray-300 rounded p-2 bg-white">
-            <div class="mb-2 flex gap-2">
-              <button @click="selectAllFilteredItems" class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                Select All
-              </button>
-              <button @click="deselectAllItems" class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
-                Deselect All
-              </button>
-            </div>
-            <div v-if="hasSummaries">
-              <div v-for="summary in availableSummaries" :key="summary" class="mb-2">
-                <div class="flex items-center justify-between bg-gray-100 p-2 rounded cursor-pointer" @click="toggleSummaryExpanded(summary)">
-                  <div class="flex items-center">
-                    <span class="text-sm font-medium text-gray-700">{{ summary }}</span>
-                    <span class="ml-2 text-xs text-gray-500">
-                      ({{ getSummarySelectedCount(summary) }}/{{ getSummaryItemsCount(summary) }})
-                    </span>
-                  </div>
-                  <button
-                    @click.stop="selectAllItemsBySummary(summary)"
-                    class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                  >
-                    {{ isSummaryFullySelected(summary) ? 'Deselect All' : 'Select All' }}
-                  </button>
-                </div>
-                <div v-if="isSummaryExpanded(summary)" class="mt-1 ml-2 space-y-1">
-                  <button
-                    v-for="item in getItemsForSummary(summary)" 
-                    :key="item"
-                    @click="toggleItem(item, !isItemSelected(item))"
-                    type="button"
-                    :class="[
-                      'w-full text-left px-3 py-1.5 rounded text-sm transition-colors',
-                      isItemSelected(item) 
-                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                    ]"
-                    :title="item"
-                  >
-                    <span class="flex items-center justify-between">
-                      <span class="truncate flex-1">{{ item }}</span>
-                      <span v-if="isItemSelected(item)" class="ml-2">✓</span>
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div v-else class="space-y-1">
-              <button
-                v-for="item in filteredItems" 
-                :key="item"
-                @click="toggleItem(item, !isItemSelected(item))"
-                type="button"
-                :class="[
-                  'w-full text-left px-3 py-2 rounded text-sm transition-colors mb-1',
-                  isItemSelected(item) 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                ]"
-                :title="item"
-              >
-                <span class="flex items-center justify-between">
-                  <span class="truncate flex-1">{{ item }}</span>
-                  <span v-if="isItemSelected(item)" class="ml-2">✓</span>
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div v-if="selectedScenarios.length === 0 || selectedItems.length === 0" class="text-sm text-orange-600">
-        Select scenarios and items above to view the detailed horizontal bar chart below.
-      </div>
-    </div>
 
     <!-- Custom plot chart (when user defines one from modal) -->
     <div v-if="showCustomPlot && customPlotChartOption && Object.keys(customPlotChartOption).length" class="chart-wrapper bg-white rounded-lg shadow-sm border mb-4">
@@ -189,19 +70,6 @@
       </div>
       <v-chart
         :option="customPlotChartOption"
-        :style="{ height: chartHeight + 'px', width: '100%' }"
-        autoresize
-      />
-    </div>
-    
-    <!-- Horizontal Bar Chart Container (only when data is selected) -->
-    <div v-if="hasValidHorizontalData" class="chart-wrapper bg-white rounded-lg shadow-sm border">
-      <div class="p-2 border-b flex items-center justify-end">
-        <button type="button" @click="openChartSettings('horizontal')" class="px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded" title="Chart settings">Settings</button>
-      </div>
-      <v-chart
-        ref="horizontalChartRef"
-        :option="horizontalChartOption"
         :style="{ height: chartHeight + 'px', width: '100%' }"
         autoresize
       />
@@ -365,7 +233,6 @@ const props = defineProps({
 defineExpose({ openCustomPlotModal });
 
 const chartRef = ref(null);
-const horizontalChartRef = ref(null);
 const categoryItemsChartRef = ref(null);
 const categoryChartWrapperRef = ref(null);
 /** Cursor position relative to category chart container (for tooltip placement) */
@@ -379,7 +246,6 @@ const selectedEntities = ref([]);
 const expandedSummaries = ref([]);
 const scenarioStructure = ref(null);
 const chartOption = ref({});
-const horizontalChartOption = ref({});
 /** List of category names that have been opened (charts shown below) */
 const openedCategories = ref([]);
 /** Chart options per category: { [categoryName]: EChartsOption } */
@@ -396,14 +262,13 @@ const showCustomPlot = ref(false);
 const customPlotHideZeroValues = ref(false);
 
 /** Per-chart settings (axis scale, top N, min bar height, hide zeros). Each plot has a Settings button that opens a popup. */
-const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: true });
+const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: false });
 const categoryTotalsSettings = ref(DEFAULT_CHART_SETTINGS());
 const categoryItemsSettings = ref({}); // { [categoryName]: settings }
-const customPlotSettings = ref({ ...DEFAULT_CHART_SETTINGS(), hideZeroValues: false });
-const horizontalChartSettings = ref(DEFAULT_CHART_SETTINGS());
+const customPlotSettings = ref({ ...DEFAULT_CHART_SETTINGS() });
 
 const settingsModalOpen = ref(false);
-const settingsModalTarget = ref(null); // 'categoryTotals' | { type: 'categoryItems', categoryName } | 'customPlot' | 'horizontal'
+const settingsModalTarget = ref(null); // 'categoryTotals' | { type: 'categoryItems', categoryName } | 'customPlot'
 const modalSettings = ref({ ...DEFAULT_CHART_SETTINGS() });
 
 const availableScenarios = computed(() => scenarioStructure.value?.scenarios || []);
@@ -422,14 +287,6 @@ const hasValidData = computed(() => {
   return scenarioStructure.value.hasSummaries && scenarioStructure.value.scenarios.length > 0;
 });
 
-// Horizontal chart needs items and scenarios
-const hasValidHorizontalData = computed(() => 
-  scenarioStructure.value && 
-  selectedItems.value.length > 0 && 
-  selectedScenarios.value.length > 0 &&
-  (!showEntities.value || selectedEntities.value.length > 0)
-);
-
 function normalizeString(value) {
   return String(value || '').trim();
 }
@@ -438,7 +295,6 @@ function getSettingsForTarget(target) {
   if (!target) return DEFAULT_CHART_SETTINGS();
   if (target === 'categoryTotals') return { ...categoryTotalsSettings.value };
   if (target === 'customPlot') return { ...customPlotSettings.value };
-  if (target === 'horizontal') return { ...horizontalChartSettings.value };
   if (target?.type === 'categoryItems' && target.categoryName) {
     const s = categoryItemsSettings.value[target.categoryName];
     return s ? { ...s } : DEFAULT_CHART_SETTINGS();
@@ -471,9 +327,6 @@ function applyChartSettings() {
     customPlotSettings.value = s;
     customPlotHideZeroValues.value = s.hideZeroValues;
     rebuildCustomPlot();
-  } else if (target === 'horizontal') {
-    horizontalChartSettings.value = s;
-    updateHorizontalChart();
   } else if (target?.type === 'categoryItems' && target.categoryName) {
     categoryItemsSettings.value = { ...categoryItemsSettings.value, [target.categoryName]: s };
     updateCategoryItemsChartFor(target.categoryName);
@@ -515,13 +368,19 @@ function applyTopNFilter(chartConfig, topN) {
   
   const series = chartConfig.series || [];
   
+  const getBarValue = (d) => {
+    if (d == null) return 0;
+    if (typeof d === 'object' && 'value' in d) return Number(d.value) || 0;
+    return Number(d) || 0;
+  };
+
   // Calculate total value for each category across all series
   const categoryTotals = {};
   categories.forEach((cat, catIndex) => {
     let total = 0;
     series.forEach(serie => {
       if (serie.data && serie.data[catIndex] !== undefined) {
-        total += Math.abs(serie.data[catIndex] || 0);
+        total += Math.abs(getBarValue(serie.data[catIndex]));
       }
     });
     categoryTotals[cat] = total;
@@ -557,19 +416,19 @@ function applyTopNFilter(chartConfig, topN) {
     }
   });
   
-  // Process series data
+  // Process series data (extract numeric value for summing when data item is { value, actualValue })
   const newSeries = series.map(serie => {
     const newData = new Array(newCategories.length).fill(0);
-    
+
     if (serie.data) {
       serie.data.forEach((value, origIndex) => {
         const newIndex = categoryMap[origIndex];
         if (newIndex >= 0) {
-          newData[newIndex] = (newData[newIndex] || 0) + (value || 0);
+          newData[newIndex] = (newData[newIndex] || 0) + getBarValue(value);
         }
       });
     }
-    
+
     return {
       ...serie,
       data: newData
@@ -803,45 +662,6 @@ function updateCategoryTotalsChart() {
   }
 }
 
-function updateHorizontalChart() {
-  // Horizontal bar chart: Controlled by user selections (scenarios and items)
-  if (!scenarioStructure.value || selectedItems.value.length === 0 || selectedScenarios.value.length === 0) {
-    horizontalChartOption.value = {};
-    return;
-  }
-  
-  if (showEntities.value && selectedEntities.value.length === 0) {
-    horizontalChartOption.value = {};
-    return;
-  }
-  
-  const s = horizontalChartSettings.value;
-  const horizontalConfig = processScenarioComparisonData(
-    props.data,
-    scenarioStructure.value,
-    selectedItems.value,
-    selectedScenarios.value,
-    'horizontalBar',
-    showEntities.value,
-    selectedEntities.value,
-    s.yAxisScale,
-    s.useMinBarHeight,
-    s.hideZeroValues
-  );
-  
-  if (horizontalConfig) {
-    horizontalConfig.title = {
-      text: `Horizontal Bar Chart: ${props.fileName}`,
-      left: 'center',
-      textStyle: { fontSize: 16 }
-    };
-    const filteredConfig = applyTopNFilter(horizontalConfig, s.topNValues);
-    horizontalChartOption.value = filteredConfig;
-  } else {
-    horizontalChartOption.value = {};
-  }
-}
-
 function onCategoryChartClick(params) {
   // Ignore clicks on bars (series) - only handle background/axis clicks
   if (params.componentType === 'series') {
@@ -1052,7 +872,6 @@ function rebuildCustomPlot() {
 
 function updateChart() {
   updateCategoryTotalsChart();
-  updateHorizontalChart();
 }
 
 function initializeChart() {
@@ -1065,11 +884,8 @@ function initializeChart() {
   scenarioStructure.value = structure;
   
   if (structure) {
-    // Select all scenarios by default
     selectedScenarios.value = structure.scenarios.map(s => normalizeString(s));
-    selectedItems.value = [];
-    
-    
+    selectedItems.value = (structure.items || []).map(i => normalizeString(i));
     if (structure.hasEntities) {
       updateEntitiesForItems();
     }
@@ -1085,25 +901,6 @@ watch(
   () => [categoryTotalsSettings.value, scenarioStructure.value],
   () => {
     updateCategoryTotalsChart();
-  },
-  { deep: true }
-);
-
-// Watcher for horizontal chart - updates when selections or settings change
-watch(
-  () => [
-    selectedScenarios.value,
-    selectedItems.value,
-    selectedEntities.value,
-    horizontalChartSettings.value,
-    showEntities.value,
-    scenarioStructure.value
-  ],
-  () => {
-    if (showEntities.value && hasEntities.value) {
-      updateEntitiesForItems();
-    }
-    updateHorizontalChart();
   },
   { deep: true }
 );
