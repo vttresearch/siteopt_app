@@ -322,18 +322,48 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
     });
   }
 
-  const series = scenarios.map(name => ({
-    name,
-    type: 'bar',
-    data: categories.map(cat => sums[name][cat] ?? 0)
-  }));
+  let categoriesToShow = categories;
+  if (hideZeroValues) {
+    categoriesToShow = categories.filter(cat =>
+      scenarios.some(sc => (sums[sc][cat] ?? 0) !== 0)
+    );
+  }
+
+  const series = scenarios.map(name => {
+    const rawData = categoriesToShow.map(cat => sums[name][cat] ?? 0);
+    let data = rawData;
+    if (useMinBarHeight && rawData.some(v => v > 0)) {
+      const maxVal = Math.max(...rawData);
+      const minDisplay = maxVal > 0 ? maxVal * 0.005 : 0;
+      data = rawData.map(v => {
+        if (v === 0) return 0;
+        const display = Math.max(v, minDisplay);
+        return display !== v ? { value: display, actualValue: v } : v;
+      });
+    }
+    return { name, type: 'bar', data };
+  });
 
   const colors = generateColorPalette(series.length);
+  const tooltip = {
+    trigger: 'axis',
+    axisPointer: { type: 'shadow' },
+    formatter: useMinBarHeight ? (params) => {
+      if (!params?.length) return '';
+      const lines = [params[0].axisValue];
+      params.forEach(p => {
+        const val = p.data?.actualValue ?? p.value;
+        const num = typeof val === 'number' ? val : (p.data?.value ?? p.value);
+        lines.push(`${p.marker} ${p.seriesName}: ${num}`);
+      });
+      return lines.join('<br/>');
+    } : undefined
+  };
   return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { data: scenarios, bottom: 0 },
     grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-    xAxis: { type: 'category', data: categories },
+    xAxis: { type: 'category', data: categoriesToShow },
     yAxis: { type: 'value', scale: yAxisScale === 'log' },
     series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
   };
@@ -358,27 +388,70 @@ export function processScenarioComparisonData(data, scenarioStructure, items, sc
     return v !== undefined && v !== null ? (typeof v === 'number' ? v : parseFloat(v) || 0) : 0;
   };
 
-  const series = scenarios.map(scenarioName => ({
-    name: scenarioName,
-    type: 'bar',
-    data: items.map(item => {
+  const series = scenarios.map(scenarioName => {
+    const rawData = items.map(item => {
       if (itemCol && valueCol) {
         const rows = data.filter(r => normalizeStr(r[scenarioColumn]) === scenarioName && normalizeStr(r[itemCol]) === item);
         return rows.reduce((sum, row) => sum + (parseFloat(row[valueCol]) || 0), 0);
       }
       const row = data.find(r => normalizeStr(r[scenarioColumn]) === scenarioName);
       return row ? getValue(row, item) : 0;
-    })
-  }));
+    });
+    let outData = rawData;
+    if (useMinBarHeight && rawData.some(v => v > 0)) {
+      const maxVal = Math.max(...rawData);
+      const minDisplay = maxVal > 0 ? maxVal * 0.005 : 0;
+      outData = rawData.map(v => {
+        if (v === 0) return 0;
+        const display = Math.max(v, minDisplay);
+        return display !== v ? { value: display, actualValue: v } : v;
+      });
+    }
+    return { name: scenarioName, type: 'bar', data: outData };
+  });
 
-  const colors = generateColorPalette(series.length);
-  const axisCategories = items;
+  let itemsToShow = items;
+  let seriesToUse = series;
+  if (hideZeroValues) {
+    const nonZeroIndices = items.map((_, i) => i).filter(i =>
+      series.some(s => {
+        const d = s.data[i];
+        const v = (d && typeof d === 'object' && 'actualValue' in d) ? d.actualValue : (d?.value ?? d);
+        return (v ?? 0) !== 0;
+      })
+    );
+    itemsToShow = nonZeroIndices.map(i => items[i]);
+    seriesToUse = series.map(s => ({
+      ...s,
+      data: nonZeroIndices.map(i => s.data[i])
+    }));
+  }
+
+  const colors = generateColorPalette(seriesToUse.length);
+  const axisCategories = itemsToShow;
+
+  const tooltip = {
+    trigger: 'axis',
+    axisPointer: { type: 'shadow' },
+    ...(useMinBarHeight && {
+      formatter: (params) => {
+        if (!params?.length) return '';
+        const lines = [params[0].axisValue];
+        params.forEach(p => {
+          const val = p.data?.actualValue ?? p.value;
+          const num = typeof val === 'number' ? val : (p.data?.value ?? p.value);
+          lines.push(`${p.marker} ${p.seriesName}: ${num}`);
+        });
+        return lines.join('<br/>');
+      }
+    })
+  };
 
   const base = {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip,
     legend: { data: scenarios, bottom: 0 },
     grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-    series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
+    series: seriesToUse.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
   };
 
   if (chartType === 'horizontalBar') {
