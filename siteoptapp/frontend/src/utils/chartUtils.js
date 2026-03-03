@@ -359,16 +359,25 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
       return lines.join('<br/>');
     } : undefined
   };
+  const axisLabel = { fontSize: 20 };
+  const valueAxis = { type: 'value', scale: yAxisScale === 'log' };
+  const categoryAxis = { type: 'category', data: categoriesToShow, axisLabel };
+  if (chartType === 'horizontalBar') {
+    return {
+      tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { data: scenarios, bottom: 0 },
+      grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+      yAxis: { ...categoryAxis, inverse: true },
+      xAxis: valueAxis,
+      series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
+    };
+  }
   return {
     tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { data: scenarios, bottom: 0 },
     grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: categoriesToShow,
-      axisLabel: { fontSize: 20 }
-    },
-    yAxis: { type: 'value', scale: yAxisScale === 'log' },
+    xAxis: categoryAxis,
+    yAxis: valueAxis,
     series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
   };
 }
