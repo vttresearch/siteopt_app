@@ -26,21 +26,30 @@
     <!-- Category selector: click to toggle category item plots below -->
     <div v-if="hasValidData && hasSummaries && availableSummaries.length" class="mb-4">
       <label class="block text-sm font-medium text-gray-700 mb-2">Categories</label>
-      <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1 w-full max-w-xs">
-        <label
-          v-for="summary in availableSummaries"
-          :key="summary"
-          class="flex items-center gap-2 cursor-pointer"
-          @click.prevent="toggleCategory(summary)"
-        >
-          <span
-            class="w-4 h-4 border border-blue-500 rounded-sm flex items-center justify-center text-[11px] font-bold"
-            :class="isCategorySelected(summary) ? 'bg-blue-500 text-white' : 'bg-white text-transparent'"
+      <div class="flex flex-col gap-2">
+        <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1 w-full max-w-xs">
+          <label
+            v-for="summary in availableSummaries"
+            :key="summary"
+            class="flex items-center gap-2 cursor-pointer"
+            @click.prevent="toggleCategory(summary)"
           >
-            ✓
-          </span>
-          <span class="text-sm truncate">{{ summary }}</span>
-        </label>
+            <span
+              class="w-4 h-4 border border-blue-500 rounded-sm flex items-center justify-center text-[11px] font-bold"
+              :class="isCategorySelected(summary) ? 'bg-blue-500 text-white' : 'bg-white text-transparent'"
+            >
+              ✓
+            </span>
+            <span class="text-sm truncate">{{ summary }}</span>
+          </label>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center px-3 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 rounded hover:bg-indigo-100 w-fit"
+          @click="openCustomPlotModal"
+        >
+          Define custom plot
+        </button>
       </div>
     </div>
 
@@ -96,43 +105,69 @@
       >
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
           <div class="p-4 border-b font-semibold text-gray-800">Define custom plot</div>
-          <div class="p-4 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <!-- Categories -->
+          <div class="p-4 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Categories & items (combined) -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Categories</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Categories & items</label>
               <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
-                <label
-                  v-for="summary in availableSummaries"
-                  :key="summary"
-                  class="flex items-center gap-2 cursor-pointer"
-                >
-                  <input type="checkbox" :checked="isCustomCategorySelected(summary)" @change="toggleCustomCategory(summary)" class="rounded" />
-                  <span class="text-sm truncate">{{ summary }}</span>
-                </label>
-              </div>
-            </div>
-            <!-- Items -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Items</label>
-              <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
-                <template v-for="summary in availableSummaries" :key="summary">
-                  <div class="text-xs font-medium text-gray-500 mt-2 first:mt-0">{{ summary }}</div>
-                  <label
-                    v-for="item in getItemsForSummary(summary)"
-                    :key="item"
-                    class="flex items-center gap-2 cursor-pointer ml-1"
+                <!-- When summaries/categories exist, show items grouped under collapsible category headers -->
+                <template v-if="hasSummaries">
+                  <div
+                    v-for="summary in availableSummaries"
+                    :key="summary"
+                    class="mb-1"
                   >
-                    <input type="checkbox" :checked="isCustomItemSelected(item)" @change="toggleCustomItem(item)" class="rounded" />
-                    <span class="text-sm truncate">{{ item }}</span>
-                  </label>
+                    <button
+                      type="button"
+                      class="w-full flex items-center justify-between text-xs font-medium text-gray-700 hover:text-gray-900 mb-1"
+                      @click="toggleSummaryExpanded(summary)"
+                    >
+                      <span class="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          class="w-3 h-3 rounded border border-gray-400"
+                          :checked="isCustomCategoryFullySelected(summary)"
+                          @change.stop="toggleCustomCategoryAll(summary, $event.target.checked)"
+                        />
+                        <span class="inline-block transition-transform" :class="isSummaryExpanded(summary) ? 'rotate-90' : ''">
+                          ▶
+                        </span>
+                        <span>{{ summary }}</span>
+                      </span>
+                    </button>
+                    <div
+                      v-if="isSummaryExpanded(summary)"
+                      class="ml-4 space-y-1"
+                    >
+                      <label
+                        v-for="item in getItemsForSummary(summary)"
+                        :key="item"
+                        class="flex items-center gap-2 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="isCustomItemSelected(item)"
+                          @change="toggleCustomItem(item, $event.target.checked)"
+                          class="rounded"
+                        />
+                        <span class="text-sm truncate">{{ item }}</span>
+                      </label>
+                    </div>
+                  </div>
                 </template>
-                <template v-if="!hasSummaries">
+                <!-- Fallback: no summaries, show flat item list -->
+                <template v-else>
                   <label
                     v-for="item in availableItems"
                     :key="item"
                     class="flex items-center gap-2 cursor-pointer"
                   >
-                    <input type="checkbox" :checked="isCustomItemSelected(normalizeString(item))" @change="toggleCustomItem(normalizeString(item))" class="rounded" />
+                    <input
+                      type="checkbox"
+                      :checked="isCustomItemSelected(normalizeString(item))"
+                      @change="toggleCustomItem(normalizeString(item), $event.target.checked)"
+                      class="rounded"
+                    />
                     <span class="text-sm truncate">{{ item }}</span>
                   </label>
                 </template>
@@ -154,10 +189,33 @@
             </div>
           </div>
           <div class="p-4 border-t flex flex-wrap items-center justify-between gap-4">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="customPlotHideZeroValues" class="rounded" />
-              <span class="text-sm text-gray-700">Hide zero values</span>
-            </label>
+            <div class="flex flex-col gap-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" v-model="customPlotHideZeroValues" class="rounded" />
+                <span class="text-sm text-gray-700">Hide zero values</span>
+              </label>
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-gray-700">Orientation:</span>
+                <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    class="rounded"
+                    value="horizontal"
+                    v-model="customPlotOrientation"
+                  />
+                  <span>Horizontal</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    class="rounded"
+                    value="vertical"
+                    v-model="customPlotOrientation"
+                  />
+                  <span>Vertical</span>
+                </label>
+              </div>
+            </div>
             <div class="flex gap-2">
               <button type="button" @click="closeCustomPlotModal" class="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
               <button type="button" @click="applyCustomPlot" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">Show plot</button>
@@ -270,6 +328,8 @@ const customPlotChartOption = ref({});
 const showCustomPlot = ref(false);
 /** Custom plot: hide zero values (default false = keep zero values) */
 const customPlotHideZeroValues = ref(false);
+/** Custom plot: orientation ('horizontal' or 'vertical') */
+const customPlotOrientation = ref('horizontal');
 
 /** Per-chart settings (axis scale, top N, min bar height, hide zeros). Each plot has a Settings button that opens a popup. */
 const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: false });
@@ -694,6 +754,7 @@ function openCustomPlotModal() {
   customPlotSelectedCategories.value = [];
   customPlotSelectedItems.value = [];
   customPlotSelectedScenarios.value = [...(scenarioStructure.value?.scenarios || []).map(s => normalizeString(s))];
+  customPlotOrientation.value = 'horizontal';
   customPlotModalOpen.value = true;
 }
 
@@ -701,34 +762,39 @@ function closeCustomPlotModal() {
   customPlotModalOpen.value = false;
 }
 
-function isCustomCategorySelected(category) {
-  return customPlotSelectedCategories.value.some(c => normalizeString(c) === normalizeString(category));
-}
-
-function toggleCustomCategory(category) {
-  const norm = normalizeString(category);
-  const list = customPlotSelectedCategories.value.map(c => normalizeString(c));
-  if (list.includes(norm)) {
-    customPlotSelectedCategories.value = customPlotSelectedCategories.value.filter(c => normalizeString(c) !== norm);
-  } else {
-    const match = availableSummaries.value.find(s => normalizeString(s) === norm) || category;
-    customPlotSelectedCategories.value = [...customPlotSelectedCategories.value, match];
-  }
-}
-
 function isCustomItemSelected(item) {
   const norm = normalizeString(item);
   return customPlotSelectedItems.value.some(i => normalizeString(i) === norm);
 }
 
-function toggleCustomItem(item) {
+function toggleCustomItem(item, isChecked) {
   const norm = normalizeString(item);
   const list = customPlotSelectedItems.value.map(i => normalizeString(i));
-  if (list.includes(norm)) {
-    customPlotSelectedItems.value = customPlotSelectedItems.value.filter(i => normalizeString(i) !== norm);
-  } else {
-    customPlotSelectedItems.value = [...customPlotSelectedItems.value, item];
+  let nextChecked = isChecked;
+  if (nextChecked === undefined) {
+    nextChecked = !list.includes(norm);
   }
+  if (nextChecked) {
+    if (!list.includes(norm)) {
+      customPlotSelectedItems.value = [...list, norm];
+    }
+  } else {
+    customPlotSelectedItems.value = customPlotSelectedItems.value.filter(i => normalizeString(i) !== norm);
+  }
+}
+
+function isCustomCategoryFullySelected(summary) {
+  const items = getItemsForSummary(summary);
+  if (!items.length) return false;
+  return items.every(item => isCustomItemSelected(item));
+}
+
+function toggleCustomCategoryAll(summary, isChecked) {
+  const items = getItemsForSummary(summary);
+  if (!items.length) return;
+  items.forEach(item => {
+    toggleCustomItem(item, isChecked);
+  });
 }
 
 function isCustomScenarioSelected(scenario) {
@@ -748,9 +814,6 @@ function toggleCustomScenario(scenario) {
 /** Combined list of items for custom plot: items from selected categories + explicitly selected items (deduplicated) */
 function getCustomPlotItemsList() {
   const set = new Set();
-  customPlotSelectedCategories.value.forEach(cat => {
-    (scenarioStructure.value?.summaryItemMap?.[cat] || []).forEach(i => set.add(normalizeString(i)));
-  });
   customPlotSelectedItems.value.forEach(i => set.add(normalizeString(i)));
   return Array.from(set);
 }
@@ -763,13 +826,15 @@ function applyCustomPlot() {
     return;
   }
   customPlotSettings.value.hideZeroValues = customPlotHideZeroValues.value;
+  // Map orientation to chart type used by processScenarioComparisonData
+  const chartType = customPlotOrientation.value === 'vertical' ? 'groupedBar' : 'horizontalBar';
   const s = customPlotSettings.value;
   const config = processScenarioComparisonData(
     props.data,
     scenarioStructure.value,
     items,
     scenarios,
-    'horizontalBar',
+    chartType,
     false,
     [],
     s.yAxisScale,
@@ -794,13 +859,14 @@ function rebuildCustomPlot() {
   const items = getCustomPlotItemsList();
   const scenarios = customPlotSelectedScenarios.value.map(s => normalizeString(s));
   if (items.length === 0 || scenarios.length === 0) return;
+  const chartType = customPlotOrientation.value === 'vertical' ? 'groupedBar' : 'horizontalBar';
   const s = customPlotSettings.value;
   const config = processScenarioComparisonData(
     props.data,
     scenarioStructure.value,
     items,
     scenarios,
-    'horizontalBar',
+    chartType,
     false,
     [],
     s.yAxisScale,
