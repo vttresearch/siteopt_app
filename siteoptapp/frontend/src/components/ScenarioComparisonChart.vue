@@ -4,7 +4,6 @@
     <div
       ref="categoryChartWrapperRef"
       class="chart-wrapper bg-white rounded-lg shadow-sm border mb-4"
-      @mousemove="onCategoryChartMouseMove"
     >
       <div v-if="hasValidData" class="p-2 border-b flex items-center justify-end">
         <button type="button" @click="openChartSettings('categoryTotals')" class="px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded" title="Chart settings">Settings</button>
@@ -21,13 +20,33 @@
         :option="chartOption"
         :style="{ height: chartHeight + 'px', width: '100%' }"
         autoresize
-        @click="onCategoryChartClick"
       />
     </div>
-    
-    <!-- Category Items Charts (one per opened category, stacked below) -->
+
+    <!-- Category selector: click to toggle category item plots below -->
+    <div v-if="hasValidData && hasSummaries && availableSummaries.length" class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Categories</label>
+      <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1 w-full max-w-xs">
+        <label
+          v-for="summary in availableSummaries"
+          :key="summary"
+          class="flex items-center gap-2 cursor-pointer"
+          @click.prevent="toggleCategory(summary)"
+        >
+          <span
+            class="w-4 h-4 border border-blue-500 rounded-sm flex items-center justify-center text-[11px] font-bold"
+            :class="isCategorySelected(summary) ? 'bg-blue-500 text-white' : 'bg-white text-transparent'"
+          >
+            ✓
+          </span>
+          <span class="text-sm truncate">{{ summary }}</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Category items charts (one per selected category, stacked below) -->
     <div
-      v-for="category in openedCategories"
+      v-for="category in selectedCategories"
       :key="category"
       class="chart-wrapper bg-white rounded-lg shadow-sm border mb-4"
     >
@@ -37,13 +56,6 @@
         </h3>
         <div class="flex gap-2">
           <button type="button" @click="openChartSettings({ type: 'categoryItems', categoryName: category })" class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Settings</button>
-          <button
-            type="button"
-            @click="closeCategoryChart(category)"
-            class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-          >
-            Close
-          </button>
         </div>
       </div>
       <div v-if="!getCategoryChartOption(category) || !Object.keys(getCategoryChartOption(category)).length" class="flex items-center justify-center h-96">
@@ -235,8 +247,6 @@ defineExpose({ openCustomPlotModal });
 const chartRef = ref(null);
 const categoryItemsChartRef = ref(null);
 const categoryChartWrapperRef = ref(null);
-/** Cursor position relative to category chart container (for tooltip placement) */
-const categoryChartCursorPos = ref([0, 0]);
 const chartHeight = ref(400);
 const showEntities = ref(false);
 
@@ -246,8 +256,8 @@ const selectedEntities = ref([]);
 const expandedSummaries = ref([]);
 const scenarioStructure = ref(null);
 const chartOption = ref({});
-/** List of category names that have been opened (charts shown below) */
-const openedCategories = ref([]);
+/** Categories selected from dropdown to show item plots below */
+const selectedCategories = ref([]);
 /** Chart options per category: { [categoryName]: EChartsOption } */
 const categoryItemsChartOptions = ref({});
 
@@ -339,10 +349,20 @@ function getCategoryItemsSettings(categoryName) {
   return s || DEFAULT_CHART_SETTINGS();
 }
 
-function onCategoryChartMouseMove(e) {
-  if (!categoryChartWrapperRef.value) return;
-  const rect = categoryChartWrapperRef.value.getBoundingClientRect();
-  categoryChartCursorPos.value = [e.clientX - rect.left, e.clientY - rect.top];
+function isCategorySelected(category) {
+  const norm = normalizeString(category);
+  return selectedCategories.value.some(c => normalizeString(c) === norm);
+}
+
+function toggleCategory(category) {
+  const norm = normalizeString(category);
+  const current = selectedCategories.value.map(c => normalizeString(c));
+  if (current.includes(norm)) {
+    selectedCategories.value = selectedCategories.value.filter(c => normalizeString(c) !== norm);
+  } else {
+    const match = availableSummaries.value.find(s => normalizeString(s) === norm) || category;
+    selectedCategories.value = [...selectedCategories.value, match];
+  }
 }
 
 /**
@@ -620,86 +640,13 @@ function updateCategoryTotalsChart() {
         textStyle: { fontSize: 16 }
       };
 
-      categoryConfig.tooltip.enterable = true;
-      categoryConfig.tooltip.appendToBody = false;
-      categoryConfig.tooltip.formatter = (params) => {
-        const categoryName = Array.isArray(params) ? params[0]?.name : params?.name;
-        if (!categoryName) return '';
-        const safeName = categoryName.replace(/"/g, '&quot;');
-        const text = `Open ${categoryName} chart`;
-        return `<div class="category-tooltip-container" data-category="${safeName}" style="cursor: pointer; padding: 4px 8px;">${text}</div>`;
-      };
-      categoryConfig.tooltip.position = (point, params, dom, rect, size) => {
-        const [x, y] = categoryChartCursorPos.value;
-        const contentSize = size?.contentSize || [0, 0];
-        return [x - contentSize[0] / 2, y - contentSize[1] / 2];
-      };
-
-      if (categoryConfig.xAxis) {
-        categoryConfig.xAxis = {
-          ...categoryConfig.xAxis,
-          triggerEvent: true,
-          axisLabel: {
-            ...categoryConfig.xAxis.axisLabel,
-            color: '#1890ff',
-            cursor: 'pointer'
-          }
-        };
-      }
-
       chartOption.value = categoryConfig;
-
-      nextTick(() => {
-        if (chartRef.value?.chart) {
-          attachCategoryBackgroundClick(chartRef.value.chart);
-        }
-      });
     } else {
       chartOption.value = {};
     }
   } else {
     chartOption.value = {};
   }
-}
-
-function onCategoryChartClick(params) {
-  // Ignore clicks on bars (series) - only handle background/axis clicks
-  if (params.componentType === 'series') {
-    return; // Don't open items chart when clicking on bars
-  }
-  
-  // Axis label click
-  if (params.componentType === 'xAxis') {
-    const categoryName = params.value;
-    if (!categoryName) return;
-    openCategoryChart(categoryName);
-    return;
-  }
-  
-  // Handle clicks on grid/background area (when params is null or has no componentType)
-  if (!params || !params.componentType) {
-    // This will be handled by handleChartAreaClick
-    return;
-  }
-}
-
-function openCategoryChart(categoryName) {
-  if (!categoryName || !scenarioStructure.value?.summaries) return;
-  const matched = scenarioStructure.value.summaries.find(
-    s => normalizeString(s) === normalizeString(categoryName) || s.toLowerCase() === categoryName.toLowerCase()
-  );
-  if (!matched) return;
-  if (!openedCategories.value.includes(matched)) {
-    openedCategories.value = [...openedCategories.value, matched];
-  }
-  updateCategoryItemsChartFor(matched);
-}
-
-function closeCategoryChart(categoryName) {
-  openedCategories.value = openedCategories.value.filter(c => c !== categoryName);
-  const next = { ...categoryItemsChartOptions.value };
-  delete next[categoryName];
-  categoryItemsChartOptions.value = next;
 }
 
 function getCategoryChartOption(categoryName) {
@@ -740,10 +687,6 @@ function updateCategoryItemsChartFor(categoryName) {
   } else {
     categoryItemsChartOptions.value = { ...categoryItemsChartOptions.value, [categoryName]: {} };
   }
-}
-
-function updateAllOpenedCategoryCharts() {
-  openedCategories.value.forEach(cat => updateCategoryItemsChartFor(cat));
 }
 
 // ---- Custom plot modal ----
@@ -889,8 +832,15 @@ function initializeChart() {
     if (structure.hasEntities) {
       updateEntitiesForItems();
     }
+    // Clear dropdown selections if categories no longer exist
+    if (selectedCategories.value.length && structure.summaries) {
+      selectedCategories.value = selectedCategories.value.filter(sel =>
+        structure.summaries.some(s => normalizeString(s) === normalizeString(sel))
+      );
+    }
+  } else {
+    selectedCategories.value = [];
   }
-  
 }
 
 // Watch data changes to initialize structure
@@ -905,156 +855,25 @@ watch(
   { deep: true }
 );
 
-// Watcher for category items charts - update all opened when settings change
+// When categories are selected from dropdown, build/update the items charts
 watch(
-  () => [openedCategories.value, categoryItemsSettings.value, scenarioStructure.value],
+  () => [selectedCategories.value, categoryItemsSettings.value, scenarioStructure.value],
   () => {
-    updateAllOpenedCategoryCharts();
-  },
-  { deep: true }
-);
-
-watch(
-  () => selectedScenarios.value,
-  v => {
-    console.log(
-      'DEBUG selectedScenarios:',
-      v,
-      v.map(s => `[${s}]`)
-    );
-  },
-  { deep: true }
-);
-
-// Listen for category clicks from tooltip
-function handleCategoryClick(event) {
-  const categoryName = typeof event === 'string' ? event : (event.detail || event);
-  if (categoryName) {
-    openCategoryChart(categoryName);
-  }
-}
-
-// Global click handler for tooltip clicks — whole tooltip box is clickable
-function handleDocumentClick(e) {
-  // Click on our container, or on the ECharts tooltip wrapper (the visible box) that contains it
-  const tooltipContainer =
-    e.target.closest('.category-tooltip-container') ||
-    e.target.querySelector?.('.category-tooltip-container');
-  if (tooltipContainer) {
-    e.preventDefault();
-    e.stopPropagation();
-    const categoryName = tooltipContainer.getAttribute('data-category');
-    if (categoryName) {
-      handleCategoryClick(categoryName);
-      return;
-    }
-  }
-
-  // Also check for the old category-tooltip-link class (backward compatibility)
-  if (e.target.classList && e.target.classList.contains('category-tooltip-link')) {
-    e.preventDefault();
-    e.stopPropagation();
-    const categoryName = e.target.getAttribute('data-category');
-    if (categoryName) {
-      handleCategoryClick(categoryName);
-    }
-  }
-}
-
-// Watch for tooltip creation and attach click handlers
-let tooltipObserver = null;
-
-function setupTooltipClickHandler() {
-  if (tooltipObserver) {
-    tooltipObserver.disconnect();
-  }
-  
-  // Use MutationObserver to watch for tooltip creation
-  tooltipObserver = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
-        if (node.nodeType === 1) { // Element node
-          // Check if this is the tooltip container
-          const tooltipContainer = node.classList?.contains('category-tooltip-container') 
-            ? node 
-            : node.querySelector?.('.category-tooltip-container');
-          
-          if (tooltipContainer && !tooltipContainer.dataset.clickHandlerAttached) {
-            tooltipContainer.dataset.clickHandlerAttached = 'true';
-            tooltipContainer.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const categoryName = tooltipContainer.getAttribute('data-category');
-              if (categoryName) {
-                handleCategoryClick(categoryName);
-              }
-            });
-          }
-        }
-      });
+    if (!selectedCategories.value || !selectedCategories.value.length) return;
+    selectedCategories.value.forEach(cat => {
+      updateCategoryItemsChartFor(cat);
     });
-  });
-  
-  // Observe the document body for tooltip additions
-  tooltipObserver.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-}
+  },
+  { deep: true }
+);
 
 // Initialize on mount - watcher will handle chart update
 onMounted(() => {
   initializeChart();
-  // Listen for clicks on tooltip category links
-  document.addEventListener('click', handleDocumentClick, true); // Use capture phase
-  // Setup mutation observer for tooltip
-  setupTooltipClickHandler();
 });
 
 // Cleanup on unmount
-onUnmounted(() => {
-  if (tooltipClickHandler) {
-    document.removeEventListener('click', tooltipClickHandler, true);
-  }
-  if (tooltipObserver) {
-    tooltipObserver.disconnect();
-  }
-});
-
-function attachCategoryBackgroundClick(chartInstance) {
-  const model = chartInstance.getModel();
-  const xAxis = model.getComponent('xAxis').axis;
-  const grid = model.getComponent('grid').coordinateSystem;
-
-  const categories = chartOption.value?.xAxis?.data;
-  if (!categories?.length) return;
-
-  const bandWidth = xAxis.getBandWidth();
-
-  const graphics = categories.map((cat, index) => {
-    const xCenter = xAxis.dataToCoord(index);
-    const x = xCenter - bandWidth / 2;
-
-    return {
-      type: 'rect',
-      invisible: true,
-      cursor: 'pointer',
-      shape: {
-        x,
-        y: grid.y,
-        width: bandWidth,
-        height: grid.height
-      },
-      onclick: () => {
-        handleCategoryClick(cat);
-      }
-    };
-  });
-
-  chartInstance.setOption({
-    graphic: graphics
-  });
-}
+onUnmounted(() => {});
 </script>
 
 <style scoped>

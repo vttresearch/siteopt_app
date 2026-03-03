@@ -363,7 +363,11 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
     tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { data: scenarios, bottom: 0 },
     grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-    xAxis: { type: 'category', data: categoriesToShow },
+    xAxis: {
+      type: 'category',
+      data: categoriesToShow,
+      axisLabel: { fontSize: 20 }
+    },
     yAxis: { type: 'value', scale: yAxisScale === 'log' },
     series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
   };
@@ -454,11 +458,12 @@ export function processScenarioComparisonData(data, scenarioStructure, items, sc
     series: seriesToUse.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
   };
 
+  const categoryAxisLabel = { fontSize: 14 };
   if (chartType === 'horizontalBar') {
-    base.yAxis = { type: 'category', data: axisCategories, inverse: true };
+    base.yAxis = { type: 'category', data: axisCategories, inverse: true, axisLabel: categoryAxisLabel };
     base.xAxis = { type: 'value', scale: yAxisScale === 'log' };
   } else {
-    base.xAxis = { type: 'category', data: axisCategories };
+    base.xAxis = { type: 'category', data: axisCategories, axisLabel: categoryAxisLabel };
     base.yAxis = { type: 'value', scale: yAxisScale === 'log' };
   }
 
