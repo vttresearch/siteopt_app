@@ -259,6 +259,17 @@
               <input type="checkbox" v-model="modalSettings.hideZeroValues" class="rounded" />
               <span class="text-sm text-gray-700">Hide zero values</span>
             </label>
+            <div class="flex items-center gap-3">
+              <span class="text-sm font-medium text-gray-700">Orientation</span>
+              <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
+                <input type="radio" class="rounded" value="horizontal" v-model="modalSettings.orientation" />
+                <span>Horizontal</span>
+              </label>
+              <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
+                <input type="radio" class="rounded" value="vertical" v-model="modalSettings.orientation" />
+                <span>Vertical</span>
+              </label>
+            </div>
           </div>
           <div class="p-4 border-t flex justify-end gap-2">
             <button type="button" @click="closeChartSettings" class="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
@@ -332,7 +343,7 @@ const customPlotHideZeroValues = ref(false);
 const customPlotOrientation = ref('horizontal');
 
 /** Per-chart settings (axis scale, top N, min bar height, hide zeros). Each plot has a Settings button that opens a popup. */
-const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: false });
+const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: false, orientation: 'horizontal' });
 const categoryTotalsSettings = ref(DEFAULT_CHART_SETTINGS());
 const categoryItemsSettings = ref({}); // { [categoryName]: settings }
 const customPlotSettings = ref({ ...DEFAULT_CHART_SETTINGS() });
@@ -683,11 +694,12 @@ function updateCategoryTotalsChart() {
     const allScenarios = scenarioStructure.value.scenarios.map(s => normalizeString(s));
     
     const s = categoryTotalsSettings.value;
+    const categoryChartType = (s.orientation === 'vertical') ? 'groupedBar' : 'horizontalBar';
     const categoryConfig = processCategorySummedData(
       props.data,
       scenarioStructure.value,
       allScenarios,
-      'groupedBar',
+      categoryChartType,
       s.yAxisScale,
       s.useMinBarHeight,
       s.hideZeroValues
@@ -724,12 +736,13 @@ function updateCategoryItemsChartFor(categoryName) {
   }
   const allScenarios = scenarioStructure.value.scenarios.map(s => normalizeString(s));
   const s = getCategoryItemsSettings(categoryName);
+  const itemsChartType = (s.orientation === 'vertical') ? 'groupedBar' : 'horizontalBar';
   const itemsConfig = processScenarioComparisonData(
     props.data,
     scenarioStructure.value,
     categoryItems.map(i => normalizeString(i)),
     allScenarios,
-    'groupedBar',
+    itemsChartType,
     false,
     [],
     s.yAxisScale,
