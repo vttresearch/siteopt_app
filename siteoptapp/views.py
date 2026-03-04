@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import openpyxl
+import spinedb_api.exception
 from openpyxl.utils import range_boundaries
 from spinedb_api import DatabaseMapping
 from django.http import JsonResponse, StreamingHttpResponse
@@ -167,12 +168,49 @@ def fetch_scenarios_from_input_db(client_id, configs):
         return JsonResponse({"success": False, "error": f"SQLite file {sqlite_fpath} doesn't exist"})
     scenario_names = list()
     with DatabaseMapping("sqlite:///" + str(sqlite_fpath)) as db_map:
-        # Adding a scenario
-        # items, errors = db_map.add_items("scenario", {"name": "my_scenario"})
         scenarios = db_map.find_by_type(db_key)  # scenarios is a list-of-PublicItems
         for scenario in scenarios:
             scenario_names.append(scenario["name"])
     return JsonResponse({"success": True, "data": {"scenarios": scenario_names}})
+
+
+def add_scenario(client_id, scenario_name, project_name):
+    client_root = Path(get_client_work_root(client_id))
+    sqlite_fpath = (client_root / project_name / INPUT_DATA_SQLITE_FILE).resolve()
+    if not os.path.exists(sqlite_fpath):
+        return JsonResponse({"success": False, "error": f"Input data SQlite file {sqlite_fpath} doesn't exist"})
+    with DatabaseMapping("sqlite:///" + str(sqlite_fpath)) as db_map:
+        # Add scenario item
+        items, errors = db_map.add_items("scenario", {"name": scenario_name})
+        if isinstance(errors, list) and len(errors) > 0:
+            print(f"Something went wrong when adding scenarios. Errors: {errors}")
+        try:
+            db_map.commit_session(f"Add scenario {scenario_name}")
+        except spinedb_api.exception.NothingToCommit:
+            print("Nothing to commit")
+        except spinedb_api.exception.SpineDBAPIError as e:
+            print(f"Commit failed: {e}")
+    return JsonResponse({"success": True, "data": {}})
+
+
+def remove_scenario(client_id, scenario_name, project_name):
+    client_root = Path(get_client_work_root(client_id))
+    sqlite_fpath = (client_root / project_name / INPUT_DATA_SQLITE_FILE).resolve()
+    if not os.path.exists(sqlite_fpath):
+        return JsonResponse({"success": False, "error": f"Input data SQlite file {sqlite_fpath} doesn't exist"})
+    with DatabaseMapping("sqlite:///" + str(sqlite_fpath)) as db_map:
+        # Remove scenario item
+        # scenario_table = db_map.mapped_table("scenario")
+        # scenario_item = db_map.item(scenario_table, {})
+        scenario = db_map.scenario(name=scenario_name)
+        scenario.remove()
+        try:
+            db_map.commit_session(f"Remove scenario {scenario_name}")
+        except spinedb_api.exception.NothingToCommit:
+            print("Nothing to commit")
+        except spinedb_api.exception.SpineDBAPIError as e:
+            print(f"Commit failed: {e}")
+    return JsonResponse({"success": True, "data": {}})
 
 
 @csrf_protect
@@ -213,12 +251,20 @@ def post(request, action):
     elif action == "add_existing_work_folder":
         return JsonResponse(add_existing_work_folder(client_id, data["name"], data["path"]))
     elif action == "fetch_input_db_data":
-        print(f"fetching key:{data['db_key']} from input db's sqlite file")
         if data["db_key"] == "scenario":
+            print("Fetching scenarios")
             response = fetch_scenarios_from_input_db(client_id, data)
         else:
             print(f"Not implemented db_key:{data['db_key']}")
             response = JsonResponse({"success": False, "error": f"Fetching db_key {data['db_key']} not Implemented"})
+        return response
+    elif action == "add_scenario":
+        print(f"Adding scenario {data['scenario_name']}")
+        response = add_scenario(client_id, data["scenario_name"], data["work_folder"])
+        return response
+    elif action == "remove_scenario":
+        print(f"Removing scenario {data['scenario_name']}")
+        response = remove_scenario(client_id, data["scenario_name"], data["work_folder"])
         return response
     else:
         print(f"Unknown action: {action}")

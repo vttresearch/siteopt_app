@@ -130,7 +130,7 @@ async function restoreProject(c) {
 
 <template>
   <div class="mb-3 text-lg font-semibold text-gray-800">Projects</div>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     <span class="w-80">
       <input
           class="w-full px-3 py-2 bg-blue-100 rounded-md text-sm"
@@ -143,6 +143,7 @@ async function restoreProject(c) {
     </span>
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+        type="button"
         :disabled="creating"
         @click="makeNewProject">
       <i v-if="settingStore.creatingProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
@@ -151,6 +152,7 @@ async function restoreProject(c) {
     </button>
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+        type="button"
         :disabled="creating"
         @click="makeNewProjectWithExampleData">
       <i v-if="settingStore.creatingProjectFolderWithExampleData" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
@@ -159,6 +161,7 @@ async function restoreProject(c) {
     </button>
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+        type="button"
         :disabled="creating"
         @click="makeNewTestProject">
       <i v-if="settingStore.creatingTestProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
@@ -167,6 +170,7 @@ async function restoreProject(c) {
     </button>
     <button
         class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+        type="button"
         :disabled="creating || restoring"
         @click="openRestore">
       <i class="fa-solid fa-folder-open"></i>
