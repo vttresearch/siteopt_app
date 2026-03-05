@@ -1,7 +1,47 @@
 <template>
-  <div class="scenario-comparison-container">
+  <div class="scenario-comparison-container flex gap-4">
+    <!-- Left sidebar: Create new plot -->
+    <aside class="create-plot-sidebar flex-shrink-0 w-52 bg-white rounded-lg shadow-sm border border-gray-200 p-4 h-fit">
+      <h3 class="text-sm font-semibold text-gray-800 mb-3">Create new plot</h3>
+      <div class="space-y-2">
+        <button
+          type="button"
+          class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
+          :class="showScenarioSumChart ? 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
+          title="Scenario totals by category"
+          @click="toggleScenarioSumPlot"
+        >
+          <span class="text-lg leading-none" aria-hidden="true">📊</span>
+          <span>Scenarios Sum Plot</span>
+        </button>
+        <button
+          v-for="summary in availableSummaries"
+          :key="summary"
+          type="button"
+          class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
+          :class="isCategorySelected(summary) ? 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
+          @click="toggleCategory(summary)"
+        >
+          <span class="text-lg leading-none" aria-hidden="true">📈</span>
+          <span class="truncate">Plot {{ summary }}</span>
+        </button>
+        <button
+          type="button"
+          class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
+          @click="openCustomPlotModal"
+        >
+          <span class="text-lg leading-none" aria-hidden="true">📉</span>
+          <span>Custom Plot</span>
+          <span class="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-500 text-white">Custom</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main content: charts -->
+    <div class="flex-1 min-w-0">
     <!-- Category Totals Chart Container -->
     <div
+      v-if="showScenarioSumChart"
       ref="categoryChartWrapperRef"
       class="chart-wrapper bg-white rounded-lg shadow-sm border mb-4"
     >
@@ -23,34 +63,28 @@
       />
     </div>
 
-    <!-- Category selector: click to toggle category item plots below -->
-    <div v-if="hasValidData && hasSummaries && availableSummaries.length" class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-2">Categories</label>
-      <div class="flex flex-col gap-2">
-        <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1 w-full max-w-xs">
-          <label
-            v-for="summary in availableSummaries"
-            :key="summary"
-            class="flex items-center gap-2 cursor-pointer"
-            @click.prevent="toggleCategory(summary)"
+    <!-- Default items plot: all items that have some non-zero value in any scenario -->
+    <div
+      v-if="defaultItemsChartOption && Object.keys(defaultItemsChartOption).length"
+      class="chart-wrapper bg-white rounded-lg shadow-sm border mb-4"
+    >
+      <div class="p-4 border-b flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-gray-700">All items with non-zero values</h3>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            @click="openChartSettings('defaultItems')"
+            class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
           >
-            <span
-              class="w-4 h-4 border border-blue-500 rounded-sm flex items-center justify-center text-[11px] font-bold"
-              :class="isCategorySelected(summary) ? 'bg-blue-500 text-white' : 'bg-white text-transparent'"
-            >
-              ✓
-            </span>
-            <span class="text-sm truncate">{{ summary }}</span>
-          </label>
+            Settings
+          </button>
         </div>
-        <button
-          type="button"
-          class="inline-flex items-center px-3 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 rounded hover:bg-indigo-100 w-fit"
-          @click="openCustomPlotModal"
-        >
-          Define custom plot
-        </button>
       </div>
+      <v-chart
+        :option="defaultItemsChartOption"
+        :style="{ height: chartHeight + 'px', width: '100%' }"
+        autoresize
+      />
     </div>
 
     <!-- Category items charts (one per selected category, stacked below) -->
@@ -94,6 +128,7 @@
         :style="{ height: chartHeight + 'px', width: '100%' }"
         autoresize
       />
+    </div>
     </div>
 
     <!-- Custom plot modal -->
@@ -316,6 +351,8 @@ defineExpose({ openCustomPlotModal });
 const chartRef = ref(null);
 const categoryItemsChartRef = ref(null);
 const categoryChartWrapperRef = ref(null);
+const showScenarioSumChart = ref(true);
+const defaultItemsChartOption = ref({});
 const chartHeight = ref(400);
 const showEntities = ref(false);
 
@@ -345,11 +382,13 @@ const customPlotOrientation = ref('horizontal');
 /** Per-chart settings (axis scale, top N, min bar height, hide zeros). Each plot has a Settings button that opens a popup. */
 const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: false, orientation: 'horizontal' });
 const categoryTotalsSettings = ref(DEFAULT_CHART_SETTINGS());
+// For the default items plot we want to hide items that are zero in all scenarios by default
+const defaultItemsSettings = ref({ ...DEFAULT_CHART_SETTINGS(), hideZeroValues: true });
 const categoryItemsSettings = ref({}); // { [categoryName]: settings }
 const customPlotSettings = ref({ ...DEFAULT_CHART_SETTINGS() });
 
 const settingsModalOpen = ref(false);
-const settingsModalTarget = ref(null); // 'categoryTotals' | { type: 'categoryItems', categoryName } | 'customPlot'
+const settingsModalTarget = ref(null); // 'categoryTotals' | 'defaultItems' | { type: 'categoryItems', categoryName } | 'customPlot'
 const modalSettings = ref({ ...DEFAULT_CHART_SETTINGS() });
 
 const availableScenarios = computed(() => scenarioStructure.value?.scenarios || []);
@@ -375,12 +414,22 @@ function normalizeString(value) {
 function getSettingsForTarget(target) {
   if (!target) return DEFAULT_CHART_SETTINGS();
   if (target === 'categoryTotals') return { ...categoryTotalsSettings.value };
+  if (target === 'defaultItems') return { ...defaultItemsSettings.value };
   if (target === 'customPlot') return { ...customPlotSettings.value };
   if (target?.type === 'categoryItems' && target.categoryName) {
     const s = categoryItemsSettings.value[target.categoryName];
     return s ? { ...s } : DEFAULT_CHART_SETTINGS();
   }
   return DEFAULT_CHART_SETTINGS();
+}
+
+function toggleScenarioSumPlot() {
+  showScenarioSumChart.value = !showScenarioSumChart.value;
+  if (showScenarioSumChart.value) {
+    // When reopening, scroll into view for convenience
+    const el = categoryChartWrapperRef.value;
+    if (el?.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function openChartSettings(target) {
@@ -403,6 +452,9 @@ function applyChartSettings() {
   const s = { ...modalSettings.value };
   if (target === 'categoryTotals') {
     categoryTotalsSettings.value = s;
+    updateCategoryTotalsChart();
+  } else if (target === 'defaultItems') {
+    defaultItemsSettings.value = s;
     updateCategoryTotalsChart();
   } else if (target === 'customPlot') {
     customPlotSettings.value = s;
@@ -685,6 +737,7 @@ function updateCategoryTotalsChart() {
   // First chart: Always shows category totals for ALL scenarios (independent of controls)
   if (!scenarioStructure.value) {
     chartOption.value = {};
+    defaultItemsChartOption.value = {};
     return;
   }
   
@@ -705,19 +758,51 @@ function updateCategoryTotalsChart() {
       s.hideZeroValues
     );
     
-    if (categoryConfig) {
-      categoryConfig.title = {
-        text: `Category Totals Comparison: ${props.fileName}`,
-        left: 'center',
-        textStyle: { fontSize: 16 }
-      };
+      if (categoryConfig) {
+        categoryConfig.title = {
+          text: `Category Totals Comparison: ${props.fileName}`,
+          left: 'center',
+          textStyle: { fontSize: 16 }
+        };
+        chartOption.value = categoryConfig;
+      } else {
+        chartOption.value = {};
+      }
 
-      chartOption.value = categoryConfig;
-    } else {
-      chartOption.value = {};
-    }
+      // Build default items plot: all items that have some non-zero value in any scenario
+      const allItems = (scenarioStructure.value.items || []).map(i => normalizeString(i));
+      const scenarios = allScenarios;
+      if (allItems.length && scenarios.length) {
+        const sDefaults = defaultItemsSettings.value;
+        const defaultChartType = (sDefaults.orientation === 'vertical') ? 'groupedBar' : 'horizontalBar';
+        const defaultConfig = processScenarioComparisonData(
+          props.data,
+          scenarioStructure.value,
+          allItems,
+          scenarios,
+          defaultChartType,
+          false,
+          [],
+          sDefaults.yAxisScale,
+          sDefaults.useMinBarHeight,
+          sDefaults.hideZeroValues // can still hide zero-only items via settings
+        );
+        if (defaultConfig) {
+          defaultConfig.title = {
+            text: `All items with non-zero values: ${props.fileName}`,
+            left: 'center',
+            textStyle: { fontSize: 16 }
+          };
+          defaultItemsChartOption.value = applyTopNFilter(defaultConfig, sDefaults.topNValues);
+        } else {
+          defaultItemsChartOption.value = {};
+        }
+      } else {
+        defaultItemsChartOption.value = {};
+      }
   } else {
     chartOption.value = {};
+    defaultItemsChartOption.value = {};
   }
 }
 

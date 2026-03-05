@@ -13,6 +13,7 @@ const loadingResults = ref(false);
 const gridApi = ref(null);
 const columnDefs = ref([]);
 const rowData = ref([]);
+const showDataView = ref(false);
 
 // Each element in workFolderFiles is the root tree node { name, path, children }
 const activeRoot = computed(() => {
@@ -122,8 +123,16 @@ watch(
   </div>
 
   <div v-else>
-    <div class="mb-3 text-lg font-semibold text-gray-800">
-      Results (results.xlsx)
+    <div class="mb-3 flex items-center justify-between gap-4">
+      <span class="text-lg font-semibold text-gray-800">Results (results.xlsx)</span>
+      <button
+        v-if="columnDefs.length"
+        type="button"
+        class="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+        @click="showDataView = !showDataView"
+      >
+        {{ showDataView ? 'Hide' : 'Show' }} results data
+      </button>
     </div>
 
     <div v-if="loadingResults" class="p-4 text-gray-500">
@@ -131,7 +140,7 @@ watch(
     </div>
 
     <div v-else-if="columnDefs.length" class="space-y-6">
-      <div class="w-full h-80 overflow-auto">
+      <div v-show="showDataView" class="w-full h-80 overflow-auto">
         <AgGridVue
           class="w-full h-full"
           :domLayout="'normal'"
