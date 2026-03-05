@@ -329,12 +329,23 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
     );
   }
 
+  // Compute global max across all scenarios/categories for consistent minimum bar height
+  let globalMax = 0;
+  if (useMinBarHeight) {
+    categoriesToShow.forEach(cat => {
+      scenarios.forEach(sc => {
+        const v = sums[sc][cat] ?? 0;
+        if (v > globalMax) globalMax = v;
+      });
+    });
+  }
+  const useMin = useMinBarHeight && globalMax > 0;
+  const minDisplay = useMin ? globalMax * 0.01 : 0;
+
   const series = scenarios.map(name => {
     const rawData = categoriesToShow.map(cat => sums[name][cat] ?? 0);
     let data = rawData;
-    if (useMinBarHeight && rawData.some(v => v > 0)) {
-      const maxVal = Math.max(...rawData);
-      const minDisplay = maxVal > 0 ? maxVal * 0.005 : 0;
+    if (useMin) {
       data = rawData.map(v => {
         if (v === 0) return 0;
         const display = Math.max(v, minDisplay);
@@ -401,19 +412,36 @@ export function processScenarioComparisonData(data, scenarioStructure, items, sc
     return v !== undefined && v !== null ? (typeof v === 'number' ? v : parseFloat(v) || 0) : 0;
   };
 
-  const series = scenarios.map(scenarioName => {
-    const rawData = items.map(item => {
+  // Build raw values matrix: scenarios x items
+  const valuesMatrix = scenarios.map(scenarioName =>
+    items.map(item => {
       if (itemCol && valueCol) {
-        const rows = data.filter(r => normalizeStr(r[scenarioColumn]) === scenarioName && normalizeStr(r[itemCol]) === item);
+        const rows = data.filter(
+          r => normalizeStr(r[scenarioColumn]) === scenarioName && normalizeStr(r[itemCol]) === item
+        );
         return rows.reduce((sum, row) => sum + (parseFloat(row[valueCol]) || 0), 0);
       }
       const row = data.find(r => normalizeStr(r[scenarioColumn]) === scenarioName);
       return row ? getValue(row, item) : 0;
-    });
+    })
+  );
+
+  // Compute global max across all scenarios/items for minimum bar height
+  let globalMax = 0;
+  if (useMinBarHeight) {
+    for (const row of valuesMatrix) {
+      for (const v of row) {
+        if (v > globalMax) globalMax = v;
+      }
+    }
+  }
+  const useMin = useMinBarHeight && globalMax > 0;
+  const minDisplay = useMin ? globalMax * 0.01 : 0;
+
+  const series = scenarios.map((scenarioName, sIdx) => {
+    const rawData = valuesMatrix[sIdx];
     let outData = rawData;
-    if (useMinBarHeight && rawData.some(v => v > 0)) {
-      const maxVal = Math.max(...rawData);
-      const minDisplay = maxVal > 0 ? maxVal * 0.005 : 0;
+    if (useMin) {
       outData = rawData.map(v => {
         if (v === 0) return 0;
         const display = Math.max(v, minDisplay);
@@ -427,11 +455,7 @@ export function processScenarioComparisonData(data, scenarioStructure, items, sc
   let seriesToUse = series;
   if (hideZeroValues) {
     const nonZeroIndices = items.map((_, i) => i).filter(i =>
-      series.some(s => {
-        const d = s.data[i];
-        const v = (d && typeof d === 'object' && 'actualValue' in d) ? d.actualValue : (d?.value ?? d);
-        return (v ?? 0) !== 0;
-      })
+      valuesMatrix.some(row => (row[i] ?? 0) !== 0)
     );
     itemsToShow = nonZeroIndices.map(i => items[i]);
     seriesToUse = series.map(s => ({
