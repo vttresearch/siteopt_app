@@ -762,7 +762,7 @@ function updateCategoryTotalsChart() {
         categoryConfig.title = {
           text: `Category Totals Comparison: ${props.fileName}`,
           left: 'center',
-          textStyle: { fontSize: 16 }
+          textStyle: { fontSize: 24 }
         };
         chartOption.value = categoryConfig;
       } else {
@@ -791,7 +791,7 @@ function updateCategoryTotalsChart() {
           defaultConfig.title = {
             text: `All items with non-zero values: ${props.fileName}`,
             left: 'center',
-            textStyle: { fontSize: 16 }
+            textStyle: { fontSize: 24 }
           };
           defaultItemsChartOption.value = applyTopNFilter(defaultConfig, sDefaults.topNValues);
         } else {
@@ -834,12 +834,12 @@ function updateCategoryItemsChartFor(categoryName) {
     s.useMinBarHeight,
     s.hideZeroValues
   );
-  if (itemsConfig) {
-    itemsConfig.title = {
-      text: `Items in "${categoryName}": ${props.fileName}`,
-      left: 'center',
-      textStyle: { fontSize: 16 }
-    };
+    if (itemsConfig) {
+      itemsConfig.title = {
+        text: `Items in "${categoryName}": ${props.fileName}`,
+        left: 'center',
+        textStyle: { fontSize: 20 }
+      };
     const filteredConfig = applyTopNFilter(itemsConfig, s.topNValues);
     categoryItemsChartOptions.value = { ...categoryItemsChartOptions.value, [categoryName]: filteredConfig };
   } else {
@@ -940,7 +940,7 @@ function applyCustomPlot() {
     s.hideZeroValues
   );
   if (config) {
-    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: 16 } };
+    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: 20 } };
     customPlotChartOption.value = applyTopNFilter(config, s.topNValues);
     showCustomPlot.value = true;
   }
@@ -972,7 +972,7 @@ function rebuildCustomPlot() {
     s.hideZeroValues
   );
   if (config) {
-    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: 16 } };
+    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: 20 } };
     customPlotChartOption.value = applyTopNFilter(config, s.topNValues);
   }
 }
