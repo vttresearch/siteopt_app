@@ -377,10 +377,10 @@ const showCustomPlot = ref(false);
 /** Custom plot: hide zero values (default false = keep zero values) */
 const customPlotHideZeroValues = ref(false);
 /** Custom plot: orientation ('horizontal' or 'vertical') */
-const customPlotOrientation = ref('horizontal');
+const customPlotOrientation = ref('vertical');
 
 /** Per-chart settings (axis scale, top N, min bar height, hide zeros). Each plot has a Settings button that opens a popup. */
-const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: false, orientation: 'horizontal' });
+const DEFAULT_CHART_SETTINGS = () => ({ yAxisScale: 'linear', topNValues: 10, useMinBarHeight: true, hideZeroValues: false, orientation: 'vertical' });
 const categoryTotalsSettings = ref(DEFAULT_CHART_SETTINGS());
 // For the default items plot we want to hide items that are zero in all scenarios by default
 const defaultItemsSettings = ref({ ...DEFAULT_CHART_SETTINGS(), hideZeroValues: true });
@@ -852,7 +852,7 @@ function openCustomPlotModal() {
   customPlotSelectedCategories.value = [];
   customPlotSelectedItems.value = [];
   customPlotSelectedScenarios.value = [...(scenarioStructure.value?.scenarios || []).map(s => normalizeString(s))];
-  customPlotOrientation.value = 'horizontal';
+  customPlotOrientation.value = 'vertical';
   customPlotModalOpen.value = true;
 }
 
