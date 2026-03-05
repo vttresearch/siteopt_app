@@ -376,7 +376,7 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
   if (chartType === 'horizontalBar') {
     return {
       tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: { data: scenarios, bottom: 0 },
+      legend: { data: scenarios, bottom: 0, textStyle: { fontSize: 16 } },
       grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
       yAxis: { ...categoryAxis, inverse: true },
       xAxis: valueAxis,
@@ -385,7 +385,7 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
   }
   return {
     tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: scenarios, bottom: 0 },
+    legend: { data: scenarios, bottom: 0, textStyle: { fontSize: 16 } },
     grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
     xAxis: categoryAxis,
     yAxis: valueAxis,
@@ -486,12 +486,13 @@ export function processScenarioComparisonData(data, scenarioStructure, items, sc
 
   const base = {
     tooltip,
-    legend: { data: scenarios, bottom: 0 },
+    legend: { data: scenarios, bottom: 0, textStyle: { fontSize: 14 } },
     grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
     series: seriesToUse.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
   };
 
-  const categoryAxisLabel = { fontSize: 14 };
+  // Use same font size for item/category names as in category totals comparison
+  const categoryAxisLabel = { fontSize: 20 };
   if (chartType === 'horizontalBar') {
     base.yAxis = { type: 'category', data: axisCategories, inverse: true, axisLabel: categoryAxisLabel };
     base.xAxis = { type: 'value', scale: yAxisScale === 'log' };
