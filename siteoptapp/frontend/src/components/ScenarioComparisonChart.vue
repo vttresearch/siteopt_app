@@ -2,8 +2,9 @@
   <div class="scenario-comparison-container flex gap-4">
     <!-- Left sidebar: Create new plot -->
     <aside class="create-plot-sidebar flex-shrink-0 w-52 bg-white rounded-lg shadow-sm border border-gray-200 p-4 h-fit">
-      <h3 class="text-sm font-semibold text-gray-800 mb-3">Create new plot</h3>
-      <div class="space-y-2">
+      <div class="space-y-3">
+        <div>
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Overview</p>
         <button
           type="button"
           class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
@@ -14,6 +15,9 @@
           <span class="text-lg leading-none" aria-hidden="true">📊</span>
           <span>Scenarios Sum Plot</span>
         </button>
+        </div>
+        <div v-if="availableSummaries.length">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Summaries</p>
         <button
           v-for="summary in availableSummaries"
           :key="summary"
@@ -25,6 +29,9 @@
           <span class="text-lg leading-none" aria-hidden="true">📈</span>
           <span class="truncate">Plot {{ summary }}</span>
         </button>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Custom</p>
         <button
           type="button"
           class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
@@ -34,6 +41,7 @@
           <span>Custom Plot</span>
           <span class="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-500 text-white">Custom</span>
         </button>
+        </div>
       </div>
     </aside>
 
@@ -329,7 +337,7 @@ import {
   ToolboxComponent
 } from 'echarts/components';
 import { BarChart } from 'echarts/charts';
-import { detectScenarioStructure, processScenarioComparisonData, processCategorySummedData } from '@/utils/chartUtils.js';
+import { CHART_THEME, detectScenarioStructure, processScenarioComparisonData, processCategorySummedData } from '@/utils/chartUtils.js';
 
 use([
   CanvasRenderer,
@@ -762,7 +770,7 @@ function updateCategoryTotalsChart() {
         categoryConfig.title = {
           text: `Category Totals Comparison: ${props.fileName}`,
           left: 'center',
-          textStyle: { fontSize: 24 }
+          textStyle: { fontSize: CHART_THEME.titleFontSize }
         };
         chartOption.value = categoryConfig;
       } else {
@@ -791,7 +799,7 @@ function updateCategoryTotalsChart() {
           defaultConfig.title = {
             text: `All items with non-zero values: ${props.fileName}`,
             left: 'center',
-            textStyle: { fontSize: 24 }
+            textStyle: { fontSize: CHART_THEME.titleFontSize }
           };
           defaultItemsChartOption.value = applyTopNFilter(defaultConfig, sDefaults.topNValues);
         } else {
@@ -838,7 +846,7 @@ function updateCategoryItemsChartFor(categoryName) {
       itemsConfig.title = {
         text: `Items in "${categoryName}": ${props.fileName}`,
         left: 'center',
-        textStyle: { fontSize: 20 }
+        textStyle: { fontSize: CHART_THEME.titleFontSize }
       };
     const filteredConfig = applyTopNFilter(itemsConfig, s.topNValues);
     categoryItemsChartOptions.value = { ...categoryItemsChartOptions.value, [categoryName]: filteredConfig };
@@ -940,7 +948,7 @@ function applyCustomPlot() {
     s.hideZeroValues
   );
   if (config) {
-    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: 20 } };
+    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: CHART_THEME.titleFontSize } };
     customPlotChartOption.value = applyTopNFilter(config, s.topNValues);
     showCustomPlot.value = true;
   }
@@ -972,7 +980,7 @@ function rebuildCustomPlot() {
     s.hideZeroValues
   );
   if (config) {
-    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: 20 } };
+    config.title = { text: `Custom plot: ${props.fileName}`, left: 'center', textStyle: { fontSize: CHART_THEME.titleFontSize } };
     customPlotChartOption.value = applyTopNFilter(config, s.topNValues);
   }
 }
