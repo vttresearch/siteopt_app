@@ -3,6 +3,9 @@ import { ref, watch, nextTick } from "vue";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
+  title: { type: String, default: "Add new" },
+  message: { type: String, default: "New name" },
+  placeholderText: { type: String, default: "Type here..." },
 });
 
 const emit = defineEmits(["confirm", "cancel"]);
@@ -50,16 +53,16 @@ function cancel() {
       aria-labelledby="scenario-dialog-title"
     >
       <h3 id="scenario-dialog-title" class="text-lg font-semibold">
-        Add New Scenario
+        {{ props.title }}
       </h3>
 
       <label class="mt-4 block text-sm text-zinc-600 dark:text-zinc-300">
-        Scenario name
+        {{ props.message }}
         <input
           ref="inputEl"
           v-model="name"
           type="text"
-          placeholder="Enter scenario name…"
+          :placeholder="props.placeholderText"
           class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none ring-2 ring-transparent transition focus:border-zinc-400 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           @keyup.enter="confirm"
         />

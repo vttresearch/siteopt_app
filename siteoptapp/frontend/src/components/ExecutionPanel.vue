@@ -6,7 +6,7 @@ import { useSettingStore } from "@/stores/settingstore.js";
 import { postData, fetchWorkFolder } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
-import ScenarioNamePrompt from "@/components/ScenarioNamePrompt.vue";
+import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 
 
@@ -354,7 +354,14 @@ async function executeSelected(local) {
           :returnFocusEl="returnFocusEl"
           @confirm="confirmRemoveScenario"
       />
-      <ScenarioNamePrompt :visible="showAddScenarioPrompt" @confirm="confirmAddScenario" @cancel="cancelAddScenario" />
+      <AskNamePrompt
+          :visible="showAddScenarioPrompt"
+          title="Add New Scenario"
+          message="Scenario name"
+          placeholderText="Enter scenario name…"
+          @confirm="confirmAddScenario"
+          @cancel="cancelAddScenario"
+      />
     </div>
 
     <!-- Execute buttons -->
