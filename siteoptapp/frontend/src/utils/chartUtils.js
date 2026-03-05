@@ -44,6 +44,13 @@ export function detectTimeSeriesStructure(data) {
  * @param {string} timeColumn - Time column name
  * @returns {Object} - ECharts configuration
  */
+export const CHART_THEME = {
+  titleFontSize: 20,
+  legendFontSize: 14,
+  axisLabelFontSize: 20,
+  grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true }
+};
+
 export function processTimeSeriesData(data, selectedColumns, timeColumn) {
   if (!data || data.length === 0) return null;
   
@@ -86,14 +93,10 @@ export function processTimeSeriesData(data, selectedColumns, timeColumn) {
       data: selectedColumns,
       type: 'scroll',
       orient: 'horizontal',
-      bottom: 0
+      bottom: 0,
+      textStyle: { fontSize: CHART_THEME.legendFontSize }
     },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '15%',
-      containLabel: true
-    },
+    grid: { ...CHART_THEME.grid },
     toolbox: {
       feature: {
         dataZoom: { yAxisIndex: 'none' },
@@ -370,14 +373,14 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
       return lines.join('<br/>');
     } : undefined
   };
-  const axisLabel = { fontSize: 20 };
+  const axisLabel = { fontSize: CHART_THEME.axisLabelFontSize };
   const valueAxis = { type: 'value', scale: yAxisScale === 'log' };
   const categoryAxis = { type: 'category', data: categoriesToShow, axisLabel };
   if (chartType === 'horizontalBar') {
     return {
       tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: { data: scenarios, bottom: 0, textStyle: { fontSize: 16 } },
-      grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+      legend: { data: scenarios, bottom: 0, textStyle: { fontSize: CHART_THEME.legendFontSize } },
+      grid: { ...CHART_THEME.grid },
       yAxis: { ...categoryAxis, inverse: true },
       xAxis: valueAxis,
       series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
@@ -385,8 +388,8 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
   }
   return {
     tooltip: tooltip.formatter ? tooltip : { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: scenarios, bottom: 0, textStyle: { fontSize: 16 } },
-    grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+    legend: { data: scenarios, bottom: 0, textStyle: { fontSize: CHART_THEME.legendFontSize } },
+    grid: { ...CHART_THEME.grid },
     xAxis: categoryAxis,
     yAxis: valueAxis,
     series: series.map((s, i) => ({ ...s, itemStyle: { color: colors[i % colors.length] } }))
