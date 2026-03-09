@@ -64,7 +64,7 @@ onMounted(async () => {
                 <ExecutionPanel />
               </div>
             </div>
-            <div v-show="activeTab === 'results'" class="col-span-3 bg-white rounded-xl shadow-md relative p-4">
+            <div v-if="activeTab === 'results'" class="col-span-3 bg-white rounded-xl shadow-md relative p-4">
               <ResultsPanel />
             </div>
           </template>
