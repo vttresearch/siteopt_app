@@ -14,6 +14,9 @@ const gridApi = ref(null);
 const columnDefs = ref([]);
 const rowData = ref([]);
 const showDataView = ref(false);
+const scenarios = ref({})
+const selectedScenario = ref(null)
+const selectedRun = ref(null)
 
 // Each element in workFolderFiles is the root tree node { name, path, children }
 const activeRoot = computed(() => {
@@ -26,19 +29,31 @@ const projectName = computed(() => activeRoot.value?.name ?? "");
 
 const resultsFullPath = ref("");
 
-async function findResultsFile() {
+async function fetchResultsList() {
   if (!projectName.value) return;
 
   const r = await postData(
-    "find_results",
+    "list_results",
     { project_name: projectName.value },
     notify
   );
 
   if (r?.success) {
-    resultsFullPath.value = r.data.path;
-  } else {
-    resultsFullPath.value = "";
+    scenarios.value = r.data;
+
+    const firstScenario = Object.keys(r.data)[0];
+
+    if (firstScenario) {
+      selectedScenario.value = firstScenario;
+
+      const runs = r.data[firstScenario];
+      if (runs.length) {
+        selectedRun.value = runs[0];
+        resultsFullPath.value = runs[0].path;
+
+        await openResults();
+      }
+    }
   }
 }
 
@@ -110,28 +125,39 @@ async function openResults() {
 
 onMounted(async () => {
   await fetchWorkFolderFiles();
-
-  await findResultsFile();
-
-  if (resultsFullPath.value) {
-    await openResults();
-  }
+  await fetchResultsList();
 });
 
 watch(
   () => settingStore.activeProjectIndex,
   async () => {
-    await findResultsFile();
+    scenarios.value = {};
+    selectedScenario.value = null;
+    selectedRun.value = null;
+    resultsFullPath.value = "";
 
-    if (!resultsFullPath.value) {
-      columnDefs.value = [];
-      rowData.value = [];
-      return;
-    }
+    columnDefs.value = [];
+    rowData.value = [];
 
-    await openResults();
+    await fetchResultsList();
   }
 );
+
+watch(selectedScenario, async () => {
+  const runs = scenarios.value[selectedScenario.value];
+
+  if (runs?.length) {
+    selectedRun.value = runs[0];
+  }
+});
+
+watch(selectedRun, async () => {
+  if (selectedRun.value) {
+    resultsFullPath.value = selectedRun.value.path;
+    await openResults();
+  }
+});
+
 </script>
 
 <template>
@@ -154,6 +180,41 @@ watch(
       >
         {{ showDataView ? 'Hide' : 'Show' }} results data
       </button>
+    </div>
+
+    <div v-if="Object.keys(scenarios).length" class="flex gap-4 mb-4">
+      <div>
+        <label class="text-sm text-gray-600 mr-2">Scenario</label>
+        <select
+          v-model="selectedScenario"
+          class="border px-2 py-1 rounded bg-white"
+        >
+          <option
+            v-for="(runs, name) in scenarios"
+            :key="name"
+            :value="name"
+          >
+            {{ name }}
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <label class="text-sm text-gray-600 mr-2">Run</label>
+        <select
+          v-model="selectedRun"
+          class="border px-2 py-1 rounded bg-white"
+        >
+          <option
+            v-for="run in scenarios[selectedScenario] || []"
+            :key="run.run"
+            :value="run"
+          >
+            {{ run.run }}
+          </option>
+        </select>
+      </div>
+
     </div>
 
     <div v-if="loadingResults" class="p-4 text-gray-500">

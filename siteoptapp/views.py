@@ -60,29 +60,35 @@ def get_client_work_root(client_id: str) -> str:
     """
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
 
-def find_latest_results(project_path):
+def list_results(project_path):
     root = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output"
 
     if not root.exists():
-        return None
+        return {}
 
-    newest_file = None
-    newest_time = 0
+    scenarios = {}
 
-    for basefolder in root.iterdir():
-        if not basefolder.is_dir():
+    for scenario_dir in root.iterdir():
+        if not scenario_dir.is_dir():
             continue
 
-        for runfolder in basefolder.iterdir():
-            results = runfolder / "results.xlsx"
+        scenario_name = scenario_dir.name
+        runs = []
 
-            if results.exists():
-                t = results.stat().st_mtime
-                if t > newest_time:
-                    newest_time = t
-                    newest_file = results
+        for run_dir in scenario_dir.iterdir():
+            results_file = run_dir / "results.xlsx"
 
-    return str(newest_file) if newest_file else None
+            if results_file.exists():
+                runs.append({
+                    "run": run_dir.name,
+                    "path": str(results_file)
+                })
+
+        runs.sort(key=lambda r: r["run"], reverse=True)
+
+        scenarios[scenario_name] = runs
+
+    return scenarios
 
 
 @ensure_csrf_cookie
@@ -290,7 +296,7 @@ def post(request, action):
         print(f"Removing scenario {data['scenario_name']}")
         response = remove_scenario(client_id, data["scenario_name"], data["work_folder"])
         return response
-    elif action == "find_results":
+    elif action == "list_results":
         project_name = data["project_name"]
         config = get_client_config(client_id)
 
@@ -299,12 +305,9 @@ def post(request, action):
         if not project_path:
             return JsonResponse({"success": False, "error": "Project not found"})
 
-        results_path = find_latest_results(project_path)
+        results = list_results(project_path)
 
-        if not results_path:
-            return JsonResponse({"success": False, "error": "No results found"})
-
-        return JsonResponse({"success": True, "data": {"path": results_path}})
+        return JsonResponse({"success": True, "data": results})
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
