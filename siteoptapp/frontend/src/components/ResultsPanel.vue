@@ -24,10 +24,23 @@ const activeRoot = computed(() => {
 const basePath = computed(() => activeRoot.value?.path ?? "");
 const projectName = computed(() => activeRoot.value?.name ?? "");
 
-const resultsFullPath = computed(() => {
-  if (!basePath.value || !projectName.value) return "";
-  return `${basePath.value}/${projectName.value}/results.xlsx`;
-});
+const resultsFullPath = ref("");
+
+async function findResultsFile() {
+  if (!projectName.value) return;
+
+  const r = await postData(
+    "find_results",
+    { project_name: projectName.value },
+    notify
+  );
+
+  if (r?.success) {
+    resultsFullPath.value = r.data.path;
+  } else {
+    resultsFullPath.value = "";
+  }
+}
 
 function updateTableFromCsv(csvData) {
   const cols = csvData?.columns ?? [];
@@ -97,17 +110,25 @@ async function openResults() {
 
 onMounted(async () => {
   await fetchWorkFolderFiles();
-  if (resultsFullPath.value) await openResults();
+
+  await findResultsFile();
+
+  if (resultsFullPath.value) {
+    await openResults();
+  }
 });
 
 watch(
-  () => [settingStore.activeProjectIndex, resultsFullPath.value],
+  () => settingStore.activeProjectIndex,
   async () => {
+    await findResultsFile();
+
     if (!resultsFullPath.value) {
       columnDefs.value = [];
       rowData.value = [];
       return;
     }
+
     await openResults();
   }
 );

@@ -60,6 +60,30 @@ def get_client_work_root(client_id: str) -> str:
     """
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
 
+def find_latest_results(project_path):
+    root = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output"
+
+    if not root.exists():
+        return None
+
+    newest_file = None
+    newest_time = 0
+
+    for basefolder in root.iterdir():
+        if not basefolder.is_dir():
+            continue
+
+        for runfolder in basefolder.iterdir():
+            results = runfolder / "results.xlsx"
+
+            if results.exists():
+                t = results.stat().st_mtime
+                if t > newest_time:
+                    newest_time = t
+                    newest_file = results
+
+    return str(newest_file) if newest_file else None
+
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -266,6 +290,21 @@ def post(request, action):
         print(f"Removing scenario {data['scenario_name']}")
         response = remove_scenario(client_id, data["scenario_name"], data["work_folder"])
         return response
+    elif action == "find_results":
+        project_name = data["project_name"]
+        config = get_client_config(client_id)
+
+        project_path = config["work_folders"].get(project_name)
+
+        if not project_path:
+            return JsonResponse({"success": False, "error": "Project not found"})
+
+        results_path = find_latest_results(project_path)
+
+        if not results_path:
+            return JsonResponse({"success": False, "error": "No results found"})
+
+        return JsonResponse({"success": True, "data": {"path": results_path}})
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
