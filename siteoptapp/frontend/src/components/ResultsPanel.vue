@@ -1,65 +1,76 @@
 <script setup>
-import { computed, onMounted, watch, ref } from "vue";
-import { AgGridVue } from "ag-grid-vue3";
-import { useSettingStore } from "@/stores/settingstore.js";
-import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postData, fetchWorkFolderFiles } from "@/utils/functions.js";
-import ScenarioComparisonChart from "@/components/ScenarioComparisonChart.vue";
+import { computed, onMounted, watch, ref } from "vue"
+import { useSettingStore } from "@/stores/settingstore.js"
+import { useNotificationStore } from "@/stores/notificationstore.js"
+import { postData, fetchWorkFolderFiles } from "@/utils/functions.js"
 
-const settingStore = useSettingStore();
-const notify = useNotificationStore();
+import DashboardPanel from "@/components/DashboardPanel.vue"
+import ResultsTable from "@/components/ResultsTable.vue"
+import ScenarioComparisonPanel from "@/components/ScenarioComparisonPanel.vue"
 
-const loadingResults = ref(false);
-const gridApi = ref(null);
-const columnDefs = ref([]);
-const rowData = ref([]);
-const showDataView = ref(false);
+const settingStore = useSettingStore()
+const notify = useNotificationStore()
+
+const loadingResults = ref(false)
+
+const columnDefs = ref([])
+const rowData = ref([])
+
 const scenarios = ref({})
 const selectedScenario = ref(null)
 const selectedRun = ref(null)
+const resultsFullPath = ref("")
 
-// Each element in workFolderFiles is the root tree node { name, path, children }
 const activeRoot = computed(() => {
-  const i = settingStore.activeProjectIndex ?? 0;
-  return settingStore.workFolderFiles?.[i] ?? null;
-});
+  const i = settingStore.activeProjectIndex ?? 0
+  return settingStore.workFolderFiles?.[i] ?? null
+})
 
-const basePath = computed(() => activeRoot.value?.path ?? "");
-const projectName = computed(() => activeRoot.value?.name ?? "");
-
-const resultsFullPath = ref("");
+const projectName = computed(() => activeRoot.value?.name ?? "")
 
 async function fetchResultsList() {
-  if (!projectName.value) return;
+  if (!projectName.value) return
 
   const r = await postData(
     "list_results",
     { project_name: projectName.value },
     notify
-  );
+  )
 
-  if (r?.success) {
-    scenarios.value = r.data;
+  if (!r?.success) {
+    scenarios.value = {}
+    selectedScenario.value = null
+    selectedRun.value = null
+    resultsFullPath.value = ""
+    return
+  }
 
-    const firstScenario = Object.keys(r.data)[0];
+  scenarios.value = r.data || {}
 
-    if (firstScenario) {
-      selectedScenario.value = firstScenario;
+  const firstScenario = Object.keys(scenarios.value)[0]
 
-      const runs = r.data[firstScenario];
-      if (runs.length) {
-        selectedRun.value = runs[0];
-        resultsFullPath.value = runs[0].path;
+  if (!firstScenario) {
+    selectedScenario.value = null
+    selectedRun.value = null
+    resultsFullPath.value = ""
+    columnDefs.value = []
+    rowData.value = []
+    return
+  }
 
-        await openResults();
-      }
-    }
+  selectedScenario.value = firstScenario
+
+  const runs = scenarios.value[firstScenario] || []
+  if (runs.length > 0) {
+    selectedRun.value = runs[0]
+    resultsFullPath.value = runs[0].path
+    await openResults()
   }
 }
 
 function updateTableFromCsv(csvData) {
-  const cols = csvData?.columns ?? [];
-  const rows = csvData?.rows ?? [];
+  const cols = csvData?.columns ?? []
+  const rows = csvData?.rows ?? []
 
   columnDefs.value = [
     {
@@ -67,190 +78,209 @@ function updateTableFromCsv(csvData) {
       valueGetter: "node.rowIndex + 1",
       width: 75,
       pinned: "left",
-      cellClass: "bg-gray-50 font-medium text-left",
       editable: false,
+      sortable: false,
+      filter: false
     },
     ...cols.map((col) => ({
       headerName: col,
       field: col,
-      minWidth: 100,
+      minWidth: 120,
       editable: false,
-    })),
-  ];
+      sortable: true,
+      filter: true,
+      resizable: true
+    }))
+  ]
 
-  rowData.value = rows;
+  rowData.value = rows
 }
 
 function updateTableFromXlsx(sheetData) {
-  const cols = sheetData?.columns ?? [];
-  const rows = sheetData?.rows ?? [];
-  updateTableFromCsv({ columns: cols, rows });
+  const cols = sheetData?.columns ?? []
+  const rows = sheetData?.rows ?? []
+
+  updateTableFromCsv({
+    columns: cols,
+    rows
+  })
 }
 
 async function openResults() {
-  if (!resultsFullPath.value) return;
+  if (!resultsFullPath.value) return
 
-  loadingResults.value = true;
+  loadingResults.value = true
 
   const r = await postData(
     "fetch_data",
     { full_path: resultsFullPath.value },
     notify
-  );
+  )
 
-  if (r?.success) {
-    const fileType = r.data?.filetype;
-    const fileData = r.data?.data;
-
-    if (fileType === "csv") {
-      updateTableFromCsv(fileData);
-    } else if (fileType === "xlsx") {
-      const sheets = fileData && typeof fileData === "object" ? fileData : {};
-      const firstSheetName = Object.keys(sheets)[0];
-      const firstSheet = firstSheetName ? sheets[firstSheetName] : null;
-      if (firstSheet?.columns?.length) {
-        updateTableFromXlsx(firstSheet);
-      } else {
-        notify.show("results.xlsx has no sheet data.", 4000, "error");
-      }
-    } else {
-      notify.show("results.xlsx could not be read.", 4000, "error");
-    }
-  } else {
-    notify.show("Could not load results.xlsx", 4000, "error");
+  if (!r?.success) {
+    notify.show("Could not load result file.", 4000, "error")
+    columnDefs.value = []
+    rowData.value = []
+    loadingResults.value = false
+    return
   }
 
-  loadingResults.value = false;
+  const fileType = r.data?.filetype
+  const fileData = r.data?.data
+
+  if (fileType === "csv") {
+    updateTableFromCsv(fileData)
+  } else if (fileType === "xlsx") {
+    const sheets = fileData && typeof fileData === "object" ? fileData : {}
+    const firstSheetName = Object.keys(sheets)[0]
+    const firstSheet = firstSheetName ? sheets[firstSheetName] : null
+
+    if (firstSheet?.columns?.length) {
+      updateTableFromXlsx(firstSheet)
+    } else {
+      notify.show("results.xlsx has no readable sheet data.", 4000, "error")
+      columnDefs.value = []
+      rowData.value = []
+    }
+  } else {
+    notify.show(`Unsupported results file type: ${fileType}`, 4000, "error")
+    columnDefs.value = []
+    rowData.value = []
+  }
+
+  loadingResults.value = false
 }
 
 onMounted(async () => {
-  await fetchWorkFolderFiles();
-  await fetchResultsList();
-});
+  await fetchWorkFolderFiles()
+  await fetchResultsList()
+})
 
 watch(
   () => settingStore.activeProjectIndex,
   async () => {
-    scenarios.value = {};
-    selectedScenario.value = null;
-    selectedRun.value = null;
-    resultsFullPath.value = "";
+    scenarios.value = {}
+    selectedScenario.value = null
+    selectedRun.value = null
+    resultsFullPath.value = ""
+    columnDefs.value = []
+    rowData.value = []
 
-    columnDefs.value = [];
-    rowData.value = [];
-
-    await fetchResultsList();
+    await fetchResultsList()
   }
-);
+)
 
 watch(selectedScenario, async () => {
-  const runs = scenarios.value[selectedScenario.value];
+  const runs = scenarios.value[selectedScenario.value] || []
 
-  if (runs?.length) {
-    selectedRun.value = runs[0];
+  if (runs.length > 0) {
+    selectedRun.value = runs[0]
+  } else {
+    selectedRun.value = null
+    resultsFullPath.value = ""
+    columnDefs.value = []
+    rowData.value = []
   }
-});
+})
 
 watch(selectedRun, async () => {
-  if (selectedRun.value) {
-    resultsFullPath.value = selectedRun.value.path;
-    await openResults();
-  }
-});
+  if (!selectedRun.value) return
 
+  resultsFullPath.value = selectedRun.value.path
+  await openResults()
+})
 </script>
 
 <template>
-  <div v-if="!activeRoot" class="text-gray-500 p-4">
+  <div v-if="!activeRoot" class="p-4 text-gray-500">
     Select a project to view results.
   </div>
 
-  <div v-else-if="!loadingResults && !columnDefs.length" class="text-gray-500 p-4">
-    Run the model to generate <span class="font-mono">results.xlsx</span>.
-  </div>
+  <div v-else class="max-w-[1600px] mx-auto space-y-6">
+    <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-800">Results Dashboard</h1>
+        <p class="text-sm text-gray-500 mt-1">
+          Browse model result files and compare scenario outputs.
+        </p>
+      </div>
 
-  <div v-else>
-    <div class="mb-3 flex items-center justify-between gap-4">
-      <span class="text-lg font-semibold text-gray-800">Results (results.xlsx)</span>
-      <button
-        v-if="columnDefs.length"
-        type="button"
-        class="px-3 py-1.5 text-sm font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-        @click="showDataView = !showDataView"
+      <div
+        v-if="Object.keys(scenarios).length"
+        class="flex flex-col gap-3 sm:flex-row sm:items-end"
       >
-        {{ showDataView ? 'Hide' : 'Show' }} results data
-      </button>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Scenario
+          </label>
+          <select
+            v-model="selectedScenario"
+            class="w-full sm:w-56 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          >
+            <option
+              v-for="(runs, name) in scenarios"
+              :key="name"
+              :value="name"
+            >
+              {{ name }}
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Run
+          </label>
+          <select
+            v-model="selectedRun"
+            class="w-full sm:w-56 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          >
+            <option
+              v-for="run in scenarios[selectedScenario] || []"
+              :key="run.run"
+              :value="run"
+            >
+              {{ run.run }}
+            </option>
+          </select>
+        </div>
+      </div>
     </div>
 
-    <div v-if="Object.keys(scenarios).length" class="flex gap-4 mb-4">
-      <div>
-        <label class="text-sm text-gray-600 mr-2">Scenario</label>
-        <select
-          v-model="selectedScenario"
-          class="border px-2 py-1 rounded bg-white"
-        >
-          <option
-            v-for="(runs, name) in scenarios"
-            :key="name"
-            :value="name"
-          >
-            {{ name }}
-          </option>
-        </select>
-      </div>
-
-      <div>
-        <label class="text-sm text-gray-600 mr-2">Run</label>
-        <select
-          v-model="selectedRun"
-          class="border px-2 py-1 rounded bg-white"
-        >
-          <option
-            v-for="run in scenarios[selectedScenario] || []"
-            :key="run.run"
-            :value="run"
-          >
-            {{ run.run }}
-          </option>
-        </select>
-      </div>
-
-    </div>
-
-    <div v-if="loadingResults" class="p-4 text-gray-500">
+    <div
+      v-if="loadingResults"
+      class="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm"
+    >
       Loading results...
     </div>
 
-    <div v-else-if="columnDefs.length" class="space-y-6">
-      <div v-show="showDataView" class="w-full h-80 overflow-auto">
-        <AgGridVue
-          class="w-full h-full"
-          :domLayout="'normal'"
-          :columnDefs="columnDefs"
-          :rowData="rowData"
-          @grid-ready="(params) => (gridApi = params.api)"
-          :rowBuffer="10"
-          :rowHeight="40"
-          :animateRows="true"
-          :rowSelection.enableClickSelection="false"
-          :suppressColumnVirtualization="false"
-          :suppressCellFocus="true"
-          :suppressAnimationFrame="true"
-          :enableCellTextSelection="false"
-        />
-      </div>
-
-      <div class="mt-6 border-t pt-6">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Scenario comparison</h3>
-        <ScenarioComparisonChart
-          :data="rowData"
-          :fileName="projectName ? `${projectName} – results.xlsx` : 'results.xlsx'"
-        />
-      </div>
+    <div
+      v-else-if="!Object.keys(scenarios).length"
+      class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-500"
+    >
+      Run the model to generate result files.
     </div>
 
-    <div v-else class="p-4 text-gray-500">
-      No data found in results.xlsx.
+    <div v-else class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      <div class="xl:col-span-8">
+        <DashboardPanel title="Scenario comparison">
+          <ScenarioComparisonPanel
+            :data="rowData"
+            :fileName="projectName ? `${projectName} – results.xlsx` : 'results.xlsx'"
+          />
+        </DashboardPanel>
+      </div>
+
+      <div class="xl:col-span-4">
+        <DashboardPanel title="Results table">
+          <div class="h-[700px]">
+            <ResultsTable
+              :columnDefs="columnDefs"
+              :rowData="rowData"
+            />
+          </div>
+        </DashboardPanel>
+      </div>
     </div>
   </div>
 </template>

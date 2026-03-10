@@ -210,9 +210,9 @@ export function detectScenarioStructure(data) {
 
   const scenarioKeywords = ['scenario', 'alternative', 'case', 'run', 'variant'];
   const scenarioCol = columns.find(c => scenarioKeywords.some(k => c.toLowerCase().includes(k)));
-  const itemCol = columns.find(c => /^(item|parameter|variable|metric|name)$/i.test(c));
-  const valueCol = columns.find(c => /^(value|values?|result|total)$/i.test(c));
-  const categoryCol = columns.find(c => /^(category|summary|group|type)$/i.test(c));
+  const itemCol = columns.find(c => /(item|parameter|variable|metric|name)/i.test(c));
+  const valueCol = columns.find(c => /(value|values?|result|total)/i.test(c));
+  const categoryCol = columns.find(c => /(category|summary|group|type)/i.test(c));
   const entityCol = columns.find(c => /^(entity|entityid|object)$/i.test(c));
 
   const scenarioColumn = scenarioCol || (columns.length > 1 ? columns[0] : null);
@@ -293,10 +293,9 @@ export function processCategorySummedData(data, scenarioStructure, scenarios, ch
   if (!categories?.length) return null;
 
   const scenarioColumn = Object.keys(data[0]).find(c => /^(scenario|alternative|case|run)$/i.test(c)) || Object.keys(data[0])[0];
-  const itemCol = Object.keys(data[0]).find(c => /^(item|parameter|variable)$/i.test(c));
-  const valueCol = Object.keys(data[0]).find(c => /^(value|values?|result|total)$/i.test(c));
-  const categoryCol = Object.keys(data[0]).find(c => /^(category|summary|group|type)$/i.test(c));
-
+  const itemCol = Object.keys(data[0]).find(c => /(item|parameter|variable|metric|name)/i.test(c));
+  const valueCol = Object.keys(data[0]).find(c => /(value|values?|result|total)/i.test(c));
+  const categoryCol = Object.keys(data[0]).find(c => /(category|summary|group|type)/i.test(c));
   const getValue = (row, cat) => {
     if (valueCol) return parseFloat(row[valueCol]) || 0;
     const v = row[cat];
@@ -403,9 +402,8 @@ export function processScenarioComparisonData(data, scenarioStructure, items, sc
   if (!data?.length || !scenarioStructure || !items?.length || !scenarios?.length) return null;
 
   const scenarioColumn = Object.keys(data[0]).find(c => /^(scenario|alternative|case|run)$/i.test(c)) || Object.keys(data[0])[0];
-  const itemCol = Object.keys(data[0]).find(c => /^(item|parameter|variable)$/i.test(c));
-  const valueCol = Object.keys(data[0]).find(c => /^(value|values?|result|total)$/i.test(c));
-
+  const itemCol = Object.keys(data[0]).find(c => /(item|parameter|variable|metric|name)/i.test(c));
+  const valueCol = Object.keys(data[0]).find(c => /(value|values?|result|total)/i.test(c));
   const getValue = (row, itemKey) => {
     if (valueCol && itemCol) {
       if (normalizeStr(row[itemCol]) !== normalizeStr(itemKey)) return 0;
