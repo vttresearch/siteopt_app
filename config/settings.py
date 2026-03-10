@@ -49,7 +49,51 @@ INSTALLED_APPS = [
     "django.contrib.admindocs",
     "corsheaders",
     "siteoptapp",
+    "ai_assistant",
 ]
+
+ENABLE_AI_ASSISTANT = env_bool("ENABLE_AI_ASSISTANT", default=DEBUG)
+AI_ASSISTANT_MODEL = os.getenv("AI_ASSISTANT_MODEL", "gpt-5-mini")
+AI_ASSISTANT_SYSTEM_PROMPT_FILE = os.getenv(
+    "AI_ASSISTANT_SYSTEM_PROMPT_FILE",
+    str(BASE_DIR / "ai_assistant" / "system_prompt.md"),
+)
+AI_ASSISTANT_SYSTEM_PROMPT = os.getenv(
+    "AI_ASSISTANT_SYSTEM_PROMPT",
+    "You are SiteOpt Copilot for this repository. Focus on executing SiteOpt-related tasks safely and clearly. "
+    "Prefer reading and updating files under siteopt_toolbox/current_input and the active work directory. "
+    "When making model-input changes, explain exactly what changed and where. "
+    "Never invent file paths or column names-use available tools to inspect first. "
+    "If a request is ambiguous, ask one concise clarifying question.",
+)
+COPILOT_CLI_PATH = os.getenv("COPILOT_CLI_PATH", "")
+COPILOT_CLI_URL = os.getenv("COPILOT_CLI_URL", "")
+COPILOT_GITHUB_TOKEN = os.getenv("COPILOT_GITHUB_TOKEN", "")
+AI_ASSISTANT_COPILOT_CLI_ARGS = _split_csv("AI_ASSISTANT_COPILOT_CLI_ARGS", default="--allow-all-paths")
+AI_ASSISTANT_TOKEN_TTL = int(os.getenv("AI_ASSISTANT_TOKEN_TTL", "86400"))
+AI_ASSISTANT_SESSION_TTL = int(os.getenv("AI_ASSISTANT_SESSION_TTL", "86400"))
+AI_ASSISTANT_REQUEST_TIMEOUT = int(os.getenv("AI_ASSISTANT_REQUEST_TIMEOUT", "1800"))
+AI_ASSISTANT_RETRY_TIMEOUT = int(os.getenv("AI_ASSISTANT_RETRY_TIMEOUT", "180"))
+AI_ASSISTANT_MAX_TIMEOUT_RETRIES = int(os.getenv("AI_ASSISTANT_MAX_TIMEOUT_RETRIES", "3"))
+AI_ASSISTANT_CONTEXT_DIR = os.getenv("AI_ASSISTANT_CONTEXT_DIR", os.getenv("WORK_ROOT", str(BASE_DIR / "work")))
+AI_ASSISTANT_PROMPT_MODE = os.getenv("AI_ASSISTANT_PROMPT_MODE", "sdk-native")
+AI_ASSISTANT_HISTORY_LIMIT = int(os.getenv("AI_ASSISTANT_HISTORY_LIMIT", "50"))
+AI_ASSISTANT_OLLAMA_BASE_URL = os.getenv("AI_ASSISTANT_OLLAMA_BASE_URL", "http://localhost:11434/v1")
+AI_ASSISTANT_OLLAMA_PROVIDER_TYPE = os.getenv("AI_ASSISTANT_OLLAMA_PROVIDER_TYPE", "openai")
+AI_ASSISTANT_OLLAMA_MODELS = os.getenv("AI_ASSISTANT_OLLAMA_MODELS", "")
+AI_ASSISTANT_OLLAMA_AUTO_DISCOVER = env_bool("AI_ASSISTANT_OLLAMA_AUTO_DISCOVER", default=True)
+AI_ASSISTANT_OLLAMA_MODEL_CACHE_SECONDS = int(os.getenv("AI_ASSISTANT_OLLAMA_MODEL_CACHE_SECONDS", "20"))
+AI_ASSISTANT_OLLAMA_REQUEST_TIMEOUT = int(os.getenv("AI_ASSISTANT_OLLAMA_REQUEST_TIMEOUT", "1800"))
+AI_ASSISTANT_OLLAMA_REUSE_SDK_SESSION = env_bool("AI_ASSISTANT_OLLAMA_REUSE_SDK_SESSION", default=False)
+AI_ASSISTANT_OLLAMA_ALLOW_WRAPPED_PROMPT = env_bool("AI_ASSISTANT_OLLAMA_ALLOW_WRAPPED_PROMPT", default=False)
+AI_ASSISTANT_OLLAMA_SYSTEM_PROMPT_MAX_CHARS = int(os.getenv("AI_ASSISTANT_OLLAMA_SYSTEM_PROMPT_MAX_CHARS", "1800"))
+AI_ASSISTANT_INCLUDE_FULL_FILE_SUMMARY_WITH_HISTORY = env_bool(
+    "AI_ASSISTANT_INCLUDE_FULL_FILE_SUMMARY_WITH_HISTORY",
+    default=False,
+)
+AI_ASSISTANT_PROMPT_FILE_LIST_MAX_LINES = int(os.getenv("AI_ASSISTANT_PROMPT_FILE_LIST_MAX_LINES", "12"))
+AI_ASSISTANT_LOG_PROMPTS = env_bool("AI_ASSISTANT_LOG_PROMPTS", default=True)
+AI_ASSISTANT_LOG_PROMPT_MAX_CHARS = int(os.getenv("AI_ASSISTANT_LOG_PROMPT_MAX_CHARS", "1200"))
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",

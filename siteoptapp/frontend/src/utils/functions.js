@@ -73,6 +73,274 @@ export const getData = async (endpoint, notify) => {
 
 
 /**
+ * Assistant API: get runtime/auth status.
+ */
+export const assistantAuthStatus = async (ollamaBaseUrl = null) => {
+  try {
+    const query = new URLSearchParams();
+    if (ollamaBaseUrl) {
+      query.set("ollama_base_url", String(ollamaBaseUrl));
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const response = await fetch(`${API_BASE}api/assistant/auth/status/${suffix}`, {
+      method: "GET",
+      credentials: "include",
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+    const text = await response.text();
+    return { success: false, error: text || `HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+
+/**
+ * Assistant API: start Copilot browser/device login flow.
+ */
+export const assistantAuthLoginStart = async () => {
+  const csrfToken = getCookie("csrftoken");
+  try {
+    const response = await fetch(`${API_BASE}api/assistant/auth/login/start/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({}),
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+    const text = await response.text();
+    return { success: false, error: text || `HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+
+/**
+ * Assistant API: get Copilot browser/device login status.
+ */
+export const assistantAuthLoginStatus = async (loginId) => {
+  try {
+    const encoded = encodeURIComponent(String(loginId || ""));
+    const response = await fetch(`${API_BASE}api/assistant/auth/login/status/?login_id=${encoded}`, {
+      method: "GET",
+      credentials: "include",
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+    const text = await response.text();
+    return { success: false, error: text || `HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+
+/**
+ * Assistant API: create a new server-side session.
+ */
+export const assistantNewSession = async (contextDir = null, systemPrompt = null, model = null, ollamaBaseUrl = null) => {
+  const csrfToken = getCookie("csrftoken");
+  try {
+    const response = await fetch(`${API_BASE}api/assistant/session/new/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        context_dir: contextDir,
+        system_prompt: systemPrompt,
+        model,
+        ollama_base_url: ollamaBaseUrl,
+      }),
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+    const text = await response.text();
+    return { success: false, error: text || `HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+
+/**
+ * Assistant API: reset an existing server-side session history.
+ */
+export const assistantResetSession = async (sessionId) => {
+  const csrfToken = getCookie("csrftoken");
+  try {
+    const response = await fetch(`${API_BASE}api/assistant/session/reset/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+    const text = await response.text();
+    return { success: false, error: text || `HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+
+/**
+ * Assistant API: chat with SiteOpt Copilot.
+ */
+export const assistantChat = async (message, sessionId = "default", contextDir = null, model = null, ollamaBaseUrl = null) => {
+  const csrfToken = getCookie("csrftoken");
+  try {
+    const response = await fetch(`${API_BASE}api/assistant/chat/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        message,
+        session_id: sessionId,
+        context_dir: contextDir,
+        model,
+        ollama_base_url: ollamaBaseUrl,
+      }),
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+    const text = await response.text();
+    return { success: false, error: text || `HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+
+/**
+ * Assistant API: stream chat events (trace/progress/final) over SSE response.
+ */
+export const assistantChatStream = async (
+  message,
+  sessionId = "default",
+  contextDir = null,
+  model = null,
+  ollamaBaseUrl = null,
+  handlers = {}
+) => {
+  const csrfToken = getCookie("csrftoken");
+  const onTrace = typeof handlers.onTrace === "function" ? handlers.onTrace : () => {};
+  const onStatus = typeof handlers.onStatus === "function" ? handlers.onStatus : () => {};
+  const onError = typeof handlers.onError === "function" ? handlers.onError : () => {};
+
+  try {
+    const response = await fetch(`${API_BASE}api/assistant/chat/stream/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        message,
+        session_id: sessionId,
+        context_dir: contextDir,
+        model,
+        ollama_base_url: ollamaBaseUrl,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      const text = await response.text();
+      return { success: false, error: text || `HTTP ${response.status}` };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let finalPayload = null;
+
+    const processEventBlock = (block) => {
+      const lines = block.split("\n");
+      let eventType = "message";
+      const dataLines = [];
+      for (const line of lines) {
+        if (line.startsWith("event:")) {
+          eventType = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          dataLines.push(line.slice(5).trim());
+        }
+      }
+      const rawData = dataLines.join("\n");
+      if (!rawData) return;
+
+      let parsed = null;
+      try {
+        parsed = JSON.parse(rawData);
+      } catch {
+        parsed = { raw: rawData };
+      }
+
+      if (eventType === "trace") {
+        if (parsed?.entry) onTrace(parsed.entry);
+      } else if (eventType === "status") {
+        onStatus(parsed);
+      } else if (eventType === "error") {
+        onError(parsed);
+      } else if (eventType === "final") {
+        finalPayload = parsed;
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sepIndex = buffer.indexOf("\n\n");
+      while (sepIndex !== -1) {
+        const block = buffer.slice(0, sepIndex);
+        buffer = buffer.slice(sepIndex + 2);
+        if (block.trim()) {
+          processEventBlock(block);
+        }
+        sepIndex = buffer.indexOf("\n\n");
+      }
+    }
+
+    if (finalPayload) {
+      return finalPayload;
+    }
+    return { success: false, error: "Stream completed without final payload." };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+
+/**
  * Fetches settings.
  */
 export const fetchSettings = async () => {
@@ -137,8 +405,6 @@ export async function fetchWorkFolder(workFolderName) {
   if (idx !== -1) {
     // preserve reactivity by using splice
     settingStore.workFolderFiles.splice(idx, 1, updatedTree);
-    // Let FileSelectorPanel know that folder structure has been updated
-    settingStore.projectIndexUpdated = idx
   }
   settingStore.loadingProjects = false
 }

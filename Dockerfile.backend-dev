@@ -13,11 +13,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /app
 
+# Install Node.js 24 for GitHub Copilot CLI
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+
 # System deps for Python builds and runtime performance
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gfortran \
     libopenblas-dev liblapack-dev \
     libffi-dev libpq-dev git nano curl wget tzdata \
+    nodejs \
     libegl1 libgl1 libxkbcommon-x11-0 \
     libglib2.0-0 libfontconfig1 libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
@@ -32,6 +36,9 @@ ENV PATH="$VENV_PATH/bin:$PATH" \
 COPY requirements.txt /app/requirements.txt
 RUN python -m pip install --upgrade pip && \
     python -m pip install --no-cache-dir -r /app/requirements.txt
+
+# Install GitHub Copilot CLI for browser-based device login and SDK runtime support
+RUN npm install -g @github/copilot
 
 # Install Julia
 RUN wget https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.7-linux-x86_64.tar.gz && \

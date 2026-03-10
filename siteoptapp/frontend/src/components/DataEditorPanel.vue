@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, nextTick } from "vue";
+import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { AgGridVue } from "ag-grid-vue3";
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import { useTableDataStore } from "@/stores/filedatastore.js";
@@ -7,12 +7,14 @@ import Spinner from "@/components/Spinner.vue";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { postData } from "@/utils/functions.js";
 import { useSettingStore } from "@/stores/settingstore.js";
+import { useAssistantPlotStore } from "@/stores/assistantplotstore.js";
 import TimeSeriesChart from "@/components/TimeSeriesChart.vue";
 import { detectTimeSeriesStructure } from "@/utils/chartUtils.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
 const settingStore = useSettingStore();
+const assistantPlotStore = useAssistantPlotStore();
 
 const sheetNames = ref([]);
 const selectedSheet = ref("");
@@ -30,14 +32,132 @@ const jsonDirty = ref(false);
 const xlsxDirtyBySheet = ref({});
 
 const activeView = ref("editor"); // "editor" | "plot"
+const hasNewAssistantPlot = ref(false);
 
 const currentXlsxDirty = computed(() => !!xlsxDirtyBySheet.value[selectedSheet.value]);
 
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
 
+const activeContextDir = computed(() => {
+  const idx = settingStore.activeProjectIndex || 0;
+  const folderNames = Object.keys(settingStore.workFolders || {});
+  const activeFolderName = folderNames[idx] || null;
+  return activeFolderName ? settingStore.workFolders[activeFolderName] || null : null;
+});
+
+const assistantPlotPayload = computed(() => assistantPlotStore.getPlot(activeContextDir.value));
+
+const hasAssistantPlot = computed(() => {
+  const payload = assistantPlotPayload.value;
+  return !!payload && payload.type === "timeseries" && Array.isArray(payload.rows) && payload.rows.length > 0;
+});
+
+const groupedAssistantPlots = computed(() => {
+  if (!hasAssistantPlot.value) return [];
+  const payload = assistantPlotPayload.value;
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  const baseTitle = payload?.title || payload?.source_file || "Assistant Plot";
+  const xColumn = payload?.x_column || "";
+  const seriesColumns = payload?.series_columns || [];
+
+  const hasSummaryColumn = rows.some((row) => row && row.summary !== undefined && row.summary !== null);
+  if (!hasSummaryColumn) {
+    return [{
+      key: "all",
+      summaryLabel: "All",
+      rows,
+      title: baseTitle,
+      xColumn,
+      seriesColumns,
+    }];
+  }
+
+  const groups = new Map();
+  for (const row of rows) {
+    const label = String(row?.summary ?? "Unspecified").trim() || "Unspecified";
+    if (!groups.has(label)) {
+      groups.set(label, []);
+    }
+    groups.get(label).push(row);
+  }
+
+  return Array.from(groups.entries()).map(([summaryLabel, groupedRows]) => ({
+    key: summaryLabel,
+    summaryLabel,
+    rows: groupedRows,
+    title: `${baseTitle} — ${summaryLabel}`,
+    xColumn,
+    seriesColumns,
+  }));
+});
+
+function handleAssistantPlotReady(event) {
+  const detail = event?.detail || {};
+  const contextDir = detail.contextDir || null;
+  if (!contextDir || contextDir !== activeContextDir.value) {
+    return;
+  }
+  hasNewAssistantPlot.value = true;
+  if (hasAssistantPlot.value) {
+    activeView.value = "assistantPlot";
+  }
+}
+
 const isTimeSeriesData = computed(() => {
   const structure = detectTimeSeriesStructure(plotRows.value);
   return structure?.isTimeSeries ?? false;
+});
+
+const isPlottableData = computed(() => {
+  const rows = plotRows.value || [];
+  if (!rows.length) return false;
+
+  const structure = detectTimeSeriesStructure(rows);
+  if (structure?.isTimeSeries) return true;
+
+  const columns = Object.keys(rows[0] || {});
+  if (!columns.length) return false;
+  const sample = rows.slice(0, Math.min(100, rows.length));
+  const nonEmpty = (value) => value !== null && value !== undefined && String(value).trim() !== "";
+  const numericColumns = columns.filter((column) => {
+    const values = sample.map((row) => row[column]).filter(nonEmpty);
+    if (!values.length) return false;
+    const numericCount = values.filter((value) => !isNaN(parseFloat(value))).length;
+    return numericCount / values.length >= 0.6;
+  });
+
+  return numericColumns.length > 0 && numericColumns.length < columns.length;
+});
+
+const groupedPlotRows = computed(() => {
+  const rows = plotRows.value || [];
+  if (!rows.length) return [];
+
+  const hasSummaryColumn = rows.some((row) => row && row.summary !== undefined && row.summary !== null);
+  if (!hasSummaryColumn) {
+    return [{
+      key: 'all',
+      summaryLabel: 'All',
+      rows,
+      title: data_store.fname || 'Data Plot',
+    }];
+  }
+
+  const groups = new Map();
+  for (const row of rows) {
+    const label = String(row?.summary ?? 'Unspecified').trim() || 'Unspecified';
+    if (!groups.has(label)) {
+      groups.set(label, []);
+    }
+    groups.get(label).push(row);
+  }
+
+  return Array.from(groups.entries()).map(([summaryLabel, groupedRows]) => ({
+    key: summaryLabel,
+    summaryLabel,
+    rows: groupedRows,
+    title: `${data_store.fname || 'Data Plot'} — ${summaryLabel}`,
+  }));
 });
 
 function onGridReady(params) {
@@ -155,7 +275,7 @@ async function newSheetSelected(sheetName) {
   updateTableFromExcel();
   await nextTick();
 
-  if (activeView.value === "plot" && !isTimeSeriesData.value) {
+  if (activeView.value === "plot" && !isPlottableData.value) {
     activeView.value = "editor";
   }
 }
@@ -208,7 +328,7 @@ watch(
       updateTableFromExcel();
       await nextTick();
 
-      activeView.value = isTimeSeriesData.value ? "plot" : "editor";
+      activeView.value = isPlottableData.value ? "plot" : "editor";
     } else if (fileType === "csv") {
       sheetNames.value = [];
       selectedSheet.value = "";
@@ -217,7 +337,7 @@ watch(
       updateTableFromCsv();
       await nextTick();
 
-      activeView.value = isTimeSeriesData.value ? "plot" : "editor";
+      activeView.value = isPlottableData.value ? "plot" : "editor";
     } else if (fileType === "json") {
       sheetNames.value = [];
       selectedSheet.value = "";
@@ -251,12 +371,26 @@ watch(
   { immediate: true }
 );
 
+onMounted(() => {
+  window.addEventListener("assistant-plot-ready", handleAssistantPlotReady);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("assistant-plot-ready", handleAssistantPlotReady);
+});
+
 watch(mdText, () => {
   if (data_store.daata?.filetype === "md") mdDirty.value = true;
 });
 
 watch(jsonEditText, () => {
   if (data_store.daata?.filetype === "json") jsonDirty.value = true;
+});
+
+watch(activeView, (view) => {
+  if (view === "assistantPlot") {
+    hasNewAssistantPlot.value = false;
+  }
 });
 
 async function saveCurrentFile() {
@@ -360,10 +494,25 @@ async function saveCurrentFile() {
         class="px-3 py-1 rounded border disabled:opacity-50"
         :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
         @click="activeView = 'plot'"
-        :disabled="!isTimeSeriesData"
-        title="Requires a time/date column + numeric columns"
+        :disabled="!isPlottableData"
+        title="Requires one category/time column and numeric columns"
       >
         Plot
+      </button>
+
+      <button
+        class="px-3 py-1 rounded border"
+        :class="activeView === 'assistantPlot' ? 'bg-blue-600 text-white' : 'bg-white'"
+        @click="activeView = 'assistantPlot'"
+        title="Assistant-generated visualization for active project"
+      >
+        <span>Assistant Plot</span>
+        <span
+          v-if="hasNewAssistantPlot && activeView !== 'assistantPlot'"
+          class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
+        >
+          New
+        </span>
       </button>
     </div>
 
@@ -451,11 +600,55 @@ async function saveCurrentFile() {
 
     <!-- PLOT VIEW -->
     <div v-else-if="activeView === 'plot'" class="border rounded p-2 bg-white">
-      <div v-if="isTimeSeriesData">
-        <TimeSeriesChart :data="plotRows" :fileName="data_store.fname" />
+      <div v-if="isPlottableData">
+        <div v-if="groupedPlotRows.length === 1">
+          <TimeSeriesChart :data="groupedPlotRows[0].rows" :fileName="groupedPlotRows[0].title" />
+        </div>
+        <div v-else class="space-y-4">
+          <div
+            v-for="group in groupedPlotRows"
+            :key="group.key"
+            class="border rounded p-2 bg-white"
+          >
+            <div class="mb-2 text-sm font-medium text-gray-700">{{ group.summaryLabel }}</div>
+            <TimeSeriesChart :data="group.rows" :fileName="group.title" />
+          </div>
+        </div>
       </div>
       <div v-else class="text-gray-500 p-4">
-        No time series data detected (needs time/date column + numeric columns).
+        No plottable data detected (needs at least one category/time column and numeric columns).
+      </div>
+    </div>
+
+    <!-- ASSISTANT PLOT VIEW -->
+    <div v-else-if="activeView === 'assistantPlot'" class="border rounded p-2 bg-white">
+      <div v-if="hasAssistantPlot">
+        <div v-if="groupedAssistantPlots.length === 1">
+          <TimeSeriesChart
+            :data="groupedAssistantPlots[0].rows"
+            :fileName="groupedAssistantPlots[0].title"
+            :xColumn="groupedAssistantPlots[0].xColumn"
+            :seriesColumns="groupedAssistantPlots[0].seriesColumns"
+          />
+        </div>
+        <div v-else class="space-y-4">
+          <div
+            v-for="group in groupedAssistantPlots"
+            :key="group.key"
+            class="border rounded p-2 bg-white"
+          >
+            <div class="mb-2 text-sm font-medium text-gray-700">{{ group.summaryLabel }}</div>
+            <TimeSeriesChart
+              :data="group.rows"
+              :fileName="group.title"
+              :xColumn="group.xColumn"
+              :seriesColumns="group.seriesColumns"
+            />
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-gray-500 p-4">
+        No assistant-generated plot for the active project yet. Ask Assistant for a visualization first.
       </div>
     </div>
   </div>

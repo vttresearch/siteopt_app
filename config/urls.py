@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
+    path("api/assistant/", include("ai_assistant.urls")),
     path("api/stream/execute/<str:job_id>", views.execute, name="execute"),
 ]
 

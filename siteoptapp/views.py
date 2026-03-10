@@ -27,10 +27,16 @@ PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
 TEST_PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "test_spinetoolbox_project").resolve()
 SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
 WORK_ROOT = Path(Path(settings.BASE_DIR) / WORK_DIR).resolve()
-CONFIG_ROOT = Path(settings.BASE_DIR / "_config").resolve()
+CONFIG_ROOT = Path(os.environ.get("CONFIG_ROOT", WORK_ROOT / "_config")).resolve()
 PYTHON_EXECUTABLE = sys.executable
 INPUT_DATA_SQLITE_FILE = Path(".spinetoolbox", "items", "input_data", "elexia_input.sqlite")
 _MOD_SCRIPT_NAME = "mod_script.py"
+
+
+class ClientConfigData(dict):
+    def __init__(self, *args, config_path: str, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config_path = config_path
 
 
 def get_input_data_path() -> str:
@@ -94,7 +100,7 @@ def get_client_config(client_id):
     else:
         if not os.path.exists(str(config_file_path)):
             make_config_file(str(config_file_path))
-    return read_config_file(str(config_file_path))
+    return ClientConfigData(read_config_file(str(config_file_path)), config_path=str(config_file_path))
 
 
 def remove_work_folder(client_id: str, work_folder_name: str):

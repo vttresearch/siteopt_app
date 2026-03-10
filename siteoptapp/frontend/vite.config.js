@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
   return {
     define: {
       'import.meta.env.VITE_API_BASE': JSON.stringify(env.VITE_API_BASE),  // Add variable to env vars manually
+      'import.meta.env.VITE_ENABLE_AI_ASSISTANT': JSON.stringify(env.VITE_ENABLE_AI_ASSISTANT ?? 'false'),
     },
     plugins: [
         vue(),

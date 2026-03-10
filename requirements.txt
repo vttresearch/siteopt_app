@@ -7,3 +7,4 @@ openpyxl >=3.1.5
 pyinstaller >= 6.15
 platformdirs >= 4.4.0
 spinetoolbox == 0.10.5
+github-copilot-sdk >= 0.1.0

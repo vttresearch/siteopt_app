@@ -1,0 +1,15 @@
+{
+    "name": "hp units conversion",
+    "tooltype": "julia",
+    "includes": [
+        "conv_hp_units_dir.jl",
+        "db.jl",
+        "common.jl"
+    ],
+    "description": "",
+    "inputfiles": [],
+    "inputfiles_opt": [],
+    "outputfiles": [],
+    "cmdline_args": [],
+    "includes_main_path": "../../../code"
+}

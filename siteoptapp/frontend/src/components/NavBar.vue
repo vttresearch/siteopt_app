@@ -1,4 +1,9 @@
 <script setup>
+import { ENABLE_AI_ASSISTANT } from "@/config.js";
+
+function openAssistant() {
+  window.dispatchEvent(new CustomEvent("open-copilot-chat"));
+}
 </script>
 
 <template>
@@ -18,6 +23,14 @@
                   >Home</RouterLink>
                 <RouterLink to="/about/" class="text-white hover:bg-blue-900 hover:text-white rounded-md px-3 py-2" :class="{ 'bg-indigo-500': $route.path === '/about/' }"
                   >About</RouterLink>
+                <button
+                  v-if="ENABLE_AI_ASSISTANT"
+                  type="button"
+                  class="text-white hover:bg-blue-900 hover:text-white rounded-md px-3 py-2"
+                  @click="openAssistant"
+                >
+                  Assistant
+                </button>
               </div>
             </div>
           </div>

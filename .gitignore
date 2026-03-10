@@ -1,5 +1,8 @@
 .idea
 .venv*/
+.copilot-cli/
+.copilot-docker/
+.julia_depot/
 db.sqlite3
 *.pyc
 *.sqlite
@@ -7,7 +10,10 @@ __pycache__/
 staticfiles
 build
 dist
+logs/
 work
+work_container/
 _config
+siteopt_data.worktrees/
 test_spinetoolbox_project/results.csv
 test_spinetoolbox_project/.spinetoolbox/items/python_tool/output

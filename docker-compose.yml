@@ -8,8 +8,13 @@ services:
     working_dir: /app
     environment:
       DJANGO_DEBUG: "True"
+      ENABLE_AI_ASSISTANT: "True"
       PYTHONUNBUFFERED: "1"
       RUNNING_IN_CONTAINER: "True"
+      WORK_ROOT: /app/work_container
+      CONFIG_ROOT: /app/work_container/_config
+      AI_ASSISTANT_CONTEXT_DIR: /app/work_container
+      AI_ASSISTANT_OLLAMA_REQUEST_TIMEOUT: "1800"
       # Julia threading control
       JULIA_NUM_THREADS: "4"
       OPENBLAS_NUM_THREADS: "1"
