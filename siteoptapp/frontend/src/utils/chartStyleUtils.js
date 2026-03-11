@@ -1,26 +1,68 @@
 export const CHART_STYLE_THEME = {
     legendFontSize: 12,
-    axisLabelFontSize: 14,
+    axisLabelFontSize: 13,
     axisNameFontSize: 12,
     titleFontSize: 16,
   
-    horizontalLabelWidth: 220,
+    horizontalLabelWidth: 130,
     verticalLabelWidth: 120,
   
+    horizontalBaseHeight: 420,
+    horizontalRowHeight: 28,
     horizontalGrid: {
-      left: 210,
-      right: 20,
+      left: "0%",
+      right: "4%",
       top: 56,
-      bottom: 56,
+      bottom: 72,
       containLabel: true
     },
   
     verticalGrid: {
-      left: 56,
-      right: 20,
+      left: 0,
+      right: 24,
       top: 56,
-      bottom: 110,
+      bottom: 120,
       containLabel: true
+    }
+  }
+  
+  export const DASHBOARD_STYLE_THEME = {
+    emptyStateClass:
+      "flex items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500",
+    sectionCardClass:
+      "rounded-xl border border-gray-200 bg-white shadow-sm",
+    controlClass:
+      "w-full sm:w-56 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200",
+    loadingCardClass:
+      "rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm",
+    pageEmptyClass:
+      "rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-500",
+    tableWrapperStyle: {
+      minHeight: "240px",
+      height: "100%"
+    }
+  }
+  
+  export function getDashboardEmptyStateClass(extra = "") {
+    return `${DASHBOARD_STYLE_THEME.emptyStateClass}${extra ? ` ${extra}` : ""}`
+  }
+  
+  export function getDashboardControlClass(extra = "") {
+    return `${DASHBOARD_STYLE_THEME.controlClass}${extra ? ` ${extra}` : ""}`
+  }
+  
+  export function getDashboardLoadingCardClass(extra = "") {
+    return `${DASHBOARD_STYLE_THEME.loadingCardClass}${extra ? ` ${extra}` : ""}`
+  }
+  
+  export function getDashboardPageEmptyClass(extra = "") {
+    return `${DASHBOARD_STYLE_THEME.pageEmptyClass}${extra ? ` ${extra}` : ""}`
+  }
+  
+  export function getTableWrapperStyle(overrides = {}) {
+    return {
+      ...DASHBOARD_STYLE_THEME.tableWrapperStyle,
+      ...overrides
     }
   }
   
@@ -48,15 +90,50 @@ export const CHART_STYLE_THEME = {
     return output
   }
   
-  function getCategoryCount(option = {}, isHorizontal = false) {
+  function getCategoryData(option = {}, isHorizontal = false) {
     const categories = isHorizontal
       ? option?.yAxis?.data || []
       : option?.xAxis?.data || []
   
-    return Array.isArray(categories) ? categories.length : 0
+    return Array.isArray(categories) ? categories : []
   }
   
-  function wrapAxisLabel(value, maxLineLength = 14) {
+  function getCategoryCount(option = {}, isHorizontal = false) {
+    return getCategoryData(option, isHorizontal).length
+  }
+  
+  function getLongestCategoryLength(option = {}, isHorizontal = false) {
+    const categories = getCategoryData(option, isHorizontal)
+    if (!categories.length) return 0
+  
+    return categories.reduce((max, value) => {
+      const len = String(value ?? "").trim().length
+      return Math.max(max, len)
+    }, 0)
+  }
+  
+  function formatCompactNumber(value) {
+    const num = Number(value)
+    if (!Number.isFinite(num)) return value
+  
+    const abs = Math.abs(num)
+  
+    if (abs >= 1_000_000_000) {
+      return `${(num / 1_000_000_000).toFixed(abs >= 10_000_000_000 ? 0 : 1)}B`
+    }
+  
+    if (abs >= 1_000_000) {
+      return `${(num / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`
+    }
+  
+    if (abs >= 1_000) {
+      return `${(num / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`
+    }
+  
+    return `${num}`
+  }
+  
+  function wrapAxisLabel(value, maxLineLength = 18, maxLines = 3) {
     const text = String(value ?? "").trim()
     if (!text) return ""
   
@@ -65,6 +142,7 @@ export const CHART_STYLE_THEME = {
     }
   
     const separators = [" ", "_", "-", "/"]
+  
     for (const separator of separators) {
       if (text.includes(separator)) {
         const parts = text.split(separator)
@@ -73,6 +151,7 @@ export const CHART_STYLE_THEME = {
   
         parts.forEach((part, index) => {
           const chunk = index === 0 ? part : `${separator}${part}`
+  
           if ((current + chunk).length <= maxLineLength) {
             current += chunk
           } else {
@@ -83,14 +162,18 @@ export const CHART_STYLE_THEME = {
   
         if (current) lines.push(current)
   
-        return lines.slice(0, 3).join("\n")
+        if (lines.length <= maxLines) {
+          return lines.join("\n")
+        }
+  
+        return `${lines.slice(0, maxLines).join("\n")}`
       }
     }
   
     const lines = []
     for (let i = 0; i < text.length; i += maxLineLength) {
       lines.push(text.slice(i, i + maxLineLength))
-      if (lines.length === 3) break
+      if (lines.length === maxLines) break
     }
   
     return lines.join("\n")
@@ -98,49 +181,51 @@ export const CHART_STYLE_THEME = {
   
   function getHorizontalGrid(option = {}) {
     const count = getCategoryCount(option, true)
-  
-    if (count > 20) {
+    const longest = getLongestCategoryLength(option, true)
+
+    if (longest > 30 || count > 20) {
       return {
-        left: 250,
-        right: 20,
+        left: "3%",
+        right: "4%",
         top: 56,
-        bottom: 56,
+        bottom: 72,
         containLabel: true
       }
     }
-  
-    if (count > 10) {
+
+    if (longest > 18 || count > 10) {
       return {
-        left: 230,
-        right: 20,
+        left: "3%",
+        right: "4%",
         top: 56,
-        bottom: 56,
+        bottom: 72,
         containLabel: true
       }
     }
-  
+
     return { ...CHART_STYLE_THEME.horizontalGrid }
   }
   
   function getVerticalGrid(option = {}) {
     const count = getCategoryCount(option, false)
+    const longest = getLongestCategoryLength(option, false)
   
-    if (count > 20) {
+    if (count > 20 || longest > 18) {
       return {
-        left: 56,
-        right: 20,
+        left: 0,
+        right: 24,
         top: 56,
-        bottom: 150,
+        bottom: 160,
         containLabel: true
       }
     }
   
-    if (count > 10) {
+    if (count > 10 || longest > 12) {
       return {
-        left: 56,
-        right: 20,
+        left: 0,
+        right: 24,
         top: 56,
-        bottom: 130,
+        bottom: 135,
         containLabel: true
       }
     }
@@ -150,21 +235,39 @@ export const CHART_STYLE_THEME = {
   
   function getHorizontalAxisDefaults(option = {}) {
     const count = getCategoryCount(option, true)
+    const longest = getLongestCategoryLength(option, true)
+  
+    let labelWidth = CHART_STYLE_THEME.horizontalLabelWidth
+    let wrapLength = 22
+  
+    if (longest > 30 || count > 20) {
+      labelWidth = 300
+      wrapLength = 24
+    } else if (longest > 18 || count > 10) {
+      labelWidth = 260
+      wrapLength = 22
+    }
   
     return {
       yAxis: {
         axisLabel: {
           interval: 0,
-          width: count > 20 ? 240 : CHART_STYLE_THEME.horizontalLabelWidth,
+          width: labelWidth,
           overflow: "break",
           fontSize: CHART_STYLE_THEME.axisLabelFontSize,
-          lineHeight: 14,
-          formatter: (value) => wrapAxisLabel(value, count > 20 ? 18 : 22)
+          lineHeight: 16,
+          margin: 18,
+          formatter: (value) => wrapAxisLabel(value, wrapLength, 3)
         }
       },
       xAxis: {
         axisLabel: {
-          fontSize: CHART_STYLE_THEME.axisLabelFontSize
+          fontSize: CHART_STYLE_THEME.axisLabelFontSize,
+          hideOverlap: false,
+          formatter: (value) => formatCompactNumber(value)
+        },
+        splitLine: {
+          show: true
         },
         nameTextStyle: {
           fontSize: CHART_STYLE_THEME.axisNameFontSize
@@ -181,11 +284,12 @@ export const CHART_STYLE_THEME = {
         axisLabel: {
           interval: 0,
           rotate: count > 20 ? 50 : count > 10 ? 35 : 20,
-          width: count > 20 ? 90 : CHART_STYLE_THEME.verticalLabelWidth,
+          width: CHART_STYLE_THEME.verticalLabelWidth,
           overflow: "break",
           fontSize: CHART_STYLE_THEME.axisLabelFontSize,
           lineHeight: 14,
-          formatter: (value) => wrapAxisLabel(value, count > 20 ? 10 : 14)
+          formatter: (value) => wrapAxisLabel(value, count > 20 ? 10 : 14, 3),
+          hideOverlap: false
         },
         nameTextStyle: {
           fontSize: CHART_STYLE_THEME.axisNameFontSize
@@ -193,13 +297,30 @@ export const CHART_STYLE_THEME = {
       },
       yAxis: {
         axisLabel: {
-          fontSize: CHART_STYLE_THEME.axisLabelFontSize
+          fontSize: CHART_STYLE_THEME.axisLabelFontSize,
+          hideOverlap: false,
+          formatter: (value) => formatCompactNumber(value)
+        },
+        splitLine: {
+          show: true
         },
         nameTextStyle: {
           fontSize: CHART_STYLE_THEME.axisNameFontSize
         }
       }
     }
+  }
+  
+  export function getAutoChartHeight(option = {}, baseHeight = 400) {
+    const isHorizontal = Boolean(option?.yAxis?.data)
+    if (!isHorizontal) return baseHeight
+  
+    const count = getCategoryCount(option, true)
+    const dynamicHeight =
+      CHART_STYLE_THEME.horizontalBaseHeight +
+      Math.max(0, count - 8) * CHART_STYLE_THEME.horizontalRowHeight
+  
+    return Math.max(baseHeight, dynamicHeight)
   }
   
   export function getSharedChartStyle(option = {}) {
@@ -215,20 +336,17 @@ export const CHART_STYLE_THEME = {
   
     const sharedDefaults = {
       animation: true,
-  
       title: {
         textStyle: {
           fontSize: CHART_STYLE_THEME.titleFontSize,
           fontWeight: 600
         }
       },
-  
       tooltip: {
         confine: true,
         appendToBody: true,
         extraCssText: "max-width: 320px; white-space: normal;"
       },
-  
       legend: {
         type: "scroll",
         bottom: 8,
@@ -238,9 +356,7 @@ export const CHART_STYLE_THEME = {
           fontSize: CHART_STYLE_THEME.legendFontSize
         }
       },
-  
       grid,
-  
       series: Array.isArray(option.series)
         ? option.series.map((seriesItem) => ({
             barMaxWidth: 36,

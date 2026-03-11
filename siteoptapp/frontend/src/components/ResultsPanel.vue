@@ -7,6 +7,11 @@ import { postData, fetchWorkFolderFiles } from "@/utils/functions.js"
 import DashboardPanel from "@/components/DashboardPanel.vue"
 import ResultsTable from "@/components/ResultsTable.vue"
 import ScenarioComparisonPanel from "@/components/ScenarioComparisonPanel.vue"
+import {
+  getDashboardControlClass,
+  getDashboardLoadingCardClass,
+  getDashboardPageEmptyClass
+} from "@/utils/chartStyleUtils.js"
 
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
@@ -21,12 +26,24 @@ const selectedScenario = ref(null)
 const selectedRun = ref(null)
 const resultsFullPath = ref("")
 
+const activeTab = ref("plots")
+
 const activeRoot = computed(() => {
   const i = settingStore.activeProjectIndex ?? 0
   return settingStore.workFolderFiles?.[i] ?? null
 })
 
 const projectName = computed(() => activeRoot.value?.name ?? "")
+
+const controlClass = computed(() => getDashboardControlClass())
+const loadingCardClass = computed(() => getDashboardLoadingCardClass())
+const pageEmptyClass = computed(() => getDashboardPageEmptyClass())
+
+function getTabClass(tabName) {
+  return activeTab.value === tabName
+    ? "px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white shadow-sm"
+    : "px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+}
 
 async function fetchResultsList() {
   if (!projectName.value) return
@@ -165,6 +182,7 @@ watch(
     resultsFullPath.value = ""
     columnDefs.value = []
     rowData.value = []
+    activeTab.value = "plots"
 
     await fetchResultsList()
   }
@@ -215,7 +233,7 @@ watch(selectedRun, async () => {
           </label>
           <select
             v-model="selectedScenario"
-            class="w-full sm:w-56 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            :class="controlClass"
           >
             <option
               v-for="(runs, name) in scenarios"
@@ -233,7 +251,7 @@ watch(selectedRun, async () => {
           </label>
           <select
             v-model="selectedRun"
-            class="w-full sm:w-56 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            :class="controlClass"
           >
             <option
               v-for="run in scenarios[selectedScenario] || []"
@@ -247,22 +265,39 @@ watch(selectedRun, async () => {
       </div>
     </div>
 
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        :class="getTabClass('plots')"
+        @click="activeTab = 'plots'"
+      >
+        Plots
+      </button>
+      <button
+        type="button"
+        :class="getTabClass('table')"
+        @click="activeTab = 'table'"
+      >
+        Results table
+      </button>
+    </div>
+
     <div
       v-if="loadingResults"
-      class="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm"
+      :class="loadingCardClass"
     >
       Loading results...
     </div>
 
     <div
       v-else-if="!Object.keys(scenarios).length"
-      class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-500"
+      :class="pageEmptyClass"
     >
       Run the model to generate result files.
     </div>
 
-    <div v-else class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div class="xl:col-span-8">
+    <div v-else>
+      <div v-if="activeTab === 'plots'">
         <DashboardPanel title="Scenario comparison">
           <ScenarioComparisonPanel
             :data="rowData"
@@ -271,7 +306,7 @@ watch(selectedRun, async () => {
         </DashboardPanel>
       </div>
 
-      <div class="xl:col-span-4">
+      <div v-else>
         <DashboardPanel title="Results table">
           <div class="h-[700px]">
             <ResultsTable

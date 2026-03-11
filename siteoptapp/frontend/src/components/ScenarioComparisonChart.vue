@@ -11,7 +11,10 @@ import {
   ToolboxComponent
 } from "echarts/components"
 import { BarChart } from "echarts/charts"
-import { buildStyledChartOption } from "@/utils/chartStyleUtils.js"
+import {
+  buildStyledChartOption,
+  getAutoChartHeight
+} from "@/utils/chartStyleUtils.js"
 
 use([
   CanvasRenderer,
@@ -48,7 +51,20 @@ const hasOption = computed(() => {
 
 const finalOption = computed(() => {
   if (!hasOption.value) return {}
-  return buildStyledChartOption(props.option, props.styleOverrides)
+
+  const built = buildStyledChartOption(props.option, props.styleOverrides)
+
+  console.log("RAW OPTION:", props.option)
+  console.log("FINAL GRID:", built.grid)
+  console.log("FINAL YAXIS:", built.yAxis)
+  console.log("FINAL XAXIS:", built.xAxis)
+
+  return built
+})
+
+const finalHeight = computed(() => {
+  if (!hasOption.value) return props.height
+  return getAutoChartHeight(finalOption.value, props.height)
 })
 </script>
 
@@ -65,7 +81,7 @@ const finalOption = computed(() => {
     <v-chart
       v-else
       :option="finalOption"
-      :style="{ height: `${height}px`, width: '100%' }"
+      :style="{ height: `${finalHeight}px`, width: '100%' }"
       autoresize
     />
   </div>

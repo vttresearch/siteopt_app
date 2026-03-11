@@ -81,8 +81,15 @@ function applyTopNFilter(chartConfig, topN) {
     return chartConfig
   }
 
-  const getBarValue = (d) => {
+  const getDisplayValue = (d) => {
     if (d == null) return 0
+    if (typeof d === "object" && "value" in d) return Number(d.value) || 0
+    return Number(d) || 0
+  }
+
+  const getActualValue = (d) => {
+    if (d == null) return 0
+    if (typeof d === "object" && "actualValue" in d) return Number(d.actualValue) || 0
     if (typeof d === "object" && "value" in d) return Number(d.value) || 0
     return Number(d) || 0
   }
@@ -92,7 +99,7 @@ function applyTopNFilter(chartConfig, topN) {
     let total = 0
     for (const serie of chartConfig.series || []) {
       if (serie.data?.[catIndex] !== undefined) {
-        total += Math.abs(getBarValue(serie.data[catIndex]))
+        total += Math.abs(getActualValue(serie.data[catIndex]))
       }
     }
     totals[cat] = total
@@ -126,18 +133,25 @@ function applyTopNFilter(chartConfig, topN) {
   })
 
   const newSeries = (chartConfig.series || []).map((serie) => {
-    const newData = new Array(newCategories.length).fill(0)
+    const newData = new Array(newCategories.length).fill(null).map(() => ({
+      value: 0,
+      actualValue: 0
+    }))
 
     ;(serie.data || []).forEach((value, origIndex) => {
       const newIndex = categoryMap[origIndex]
       if (newIndex >= 0) {
-        newData[newIndex] = (newData[newIndex] || 0) + getBarValue(value)
+        newData[newIndex].value += getDisplayValue(value)
+        newData[newIndex].actualValue += getActualValue(value)
       }
     })
 
     return {
       ...serie,
-      data: newData
+      data: newData.map((d) => {
+        if (d.actualValue === 0 && d.value === 0) return 0
+        return d
+      })
     }
   })
 
