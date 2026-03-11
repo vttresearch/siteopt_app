@@ -11,6 +11,7 @@ import {
   ToolboxComponent
 } from "echarts/components"
 import { BarChart } from "echarts/charts"
+import { buildStyledChartOption } from "@/utils/chartStyleUtils.js"
 
 use([
   CanvasRenderer,
@@ -34,11 +35,20 @@ const props = defineProps({
   emptyMessage: {
     type: String,
     default: "No chart data available."
+  },
+  styleOverrides: {
+    type: Object,
+    default: () => ({})
   }
 })
 
 const hasOption = computed(() => {
   return props.option && Object.keys(props.option).length > 0
+})
+
+const finalOption = computed(() => {
+  if (!hasOption.value) return {}
+  return buildStyledChartOption(props.option, props.styleOverrides)
 })
 </script>
 
@@ -54,7 +64,7 @@ const hasOption = computed(() => {
 
     <v-chart
       v-else
-      :option="option"
+      :option="finalOption"
       :style="{ height: `${height}px`, width: '100%' }"
       autoresize
     />

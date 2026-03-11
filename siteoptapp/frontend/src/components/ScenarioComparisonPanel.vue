@@ -7,6 +7,7 @@ import {
   processScenarioComparisonData,
   processCategorySummedData
 } from "@/utils/chartUtils.js"
+import ChartSettingsModal from "@/components/ChartSettingsModal.vue"
 
 const props = defineProps({
   data: {
@@ -350,14 +351,12 @@ function getCategoryChartOption(categoryName) {
   return categoryItemsChartOptions.value[categoryName] || {}
 }
 
-function applyChartSettings() {
+function applyChartSettings(settings) {
   const target = settingsModalTarget.value
   if (!target) {
     closeChartSettings()
     return
   }
-
-  const settings = { ...modalSettings.value }
 
   if (target === "categoryTotals") {
     categoryTotalsSettings.value = settings
@@ -575,6 +574,7 @@ watch(
   },
   { deep: true }
 )
+
 </script>
 
 <template>
@@ -844,10 +844,14 @@ watch(
 
           <div class="p-4 border-t flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-col gap-2">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" v-model="customPlotHideZeroValues" class="rounded" />
-                <span class="text-sm text-gray-700">Hide zero values</span>
-              </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input
+                        v-model="customPlotHideZeroValues"
+                        type="checkbox"
+                        class="rounded"
+                    />
+                    <span class="text-sm text-gray-700">Hide zero values</span>
+                </label>
 
               <div class="flex items-center gap-3">
                 <span class="text-sm text-gray-700">Orientation:</span>
@@ -884,89 +888,12 @@ watch(
         </div>
       </div>
     </Teleport>
+    <ChartSettingsModal
+    :isOpen="settingsModalOpen"
+    :settings="modalSettings"
+    @close="closeChartSettings"
+    @apply="applyChartSettings"
+    />
 
-    <Teleport to="body">
-      <div
-        v-if="settingsModalOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        @click.self="closeChartSettings"
-      >
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
-          <div class="p-4 border-b font-semibold text-gray-800">Plot settings</div>
-
-          <div class="p-4 space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Y-axis scale</label>
-              <select
-                v-model="modalSettings.yAxisScale"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md"
-              >
-                <option value="linear">Linear</option>
-                <option value="log">Logarithmic</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Show top {{ modalSettings.topNValues }} values
-              </label>
-              <input
-                type="range"
-                v-model.number="modalSettings.topNValues"
-                min="1"
-                max="50"
-                class="w-full"
-              />
-              <div class="flex justify-between text-xs text-gray-500 mt-1">
-                <span>1</span>
-                <span>{{ modalSettings.topNValues }}</span>
-                <span>50</span>
-              </div>
-            </div>
-
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="modalSettings.useMinBarHeight" class="rounded" />
-              <span class="text-sm text-gray-700">Show minimum bar height for small values</span>
-            </label>
-
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="modalSettings.hideZeroValues" class="rounded" />
-              <span class="text-sm text-gray-700">Hide zero values</span>
-            </label>
-
-            <div class="flex items-center gap-3">
-              <span class="text-sm font-medium text-gray-700">Orientation</span>
-
-              <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
-                <input type="radio" value="horizontal" v-model="modalSettings.orientation" />
-                <span>Horizontal</span>
-              </label>
-
-              <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
-                <input type="radio" value="vertical" v-model="modalSettings.orientation" />
-                <span>Vertical</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="p-4 border-t flex justify-end gap-2">
-            <button
-              type="button"
-              @click="closeChartSettings"
-              class="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              @click="applyChartSettings"
-              class="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
-            >
-              Apply
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
