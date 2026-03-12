@@ -640,3 +640,39 @@ export function processScenarioComparisonData(
 
   return base
 }
+
+export function normalizeRowsWithScenario(sheetData, scenarioName) {
+  const cols = sheetData?.columns ?? []
+  const rows = sheetData?.rows ?? []
+
+  const normalizedRows = rows.map((row) => ({
+    scenario: scenarioName,
+    ...row
+  }))
+
+  return {
+    columns: ["scenario", ...cols],
+    rows: normalizedRows
+  }
+}
+
+export function mergeScenarioSheets(filesWithData) {
+  if (!filesWithData.length) {
+    return { columns: [], rows: [] }
+  }
+
+  const allColumns = new Set(["scenario"])
+  const allRows = []
+
+  filesWithData.forEach(({ scenario, sheetData }) => {
+    const normalized = normalizeRowsWithScenario(sheetData, scenario)
+
+    normalized.columns.forEach((col) => allColumns.add(col))
+    allRows.push(...normalized.rows)
+  })
+
+  return {
+    columns: Array.from(allColumns),
+    rows: allRows
+  }
+}

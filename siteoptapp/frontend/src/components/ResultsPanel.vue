@@ -2,7 +2,7 @@
 import { computed, onMounted, watch, ref } from "vue"
 import { useSettingStore } from "@/stores/settingstore.js"
 import { useNotificationStore } from "@/stores/notificationstore.js"
-import { postData, fetchWorkFolderFiles } from "@/utils/functions.js"
+import { postData } from "@/utils/functions.js"
 
 import DashboardPanel from "@/components/DashboardPanel.vue"
 import ResultsTable from "@/components/ResultsTable.vue"
@@ -12,7 +12,7 @@ import {
   getDashboardLoadingCardClass,
   getDashboardPageEmptyClass
 } from "@/utils/chartStyleUtils.js"
-
+import { mergeScenarioSheets } from "@/utils/chartUtils.js"
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
 
@@ -21,21 +21,15 @@ const loadingResults = ref(false)
 const columnDefs = ref([])
 const rowData = ref([])
 
-const scenarios = ref({})
-const selectedScenario = ref(null)
+const runs = ref({})
 const selectedRun = ref(null)
-const resultsFullPath = ref("")
+const selectedRunFiles = ref([])
 const resultProjects = ref([])
 const selectedProject = ref(null)
 
 const activeTab = ref("plots")
 
-const activeRoot = computed(() => {
-  const i = settingStore.activeProjectIndex ?? 0
-  return settingStore.workFolderFiles?.[i] ?? null
-})
-
-const projectName = computed(() => activeRoot.value?.name ?? "")
+const projectName = computed(() => selectedProject.value ?? "")
 
 const controlClass = computed(() => getDashboardControlClass())
 const loadingCardClass = computed(() => getDashboardLoadingCardClass())
@@ -57,34 +51,27 @@ async function fetchResultsList() {
   )
 
   if (!r?.success) {
-    scenarios.value = {}
-    selectedScenario.value = null
+    runs.value = {}
     selectedRun.value = null
-    resultsFullPath.value = ""
-    return
-  }
-
-  scenarios.value = r.data || {}
-
-  const firstScenario = Object.keys(scenarios.value)[0]
-
-  if (!firstScenario) {
-    selectedScenario.value = null
-    selectedRun.value = null
-    resultsFullPath.value = ""
+    selectedRunFiles.value = []
     columnDefs.value = []
     rowData.value = []
     return
   }
 
-  selectedScenario.value = firstScenario
+  runs.value = r.data || {}
 
-  const runs = scenarios.value[firstScenario] || []
-  if (runs.length > 0) {
-    selectedRun.value = runs[0]
-    resultsFullPath.value = runs[0].path
-    await openResults()
+  const firstRun = Object.keys(runs.value)[0]
+
+  if (!firstRun) {
+    selectedRun.value = null
+    selectedRunFiles.value = []
+    columnDefs.value = []
+    rowData.value = []
+    return
   }
+
+  selectedRun.value = firstRun
 }
 
 async function fetchProjectsWithResults() {
@@ -130,100 +117,106 @@ function updateTableFromCsv(csvData) {
   rowData.value = rows
 }
 
-function updateTableFromXlsx(sheetData) {
-  const cols = sheetData?.columns ?? []
-  const rows = sheetData?.rows ?? []
-
-  updateTableFromCsv({
-    columns: cols,
-    rows
-  })
-}
-
-async function openResults() {
-  if (!resultsFullPath.value) return
-
-  loadingResults.value = true
-
-  const r = await postData(
-    "fetch_data",
-    { full_path: resultsFullPath.value },
-    notify
-  )
-
-  if (!r?.success) {
-    notify.show("Could not load result file.", 4000, "error")
+async function openResultsForRun() {
+  if (!selectedRunFiles.value?.length) {
     columnDefs.value = []
     rowData.value = []
-    loadingResults.value = false
     return
   }
 
-  const fileType = r.data?.filetype
-  const fileData = r.data?.data
+  loadingResults.value = true
 
-  if (fileType === "csv") {
-    updateTableFromCsv(fileData)
-  } else if (fileType === "xlsx") {
-    const sheets = fileData && typeof fileData === "object" ? fileData : {}
-    const firstSheetName = Object.keys(sheets)[0]
-    const firstSheet = firstSheetName ? sheets[firstSheetName] : null
+  try {
+    const filesWithData = []
 
-    if (firstSheet?.columns?.length) {
-      updateTableFromXlsx(firstSheet)
-    } else {
-      notify.show("results.xlsx has no readable sheet data.", 4000, "error")
+    for (const fileEntry of selectedRunFiles.value) {
+      const r = await postData(
+        "fetch_data",
+        { full_path: fileEntry.path },
+        notify
+      )
+
+      if (!r?.success) {
+        continue
+      }
+
+      const fileType = r.data?.filetype
+      const fileData = r.data?.data
+
+      if (fileType === "xlsx") {
+        const sheets = fileData && typeof fileData === "object" ? fileData : {}
+        const firstSheetName = Object.keys(sheets)[0]
+        const firstSheet = firstSheetName ? sheets[firstSheetName] : null
+
+        if (firstSheet?.columns?.length) {
+          filesWithData.push({
+            scenario: fileEntry.scenario,
+            sheetData: firstSheet
+          })
+        }
+      } else if (fileType === "csv") {
+        filesWithData.push({
+          scenario: fileEntry.scenario,
+          sheetData: fileData
+        })
+      }
+    }
+
+    if (!filesWithData.length) {
+      notify.show("No readable result files found for this run.", 4000, "error")
       columnDefs.value = []
       rowData.value = []
+      return
     }
-  } else {
-    notify.show(`Unsupported results file type: ${fileType}`, 4000, "error")
-    columnDefs.value = []
-    rowData.value = []
-  }
 
-  loadingResults.value = false
+    const merged = mergeScenarioSheets(filesWithData)
+    updateTableFromCsv(merged)
+  } finally {
+    loadingResults.value = false
+  }
 }
 
 onMounted(async () => {
   await fetchProjectsWithResults()
-  await fetchResultsList()
 })
 
 watch(
   () => settingStore.activeProjectIndex,
   async () => {
-    scenarios.value = {}
-    selectedScenario.value = null
+    runs.value = {}
     selectedRun.value = null
-    resultsFullPath.value = ""
+    selectedRunFiles.value = []
     columnDefs.value = []
     rowData.value = []
     activeTab.value = "plots"
 
-    await fetchResultsList()
+    await fetchProjectsWithResults()
   }
 )
 
-watch(selectedScenario, async () => {
-  const runs = scenarios.value[selectedScenario.value] || []
+watch(selectedProject, async () => {
+  runs.value = {}
+  selectedRun.value = null
+  selectedRunFiles.value = []
+  columnDefs.value = []
+  rowData.value = []
+  activeTab.value = "plots"
 
-  if (runs.length > 0) {
-    selectedRun.value = runs[0]
-  } else {
-    selectedRun.value = null
-    resultsFullPath.value = ""
-    columnDefs.value = []
-    rowData.value = []
-  }
+  await fetchResultsList()
 })
 
 watch(selectedRun, async () => {
-  if (!selectedRun.value) return
+  if (!selectedRun.value) {
+    selectedRunFiles.value = []
+    columnDefs.value = []
+    rowData.value = []
+    return
+  }
 
-  resultsFullPath.value = selectedRun.value.path
-  await openResults()
+  selectedRunFiles.value = runs.value[selectedRun.value] || []
+  await openResultsForRun()
 })
+
 </script>
 
 <template>
@@ -247,7 +240,6 @@ watch(selectedRun, async () => {
         <select
           v-model="selectedProject"
           :class="controlClass"
-          @change="fetchResultsList"
         >
           <option
             v-for="p in resultProjects"
@@ -259,27 +251,9 @@ watch(selectedRun, async () => {
         </select>
       </div>
       <div
-        v-if="Object.keys(scenarios).length"
+        v-if="Object.keys(runs).length"
         class="flex flex-col gap-3 sm:flex-row sm:items-end"
       >
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
-            Scenario
-          </label>
-          <select
-            v-model="selectedScenario"
-            :class="controlClass"
-          >
-            <option
-              v-for="(runs, name) in scenarios"
-              :key="name"
-              :value="name"
-            >
-              {{ name }}
-            </option>
-          </select>
-        </div>
-
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">
             Run
@@ -289,11 +263,11 @@ watch(selectedRun, async () => {
             :class="controlClass"
           >
             <option
-              v-for="run in scenarios[selectedScenario] || []"
-              :key="run.run"
-              :value="run"
+              v-for="runName in Object.keys(runs)"
+              :key="runName"
+              :value="runName"
             >
-              {{ run.run }}
+              {{ runName }}
             </option>
           </select>
         </div>
@@ -325,7 +299,7 @@ watch(selectedRun, async () => {
     </div>
 
     <div
-      v-else-if="!Object.keys(scenarios).length"
+      v-else-if="!Object.keys(runs).length"
       :class="pageEmptyClass"
     >
       Run the model to generate result files.
@@ -336,7 +310,9 @@ watch(selectedRun, async () => {
         <DashboardPanel title="Scenario comparison">
           <ScenarioComparisonPanel
             :data="rowData"
-            :fileName="projectName ? `${projectName} – results.xlsx` : 'results.xlsx'"
+            :fileName="selectedProject && selectedRun
+            ? `${selectedProject} – ${selectedRun}`
+            : 'results'"
           />
         </DashboardPanel>
       </div>

@@ -8,6 +8,7 @@ import {
   processCategorySummedData
 } from "@/utils/chartUtils.js"
 import ChartSettingsModal from "@/components/ChartSettingsModal.vue"
+import CustomPlotModal from "@/components/CustomPlotModal.vue"
 
 const props = defineProps({
   data: {
@@ -23,7 +24,6 @@ const props = defineProps({
 const chartHeight = ref(400)
 const showScenarioSumChart = ref(true)
 const selectedCategories = ref([])
-const expandedSummaries = ref([])
 const scenarioStructure = ref(null)
 
 const categoryTotalsOption = ref({})
@@ -178,19 +178,6 @@ function applyTopNFilter(chartConfig, topN) {
 function getItemsForSummary(summary) {
   const items = scenarioStructure.value?.summaryItemMap?.[summary] || []
   return items.map((i) => normalizeString(i))
-}
-
-function isSummaryExpanded(summary) {
-  return expandedSummaries.value.includes(summary)
-}
-
-function toggleSummaryExpanded(summary) {
-  const index = expandedSummaries.value.indexOf(summary)
-  if (index > -1) {
-    expandedSummaries.value.splice(index, 1)
-  } else {
-    expandedSummaries.value.push(summary)
-  }
 }
 
 function isCategorySelected(category) {
@@ -404,55 +391,6 @@ function openCustomPlotModal() {
 
 function closeCustomPlotModal() {
   customPlotModalOpen.value = false
-}
-
-function isCustomItemSelected(item) {
-  const norm = normalizeString(item)
-  return customPlotSelectedItems.value.some((i) => normalizeString(i) === norm)
-}
-
-function toggleCustomItem(item, isChecked) {
-  const norm = normalizeString(item)
-  const list = customPlotSelectedItems.value.map((i) => normalizeString(i))
-
-  if (isChecked) {
-    if (!list.includes(norm)) {
-      customPlotSelectedItems.value = [...list, norm]
-    }
-  } else {
-    customPlotSelectedItems.value = customPlotSelectedItems.value.filter(
-      (i) => normalizeString(i) !== norm
-    )
-  }
-}
-
-function isCustomCategoryFullySelected(summary) {
-  const items = getItemsForSummary(summary)
-  return items.length > 0 && items.every((item) => isCustomItemSelected(item))
-}
-
-function toggleCustomCategoryAll(summary, isChecked) {
-  const items = getItemsForSummary(summary)
-  items.forEach((item) => toggleCustomItem(item, isChecked))
-}
-
-function isCustomScenarioSelected(scenario) {
-  return customPlotSelectedScenarios.value.some(
-    (s) => normalizeString(s) === normalizeString(scenario)
-  )
-}
-
-function toggleCustomScenario(scenario) {
-  const norm = normalizeString(scenario)
-  const list = customPlotSelectedScenarios.value.map((s) => normalizeString(s))
-
-  if (list.includes(norm)) {
-    customPlotSelectedScenarios.value = customPlotSelectedScenarios.value.filter(
-      (s) => normalizeString(s) !== norm
-    )
-  } else {
-    customPlotSelectedScenarios.value = [...customPlotSelectedScenarios.value, scenario]
-  }
 }
 
 function getCustomPlotItemsList() {
@@ -752,156 +690,24 @@ watch(
         </div>
       </div>
     </div>
-
-    <Teleport to="body">
-      <div
-        v-if="customPlotModalOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        @click.self="closeCustomPlotModal"
-      >
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-          <div class="p-4 border-b font-semibold text-gray-800">Define custom plot</div>
-
-          <div class="p-4 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Categories & items
-              </label>
-
-              <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
-                <template v-if="hasSummaries">
-                  <div
-                    v-for="summary in availableSummaries"
-                    :key="summary"
-                    class="mb-1"
-                  >
-                    <button
-                      type="button"
-                      class="w-full flex items-center justify-between text-xs font-medium text-gray-700 hover:text-gray-900 mb-1"
-                      @click="toggleSummaryExpanded(summary)"
-                    >
-                      <span class="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          class="w-3 h-3 rounded border border-gray-400"
-                          :checked="isCustomCategoryFullySelected(summary)"
-                          @change.stop="toggleCustomCategoryAll(summary, $event.target.checked)"
-                        />
-                        <span
-                          class="inline-block transition-transform"
-                          :class="isSummaryExpanded(summary) ? 'rotate-90' : ''"
-                        >
-                          ▶
-                        </span>
-                        <span>{{ summary }}</span>
-                      </span>
-                    </button>
-
-                    <div v-if="isSummaryExpanded(summary)" class="ml-4 space-y-1">
-                      <label
-                        v-for="item in getItemsForSummary(summary)"
-                        :key="item"
-                        class="flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          :checked="isCustomItemSelected(item)"
-                          @change="toggleCustomItem(item, $event.target.checked)"
-                          class="rounded"
-                        />
-                        <span class="text-sm truncate">{{ item }}</span>
-                      </label>
-                    </div>
-                  </div>
-                </template>
-
-                <template v-else>
-                  <label
-                    v-for="item in availableItems"
-                    :key="item"
-                    class="flex items-center gap-2 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="isCustomItemSelected(normalizeString(item))"
-                      @change="toggleCustomItem(normalizeString(item), $event.target.checked)"
-                      class="rounded"
-                    />
-                    <span class="text-sm truncate">{{ item }}</span>
-                  </label>
-                </template>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Scenarios
-              </label>
-
-              <div class="max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
-                <label
-                  v-for="scenario in availableScenarios"
-                  :key="scenario"
-                  class="flex items-center gap-2 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="isCustomScenarioSelected(scenario)"
-                    @change="toggleCustomScenario(scenario)"
-                    class="rounded"
-                  />
-                  <span class="text-sm truncate">{{ scenario }}</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="p-4 border-t flex flex-wrap items-center justify-between gap-4">
-            <div class="flex flex-col gap-2">
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input
-                        v-model="customPlotHideZeroValues"
-                        type="checkbox"
-                        class="rounded"
-                    />
-                    <span class="text-sm text-gray-700">Hide zero values</span>
-                </label>
-
-              <div class="flex items-center gap-3">
-                <span class="text-sm text-gray-700">Orientation:</span>
-
-                <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
-                  <input type="radio" value="horizontal" v-model="customPlotOrientation" />
-                  <span>Horizontal</span>
-                </label>
-
-                <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-700">
-                  <input type="radio" value="vertical" v-model="customPlotOrientation" />
-                  <span>Vertical</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="flex gap-2">
-              <button
-                type="button"
-                @click="closeCustomPlotModal"
-                class="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                @click="applyCustomPlot"
-                class="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
-              >
-                Show plot
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <CustomPlotModal
+      :isOpen="customPlotModalOpen"
+      :availableSummaries="availableSummaries"
+      :availableItems="availableItems"
+      :availableScenarios="availableScenarios"
+      :hasSummaries="hasSummaries"
+      :getItemsForSummary="getItemsForSummary"
+      :selectedItems="customPlotSelectedItems"
+      :selectedScenarios="customPlotSelectedScenarios"
+      :hideZeroValues="customPlotHideZeroValues"
+      :orientation="customPlotOrientation"
+      @close="closeCustomPlotModal"
+      @apply="applyCustomPlot"
+      @update:selectedItems="customPlotSelectedItems = $event"
+      @update:selectedScenarios="customPlotSelectedScenarios = $event"
+      @update:hideZeroValues="customPlotHideZeroValues = $event"
+      @update:orientation="customPlotOrientation = $event"
+    />
     <ChartSettingsModal
     :isOpen="settingsModalOpen"
     :settings="modalSettings"

@@ -66,29 +66,37 @@ def list_results(project_path):
     if not root.exists():
         return {}
 
-    scenarios = {}
+    runs = {}
 
     for scenario_dir in root.iterdir():
         if not scenario_dir.is_dir():
             continue
 
         scenario_name = scenario_dir.name
-        runs = []
 
         for run_dir in scenario_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+
             results_file = run_dir / "results.xlsx"
+            if not results_file.exists():
+                continue
 
-            if results_file.exists():
-                runs.append({
-                    "run": run_dir.name,
-                    "path": str(results_file)
-                })
+            run_name = run_dir.name
 
-        runs.sort(key=lambda r: r["run"], reverse=True)
+            if run_name not in runs:
+                runs[run_name] = []
 
-        scenarios[scenario_name] = runs
+            runs[run_name].append({
+                "scenario": scenario_name,
+                "run": run_name,
+                "path": str(results_file)
+            })
 
-    return scenarios
+    for run_name in runs:
+        runs[run_name].sort(key=lambda x: x["scenario"].lower())
+
+    return dict(sorted(runs.items(), key=lambda x: x[0], reverse=True))
 
 def list_projects_with_results(client_id):
     config = get_client_config(client_id)
