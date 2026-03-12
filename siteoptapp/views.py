@@ -90,6 +90,30 @@ def list_results(project_path):
 
     return scenarios
 
+def list_projects_with_results(client_id):
+    config = get_client_config(client_id)
+    projects = config.get("work_folders", {})
+
+    projects_with_results = []
+
+    for name, path in projects.items():
+        results_root = Path(path) / ".spinetoolbox" / "items" / "extract_results" / "output"
+
+        if not results_root.exists():
+            continue
+
+        # check if any results.xlsx exists
+        has_results = any(results_root.rglob("results.xlsx"))
+
+        if has_results:
+            projects_with_results.append({
+                "name": name,
+                "path": path
+            })
+
+    projects_with_results.sort(key=lambda x: x["name"].lower())
+
+    return projects_with_results
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -299,15 +323,14 @@ def post(request, action):
     elif action == "list_results":
         project_name = data["project_name"]
         config = get_client_config(client_id)
-
         project_path = config["work_folders"].get(project_name)
-
         if not project_path:
             return JsonResponse({"success": False, "error": "Project not found"})
-
         results = list_results(project_path)
-
         return JsonResponse({"success": True, "data": results})
+    elif action == "list_projects_with_results":
+        projects = list_projects_with_results(client_id)
+        return JsonResponse({"success": True, "data": projects})
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})

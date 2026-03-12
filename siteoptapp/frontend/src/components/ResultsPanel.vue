@@ -25,6 +25,8 @@ const scenarios = ref({})
 const selectedScenario = ref(null)
 const selectedRun = ref(null)
 const resultsFullPath = ref("")
+const resultProjects = ref([])
+const selectedProject = ref(null)
 
 const activeTab = ref("plots")
 
@@ -46,11 +48,11 @@ function getTabClass(tabName) {
 }
 
 async function fetchResultsList() {
-  if (!projectName.value) return
+  if (!selectedProject.value) return
 
   const r = await postData(
     "list_results",
-    { project_name: projectName.value },
+    { project_name: selectedProject.value },
     notify
   )
 
@@ -82,6 +84,21 @@ async function fetchResultsList() {
     selectedRun.value = runs[0]
     resultsFullPath.value = runs[0].path
     await openResults()
+  }
+}
+
+async function fetchProjectsWithResults() {
+  const r = await postData("list_projects_with_results", {}, notify)
+
+  if (!r?.success) {
+    resultProjects.value = []
+    return
+  }
+
+  resultProjects.value = r.data || []
+
+  if (resultProjects.value.length > 0) {
+    selectedProject.value = resultProjects.value[0].name
   }
 }
 
@@ -169,7 +186,7 @@ async function openResults() {
 }
 
 onMounted(async () => {
-  await fetchWorkFolderFiles()
+  await fetchProjectsWithResults()
   await fetchResultsList()
 })
 
@@ -210,8 +227,8 @@ watch(selectedRun, async () => {
 </script>
 
 <template>
-  <div v-if="!activeRoot" class="p-4 text-gray-500">
-    Select a project to view results.
+  <div v-if="!resultProjects.length" class="p-4 text-gray-500">
+    No projects with results available.
   </div>
 
   <div v-else class="max-w-[1600px] mx-auto space-y-6">
@@ -222,7 +239,25 @@ watch(selectedRun, async () => {
           Browse model result files and compare scenario outputs.
         </p>
       </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Project
+        </label>
 
+        <select
+          v-model="selectedProject"
+          :class="controlClass"
+          @change="fetchResultsList"
+        >
+          <option
+            v-for="p in resultProjects"
+            :key="p.name"
+            :value="p.name"
+          >
+            {{ p.name }}
+          </option>
+        </select>
+      </div>
       <div
         v-if="Object.keys(scenarios).length"
         class="flex flex-col gap-3 sm:flex-row sm:items-end"

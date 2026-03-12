@@ -678,7 +678,7 @@ watch(
           class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
         >
           <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-gray-800">All items with non-zero values</h4>
+            <h4 class="text-sm font-semibold text-gray-800">Scenario comparison by item</h4>
             <button
               type="button"
               class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
