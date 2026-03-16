@@ -21,10 +21,6 @@ const showMakeProjectPrompt = ref(false)
 const showMakeExampleProjectPrompt = ref(false)
 const showMakeTestProjectPrompt = ref(false)
 
-function setActiveProject(i) {
-  settingStore.activeProjectIndex = i
-}
-
 function validFolderName(name) {
   const folderNameRegex = /^(\/?[a-z0-9A-Z\-]+)+$/  // No special characters allowed
   return folderNameRegex.test(name);
@@ -186,7 +182,7 @@ async function restoreProject(c) {
         variant="secondary"
         class="relative pr-8"
         :class="i === settingStore.activeProjectIndex && 'ring-2 ring-blue-500'"
-        @click="setActiveProject(i)"
+        @click="settingStore.setActiveProjectIndex(i)"
       >
         {{ tree?.name ?? `Project ${i + 1}` }}
         <span

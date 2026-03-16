@@ -742,51 +742,35 @@ def _save_json(fpath: str, data, meta: dict):
 def _save_xlsx(fpath: str, data, meta: dict):
     """
     Expects:
-      data = list of row objects (same as CSV save)
+      data = dictionary containing the whole workbook
       meta = {"sheet": "SheetName", "columns": ["A","B",...]}
     """
     if not fpath.endswith(".xlsx"):
-        return {"success": False, "error": "Not a .xlsx file."}
-
-    sheet_name = meta.get("sheet")
-    columns = meta.get("columns")
-
-    if not sheet_name:
-        return {"success": False, "error": "Missing meta.sheet for xlsx save."}
-    if not isinstance(data, list):
-        return {"success": False, "error": "xlsx save expects a list of row objects."}
-
+        return {"success": False, "error": "Not an .xlsx file."}
+    if not isinstance(data, dict):
+        return {"success": False, "error": "xlsx save expects a dictionary containing sheets and wb data."}
     wb = openpyxl.load_workbook(fpath)
-    if sheet_name not in wb.sheetnames:
-        return {"success": False, "error": f"Sheet not found: {sheet_name}"}
-
-    ws = wb[sheet_name]
-
-    if not columns:
-        columns = []
-        for c in range(1, ws.max_column + 1):
-            v = ws.cell(row=1, column=c).value
-            if v is None:
-                break
-            columns.append(str(v))
-        if not columns:
-            cols_set = set()
-            for row in data:
-                if isinstance(row, dict):
-                    cols_set.update(row.keys())
-            columns = list(cols_set)
-
-    ws.delete_rows(1, ws.max_row)
-
-    for c, col in enumerate(columns, start=1):
-        ws.cell(row=1, column=c, value=col)
-
-    for r_i, row in enumerate(data, start=2):
-        if not isinstance(row, dict):
-            return {"success": False, "error": "Each XLSX row must be an object/dict."}
-        for c_i, col in enumerate(columns, start=1):
-            ws.cell(row=r_i, column=c_i, value=row.get(col, ""))
-
+    # Loop all sheets
+    for sheet_name in data.keys():
+        if sheet_name not in wb.sheetnames:
+            print(f"Sheet {sheet_name} not found in wb {fpath}. Skipping...")
+            continue
+        ws = wb[sheet_name]
+        columns = data[sheet_name]["columns"]
+        rows = data[sheet_name]["rows"]
+        # print(f"Processing sheet {sheet_name}. Columns: {columns}")
+        # print(f"rows:{rows}")
+        ws.delete_rows(1, ws.max_row)
+        # Make header
+        for c, col in enumerate(columns, start=1):
+            ws.cell(row=1, column=c, value=col)
+        # Add rows
+        for r_i, row in enumerate(rows, start=2):
+            if not isinstance(row, dict):
+                return {"success": False, "error": "Each XLSX row must be an object/dict."}
+            for c_i, col in enumerate(columns, start=1):
+                ws.cell(row=r_i, column=c_i, value=row.get(col, ""))
+    # Save workbook
     wb.save(fpath)
     return {"success": True}
 
@@ -803,7 +787,6 @@ def save_file(client_id: str, fpath: str, filetype: str, data, meta: dict):
 
     save_handlers = {
         "md": _save_md,
-        # later:
         "json": _save_json,
         "csv": _save_csv,
         "xlsx": _save_xlsx,

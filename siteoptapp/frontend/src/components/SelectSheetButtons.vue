@@ -1,44 +1,36 @@
 <script setup>
 import { ref, watch } from 'vue';
+import { useSheetStore } from "@/stores/sheetStore.js";
 
-const activeIndex = ref(0)
-const basicClass = ref("align-middle whitespace-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1")
-const activeClass = ref("align-middle whitespace-nowrap text-black bg-white rounded-sm p-1")
-
-const props = defineProps({
-  sheets: Array,
-  activeIndex: Number,
-  activeSheet: String,
-})
+const sheetStore = useSheetStore();
+const sheets = ref({})  // eg. {'scenario': false, objects: false, relationships: false, ... }
+const basicClass = ref("align-middle whitespace-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-sm p-1 mr-1")
+const activeClass = ref("align-middle whitespace-nowrap text-black bg-gray-200 rounded-sm p-1 mr-1")
 
 const emit = defineEmits(['update:activeSheet'])
 
-// Makes sure that the first sheet button is active when data changes
-watch(() => props.activeSheet, (newSheet) => {
-  let i = 0
-  for (const sheet of props.sheets) {
-    if (sheet === newSheet) {
-      activeIndex.value = i
-      return
+/* Collects sheet names and their current dirty status into an object */
+watch(() => sheetStore.sheetDataUpdated, (oldItem, newItem) => {
+  if (oldItem !== newItem) {
+    for (let [sheetName, sheetObj] of Object.entries(sheetStore.sheetsByName)) {
+      sheets.value[sheetName] = sheetObj.dirty
     }
-    i++
   }
 });
 
-function handleClick(sheet, index) {
+function handleClick(sheet) {
   emit('update:activeSheet', sheet)
-  activeIndex.value = index
 }
-
 </script>
 
 <template>
-  <div class="inline-block w-full border-r-1 border-l-1 border-t-1 border-gray-400 rounded">
-    <button v-for="(sheet, index) in sheets"
+  <div class="inline-block w-full border-1 border-gray-400 rounded">
+    <button v-for="(sheet, index) in Object.keys(sheets)"
             :key="index"
-            :class="[activeIndex === index ? activeClass : basicClass]"
-            @click="handleClick(sheet, index)">
+            :class="[sheetStore.activeSheet === sheet ? activeClass : basicClass]"
+            @click="handleClick(sheet)">
       {{ sheet }}
+      <span v-if="sheets[sheet]">*</span>
     </button>
   </div>
 </template>
