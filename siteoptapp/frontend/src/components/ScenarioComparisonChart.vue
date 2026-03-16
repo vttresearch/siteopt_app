@@ -26,6 +26,8 @@ use([
   BarChart
 ])
 
+const emit = defineEmits(["close"])
+
 const props = defineProps({
   option: {
     type: Object,
@@ -42,6 +44,10 @@ const props = defineProps({
   styleOverrides: {
     type: Object,
     default: () => ({})
+  },
+  showClose: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -54,11 +60,6 @@ const finalOption = computed(() => {
 
   const built = buildStyledChartOption(props.option, props.styleOverrides)
 
-  console.log("RAW OPTION:", props.option)
-  console.log("FINAL GRID:", built.grid)
-  console.log("FINAL YAXIS:", built.yAxis)
-  console.log("FINAL XAXIS:", built.xAxis)
-
   return built
 })
 
@@ -69,7 +70,7 @@ const finalHeight = computed(() => {
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="w-full relative">
     <div
       v-if="!hasOption"
       class="flex items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-gray-500"
@@ -78,11 +79,21 @@ const finalHeight = computed(() => {
       {{ emptyMessage }}
     </div>
 
-    <v-chart
-      v-else
-      :option="finalOption"
-      :style="{ height: `${finalHeight}px`, width: '100%' }"
-      autoresize
-    />
+    <div v-else class="relative">
+      <!-- Close button -->
+      <button
+        v-if="showClose"
+        @click="$emit('close')"
+        class="absolute top-2 right-2 z-10 rounded-md bg-white/80 hover:bg-white shadow px-2 py-1 text-sm text-gray-600 hover:text-gray-900"
+      >
+        ✕
+      </button>
+
+      <v-chart
+        :option="finalOption"
+        :style="{ height: `${finalHeight}px`, width: '100%' }"
+        autoresize
+      />
+    </div>
   </div>
 </template>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue"
+import { ref, watch } from "vue"
 
 const props = defineProps({
   isOpen: {
@@ -41,6 +41,10 @@ const props = defineProps({
   orientation: {
     type: String,
     default: "vertical"
+  },
+  title: {
+    type: String,
+    default: ""
   }
 })
 
@@ -50,7 +54,8 @@ const emit = defineEmits([
   "update:selectedItems",
   "update:selectedScenarios",
   "update:hideZeroValues",
-  "update:orientation"
+  "update:orientation",
+  "update:title"
 ])
 
 const expandedSummaries = ref([])
@@ -161,109 +166,124 @@ function handleApply() {
           Define custom plot
         </div>
 
-        <div class="p-4 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 overflow-y-auto flex-1 space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
-              Categories & items
+              Plot title
             </label>
+            <input
+              :value="title"
+              type="text"
+              placeholder="Enter custom plot title"
+              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              @input="$emit('update:title', $event.target.value)"
+            />
+          </div>
 
-            <div class="max-h-64 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
-              <template v-if="hasSummaries">
-                <div
-                  v-for="summary in availableSummaries"
-                  :key="summary"
-                  class="mb-1 rounded-md hover:bg-gray-50"
-                >
-                  <div class="flex items-center gap-2 px-1 py-1">
-                    <input
-                      type="checkbox"
-                      class="w-3.5 h-3.5 rounded border border-gray-400"
-                      :checked="isCustomCategoryFullySelected(summary)"
-                      @change="toggleCustomCategoryAll(summary, $event.target.checked)"
-                    />
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Categories & items
+              </label>
 
-                    <button
-                      type="button"
-                      class="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-gray-700 hover:text-gray-900"
-                      @click="toggleSummaryExpanded(summary)"
-                    >
-                      <span
-                        class="inline-flex h-4 w-4 items-center justify-center text-gray-500 transition-transform duration-200"
-                        :class="isSummaryExpanded(summary) ? 'rotate-90 text-gray-700' : ''"
-                      >
-                        <svg
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          class="h-4 w-4"
-                          aria-hidden="true"
-                        >
-                          <path
-                            fill-rule="evenodd"
-                            d="M7.21 14.77a.75.75 0 0 1 .02-1.06L10.94 10 7.23 6.29a.75.75 0 1 1 1.06-1.06l4.24 4.24a.75.75 0 0 1 0 1.06l-4.24 4.24a.75.75 0 0 1-1.08 0Z"
-                            clip-rule="evenodd"
-                          />
-                        </svg>
-                      </span>
-
-                      <span class="truncate">{{ summary }}</span>
-                    </button>
-                  </div>
-
-                  <div v-if="isSummaryExpanded(summary)" class="ml-7 space-y-1 pb-1">
-                    <label
-                      v-for="item in getItemsForSummary(summary)"
-                      :key="item"
-                      class="flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-gray-50"
-                    >
+              <div class="max-h-64 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
+                <template v-if="hasSummaries">
+                  <div
+                    v-for="summary in availableSummaries"
+                    :key="summary"
+                    class="mb-1 rounded-md hover:bg-gray-50"
+                  >
+                    <div class="flex items-center gap-2 px-1 py-1">
                       <input
                         type="checkbox"
-                        :checked="isCustomItemSelected(item)"
-                        @change="toggleCustomItem(item, $event.target.checked)"
-                        class="rounded"
+                        class="w-3.5 h-3.5 rounded border border-gray-400"
+                        :checked="isCustomCategoryFullySelected(summary)"
+                        @change="toggleCustomCategoryAll(summary, $event.target.checked)"
                       />
-                      <span class="text-sm truncate">{{ item }}</span>
-                    </label>
-                  </div>
-                </div>
-              </template>
 
-              <template v-else>
+                      <button
+                        type="button"
+                        class="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-gray-700 hover:text-gray-900"
+                        @click="toggleSummaryExpanded(summary)"
+                      >
+                        <span
+                          class="inline-flex h-4 w-4 items-center justify-center text-gray-500 transition-transform duration-200"
+                          :class="isSummaryExpanded(summary) ? 'rotate-90 text-gray-700' : ''"
+                        >
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            class="h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path
+                              fill-rule="evenodd"
+                              d="M7.21 14.77a.75.75 0 0 1 .02-1.06L10.94 10 7.23 6.29a.75.75 0 1 1 1.06-1.06l4.24 4.24a.75.75 0 0 1 0 1.06l-4.24 4.24a.75.75 0 0 1-1.08 0Z"
+                              clip-rule="evenodd"
+                            />
+                          </svg>
+                        </span>
+
+                        <span class="truncate">{{ summary }}</span>
+                      </button>
+                    </div>
+
+                    <div v-if="isSummaryExpanded(summary)" class="ml-7 space-y-1 pb-1">
+                      <label
+                        v-for="item in getItemsForSummary(summary)"
+                        :key="item"
+                        class="flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="isCustomItemSelected(item)"
+                          @change="toggleCustomItem(item, $event.target.checked)"
+                          class="rounded"
+                        />
+                        <span class="text-sm truncate">{{ item }}</span>
+                      </label>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else>
+                  <label
+                    v-for="item in availableItems"
+                    :key="item"
+                    class="flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="isCustomItemSelected(item)"
+                      @change="toggleCustomItem(item, $event.target.checked)"
+                      class="rounded"
+                    />
+                    <span class="text-sm truncate">{{ item }}</span>
+                  </label>
+                </template>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Scenarios
+              </label>
+
+              <div class="max-h-64 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
                 <label
-                  v-for="item in availableItems"
-                  :key="item"
+                  v-for="scenario in availableScenarios"
+                  :key="scenario"
                   class="flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-gray-50"
                 >
                   <input
                     type="checkbox"
-                    :checked="isCustomItemSelected(item)"
-                    @change="toggleCustomItem(item, $event.target.checked)"
+                    :checked="isCustomScenarioSelected(scenario)"
+                    @change="toggleCustomScenario(scenario)"
                     class="rounded"
                   />
-                  <span class="text-sm truncate">{{ item }}</span>
+                  <span class="text-sm truncate">{{ scenario }}</span>
                 </label>
-              </template>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Scenarios
-            </label>
-
-            <div class="max-h-64 overflow-y-auto border border-gray-300 rounded p-2 bg-white space-y-1">
-              <label
-                v-for="scenario in availableScenarios"
-                :key="scenario"
-                class="flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-gray-50"
-              >
-                <input
-                  type="checkbox"
-                  :checked="isCustomScenarioSelected(scenario)"
-                  @change="toggleCustomScenario(scenario)"
-                  class="rounded"
-                />
-                <span class="text-sm truncate">{{ scenario }}</span>
-              </label>
+              </div>
             </div>
           </div>
         </div>

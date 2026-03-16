@@ -22,7 +22,9 @@ const props = defineProps({
 })
 
 const chartHeight = ref(400)
+
 const showScenarioSumChart = ref(true)
+const showDefaultItemsChart = ref(true)
 const selectedCategories = ref([])
 const scenarioStructure = ref(null)
 
@@ -33,10 +35,10 @@ const categoryItemsChartOptions = ref({})
 const customPlotModalOpen = ref(false)
 const customPlotSelectedItems = ref([])
 const customPlotSelectedScenarios = ref([])
-const customPlotChartOption = ref({})
-const showCustomPlot = ref(false)
 const customPlotHideZeroValues = ref(false)
 const customPlotOrientation = ref("vertical")
+const customPlotTitle = ref("")
+const customPlots = ref([])
 
 const DEFAULT_CHART_SETTINGS = () => ({
   yAxisScale: "linear",
@@ -52,7 +54,6 @@ const defaultItemsSettings = ref({
   hideZeroValues: true
 })
 const categoryItemsSettings = ref({})
-const customPlotSettings = ref({ ...DEFAULT_CHART_SETTINGS() })
 
 const settingsModalOpen = ref(false)
 const settingsModalTarget = ref(null)
@@ -65,6 +66,13 @@ const availableSummaries = computed(() => scenarioStructure.value?.summaries || 
 
 function normalizeString(value) {
   return String(value || "").trim()
+}
+
+function makePlotId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 function applyTopNFilter(chartConfig, topN) {
@@ -204,7 +212,11 @@ function getSettingsForTarget(target) {
   if (!target) return DEFAULT_CHART_SETTINGS()
   if (target === "categoryTotals") return { ...categoryTotalsSettings.value }
   if (target === "defaultItems") return { ...defaultItemsSettings.value }
-  if (target === "customPlot") return { ...customPlotSettings.value }
+
+  if (target?.type === "customPlot" && target.id) {
+    const plot = customPlots.value.find((p) => p.id === target.id)
+    return plot ? { ...plot.settings } : DEFAULT_CHART_SETTINGS()
+  }
 
   if (target?.type === "categoryItems" && target.categoryName) {
     return categoryItemsSettings.value[target.categoryName]
@@ -352,6 +364,36 @@ function getCategoryChartOption(categoryName) {
   return categoryItemsChartOptions.value[categoryName] || {}
 }
 
+function buildCustomPlotOption(plotLike) {
+  if (!scenarioStructure.value) return {}
+
+  const chartType =
+    plotLike.settings.orientation === "vertical" ? "groupedBar" : "horizontalBar"
+
+  const config = processScenarioComparisonData(
+    props.data,
+    scenarioStructure.value,
+    plotLike.items,
+    plotLike.scenarios,
+    chartType,
+    false,
+    [],
+    plotLike.settings.yAxisScale,
+    plotLike.settings.useMinBarHeight,
+    plotLike.settings.hideZeroValues
+  )
+
+  if (!config) return {}
+
+  config.title = {
+    text: plotLike.title,
+    left: "center",
+    textStyle: { fontSize: CHART_THEME.titleFontSize }
+  }
+
+  return applyTopNFilter(config, plotLike.settings.topNValues)
+}
+
 function applyChartSettings(settings) {
   const target = settingsModalTarget.value
   if (!target) {
@@ -365,10 +407,20 @@ function applyChartSettings(settings) {
   } else if (target === "defaultItems") {
     defaultItemsSettings.value = settings
     updateCategoryTotalsChart()
-  } else if (target === "customPlot") {
-    customPlotSettings.value = settings
-    customPlotHideZeroValues.value = settings.hideZeroValues
-    rebuildCustomPlot()
+  } else if (target?.type === "customPlot" && target.id) {
+    customPlots.value = customPlots.value.map((plot) => {
+      if (plot.id !== target.id) return plot
+
+      const updatedPlot = {
+        ...plot,
+        settings: { ...settings }
+      }
+
+      return {
+        ...updatedPlot,
+        option: buildCustomPlotOption(updatedPlot)
+      }
+    })
   } else if (target?.type === "categoryItems" && target.categoryName) {
     categoryItemsSettings.value = {
       ...categoryItemsSettings.value,
@@ -385,7 +437,9 @@ function openCustomPlotModal() {
   customPlotSelectedScenarios.value = availableScenarios.value.map((s) =>
     normalizeString(s)
   )
+  customPlotHideZeroValues.value = false
   customPlotOrientation.value = "vertical"
+  customPlotTitle.value = ""
   customPlotModalOpen.value = true
 }
 
@@ -400,80 +454,59 @@ function getCustomPlotItemsList() {
 function applyCustomPlot() {
   const items = getCustomPlotItemsList()
   const scenarios = customPlotSelectedScenarios.value.map((s) => normalizeString(s))
+  const title = customPlotTitle.value.trim() || `Custom plot ${customPlots.value.length + 1}`
 
   if (!items.length || !scenarios.length) {
     closeCustomPlotModal()
     return
   }
 
-  customPlotSettings.value.hideZeroValues = customPlotHideZeroValues.value
-  const chartType =
-    customPlotOrientation.value === "vertical" ? "groupedBar" : "horizontalBar"
+  const settings = {
+    ...DEFAULT_CHART_SETTINGS(),
+    hideZeroValues: customPlotHideZeroValues.value,
+    orientation: customPlotOrientation.value
+  }
 
-  const settings = customPlotSettings.value
-  const config = processScenarioComparisonData(
-    props.data,
-    scenarioStructure.value,
+  const plotDraft = {
+    id: makePlotId(),
+    title,
     items,
     scenarios,
-    chartType,
-    false,
-    [],
-    settings.yAxisScale,
-    settings.useMinBarHeight,
-    settings.hideZeroValues
+    settings
+  }
+
+  const option = buildCustomPlotOption(plotDraft)
+  if (!Object.keys(option).length) {
+    closeCustomPlotModal()
+    return
+  }
+
+  const existingIndex = customPlots.value.findIndex(
+    (plot) => normalizeString(plot.title) === normalizeString(title)
   )
 
-  if (config) {
-    config.title = {
-      text: `Custom plot: ${props.fileName}`,
-      left: "center",
-      textStyle: { fontSize: CHART_THEME.titleFontSize }
+  if (existingIndex >= 0) {
+    const existing = customPlots.value[existingIndex]
+    customPlots.value[existingIndex] = {
+      ...existing,
+      title,
+      items,
+      scenarios,
+      settings,
+      option
     }
-    customPlotChartOption.value = applyTopNFilter(config, settings.topNValues)
-    showCustomPlot.value = true
+  } else {
+    customPlots.value.push({
+      ...plotDraft,
+      option
+    })
   }
 
   closeCustomPlotModal()
 }
 
-function rebuildCustomPlot() {
-  if (!showCustomPlot.value || !scenarioStructure.value) return
-
-  const items = getCustomPlotItemsList()
-  const scenarios = customPlotSelectedScenarios.value.map((s) => normalizeString(s))
-  if (!items.length || !scenarios.length) return
-
-  const chartType =
-    customPlotOrientation.value === "vertical" ? "groupedBar" : "horizontalBar"
-
-  const settings = customPlotSettings.value
-  const config = processScenarioComparisonData(
-    props.data,
-    scenarioStructure.value,
-    items,
-    scenarios,
-    chartType,
-    false,
-    [],
-    settings.yAxisScale,
-    settings.useMinBarHeight,
-    settings.hideZeroValues
-  )
-
-  if (config) {
-    config.title = {
-      text: `Custom plot: ${props.fileName}`,
-      left: "center",
-      textStyle: { fontSize: CHART_THEME.titleFontSize }
-    }
-    customPlotChartOption.value = applyTopNFilter(config, settings.topNValues)
-  }
-}
-
-function closeCustomPlot() {
-  showCustomPlot.value = false
-  customPlotChartOption.value = {}
+function closeCustomPlot(plotId) {
+  customPlots.value = customPlots.value.filter((plot) => plot.id !== plotId)
 }
 
 function initializeChart() {
@@ -482,6 +515,10 @@ function initializeChart() {
     categoryTotalsOption.value = {}
     defaultItemsOption.value = {}
     categoryItemsChartOptions.value = {}
+    customPlots.value = customPlots.value.map((plot) => ({
+      ...plot,
+      option: {}
+    }))
     return
   }
 
@@ -493,6 +530,10 @@ function initializeChart() {
     categoryTotalsOption.value = {}
     defaultItemsOption.value = {}
     categoryItemsChartOptions.value = {}
+    customPlots.value = customPlots.value.map((plot) => ({
+      ...plot,
+      option: {}
+    }))
     return
   }
 
@@ -507,6 +548,11 @@ function initializeChart() {
   selectedCategories.value.forEach((category) => {
     updateCategoryItemsChartFor(category)
   })
+
+  customPlots.value = customPlots.value.map((plot) => ({
+    ...plot,
+    option: buildCustomPlotOption(plot)
+  }))
 }
 
 watch(
@@ -526,7 +572,6 @@ watch(
   },
   { deep: true }
 )
-
 </script>
 
 <template>
@@ -552,6 +597,20 @@ watch(
             >
               <span class="text-lg leading-none">📊</span>
               <span>Scenario sum plot</span>
+            </button>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
+              :class="showDefaultItemsChart
+                ? 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100'
+                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
+              @click="showDefaultItemsChart = !showDefaultItemsChart"
+            >
+              <span class="text-lg leading-none">📋</span>
+              <span>Scenario comparison by item</span>
             </button>
           </div>
 
@@ -592,16 +651,28 @@ watch(
       </aside>
 
       <div class="flex-1 min-w-0 overflow-auto pr-1">
-        <div v-if="showScenarioSumChart" class="rounded-lg border border-gray-200 bg-white p-3 mb-4">
+        <div
+          v-if="showScenarioSumChart"
+          class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
+        >
           <div class="flex items-center justify-between mb-3">
             <h4 class="text-sm font-semibold text-gray-800">Category totals</h4>
-            <button
-              type="button"
-              class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-              @click="openChartSettings('categoryTotals')"
-            >
-              Settings
-            </button>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                @click="openChartSettings('categoryTotals')"
+              >
+                Settings
+              </button>
+              <button
+                type="button"
+                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                @click="showScenarioSumChart = false"
+              >
+                Close
+              </button>
+            </div>
           </div>
 
           <ScenarioComparisonChart
@@ -612,18 +683,29 @@ watch(
         </div>
 
         <div
-          v-if="defaultItemsOption && Object.keys(defaultItemsOption).length"
+          v-if="showDefaultItemsChart && defaultItemsOption && Object.keys(defaultItemsOption).length"
           class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
         >
           <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-gray-800">Scenario comparison by item</h4>
-            <button
-              type="button"
-              class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-              @click="openChartSettings('defaultItems')"
-            >
-              Settings
-            </button>
+            <h4 class="text-sm font-semibold text-gray-800">
+              Scenario comparison by item
+            </h4>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                @click="openChartSettings('defaultItems')"
+              >
+                Settings
+              </button>
+              <button
+                type="button"
+                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                @click="showDefaultItemsChart = false"
+              >
+                Close
+              </button>
+            </div>
           </div>
 
           <ScenarioComparisonChart
@@ -642,13 +724,22 @@ watch(
             <h4 class="text-sm font-semibold text-gray-800">
               Items in "{{ category }}"
             </h4>
-            <button
-              type="button"
-              class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-              @click="openChartSettings({ type: 'categoryItems', categoryName: category })"
-            >
-              Settings
-            </button>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                @click="openChartSettings({ type: 'categoryItems', categoryName: category })"
+              >
+                Settings
+              </button>
+              <button
+                type="button"
+                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                @click="toggleCategory(category)"
+              >
+                Close
+              </button>
+            </div>
           </div>
 
           <ScenarioComparisonChart
@@ -659,23 +750,26 @@ watch(
         </div>
 
         <div
-          v-if="showCustomPlot && customPlotChartOption && Object.keys(customPlotChartOption).length"
+          v-for="plot in customPlots"
+          :key="plot.id"
           class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
         >
           <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-gray-800">Custom plot</h4>
+            <h4 class="text-sm font-semibold text-gray-800">
+              {{ plot.title }}
+            </h4>
             <div class="flex gap-2">
               <button
                 type="button"
                 class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                @click="openChartSettings('customPlot')"
+                @click="openChartSettings({ type: 'customPlot', id: plot.id })"
               >
                 Settings
               </button>
               <button
                 type="button"
                 class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                @click="closeCustomPlot"
+                @click="closeCustomPlot(plot.id)"
               >
                 Close
               </button>
@@ -683,13 +777,14 @@ watch(
           </div>
 
           <ScenarioComparisonChart
-            :option="customPlotChartOption"
+            :option="plot.option"
             :height="chartHeight"
             empty-message="No custom plot data available."
           />
         </div>
       </div>
     </div>
+
     <CustomPlotModal
       :isOpen="customPlotModalOpen"
       :availableSummaries="availableSummaries"
@@ -701,19 +796,21 @@ watch(
       :selectedScenarios="customPlotSelectedScenarios"
       :hideZeroValues="customPlotHideZeroValues"
       :orientation="customPlotOrientation"
+      :title="customPlotTitle"
       @close="closeCustomPlotModal"
       @apply="applyCustomPlot"
       @update:selectedItems="customPlotSelectedItems = $event"
       @update:selectedScenarios="customPlotSelectedScenarios = $event"
       @update:hideZeroValues="customPlotHideZeroValues = $event"
       @update:orientation="customPlotOrientation = $event"
-    />
-    <ChartSettingsModal
-    :isOpen="settingsModalOpen"
-    :settings="modalSettings"
-    @close="closeChartSettings"
-    @apply="applyChartSettings"
+      @update:title="customPlotTitle = $event"
     />
 
+    <ChartSettingsModal
+      :isOpen="settingsModalOpen"
+      :settings="modalSettings"
+      @close="closeChartSettings"
+      @apply="applyChartSettings"
+    />
   </div>
 </template>

@@ -13,24 +13,18 @@ import {
   getDashboardPageEmptyClass
 } from "@/utils/chartStyleUtils.js"
 import { mergeScenarioSheets } from "@/utils/chartUtils.js"
+
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
-
 const loadingResults = ref(false)
-
 const columnDefs = ref([])
 const rowData = ref([])
-
 const runs = ref({})
 const selectedRun = ref(null)
 const selectedRunFiles = ref([])
 const resultProjects = ref([])
 const selectedProject = ref(null)
-
 const activeTab = ref("plots")
-
-const projectName = computed(() => selectedProject.value ?? "")
-
 const controlClass = computed(() => getDashboardControlClass())
 const loadingCardClass = computed(() => getDashboardLoadingCardClass())
 const pageEmptyClass = computed(() => getDashboardPageEmptyClass())
