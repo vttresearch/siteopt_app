@@ -90,9 +90,10 @@ async function postMakeWorkFolder(pathKey, projectName) {
   }
   await fetchSettings();
   await fetchWorkFolderFiles();
-  notify.show(`New project ${projectName} created`, 2000, "info")
-  const index = Object.keys(settingStore.workFolders).indexOf(projectName);
-  settingStore.setActiveProjectIndex(index-1)
+  notify.show(`New project ${workFolderName.value} created`, 2000, "info")
+  const index = Object.keys(settingStore.workFolders).indexOf(workFolderName.value);
+  settingStore.setActiveProjectIndex(index >= 0 ? index : 0)
+  workFolderName.value = ""
   clearCreating()
 }
 

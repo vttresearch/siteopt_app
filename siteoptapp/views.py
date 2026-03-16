@@ -60,6 +60,68 @@ def get_client_work_root(client_id: str) -> str:
     """
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
 
+def list_results(project_path):
+    root = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output"
+
+    if not root.exists():
+        return {}
+
+    runs = {}
+
+    for scenario_dir in root.iterdir():
+        if not scenario_dir.is_dir():
+            continue
+
+        scenario_name = scenario_dir.name
+
+        for run_dir in scenario_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+
+            results_file = run_dir / "results.xlsx"
+            if not results_file.exists():
+                continue
+
+            run_name = run_dir.name
+
+            if run_name not in runs:
+                runs[run_name] = []
+
+            runs[run_name].append({
+                "scenario": scenario_name,
+                "run": run_name,
+                "path": str(results_file)
+            })
+
+    for run_name in runs:
+        runs[run_name].sort(key=lambda x: x["scenario"].lower())
+
+    return dict(sorted(runs.items(), key=lambda x: x[0], reverse=True))
+
+def list_projects_with_results(client_id):
+    config = get_client_config(client_id)
+    projects = config.get("work_folders", {})
+
+    projects_with_results = []
+
+    for name, path in projects.items():
+        results_root = Path(path) / ".spinetoolbox" / "items" / "extract_results" / "output"
+
+        if not results_root.exists():
+            continue
+
+        # check if any results.xlsx exists
+        has_results = any(results_root.rglob("results.xlsx"))
+
+        if has_results:
+            projects_with_results.append({
+                "name": name,
+                "path": path
+            })
+
+    projects_with_results.sort(key=lambda x: x["name"].lower())
+
+    return projects_with_results
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -266,6 +328,17 @@ def post(request, action):
         print(f"Removing scenario {data['scenario_name']}")
         response = remove_scenario(client_id, data["scenario_name"], data["work_folder"])
         return response
+    elif action == "list_results":
+        project_name = data["project_name"]
+        config = get_client_config(client_id)
+        project_path = config["work_folders"].get(project_name)
+        if not project_path:
+            return JsonResponse({"success": False, "error": "Project not found"})
+        results = list_results(project_path)
+        return JsonResponse({"success": True, "data": results})
+    elif action == "list_projects_with_results":
+        projects = list_projects_with_results(client_id)
+        return JsonResponse({"success": True, "data": projects})
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
