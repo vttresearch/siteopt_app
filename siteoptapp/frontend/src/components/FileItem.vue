@@ -31,6 +31,7 @@ async function fetchFileContents(fname) {
   store.toggleLoading()
   const response = await postData("fetch_data", {full_path: full_path}, notify)
   if (!response.success) {
+    store.toggleLoading()
     return
   }
   store.addData(fname, full_path, response.data)

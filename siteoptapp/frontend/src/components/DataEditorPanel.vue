@@ -1,39 +1,63 @@
 <script setup>
-import { ref, watch, computed, nextTick } from "vue";
+import { ref, watch, computed, nextTick, shallowRef, toRaw } from "vue";
 import { AgGridVue } from "ag-grid-vue3";
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
-import { useTableDataStore } from "@/stores/filedatastore.js";
 import Spinner from "@/components/Spinner.vue";
-import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postData } from "@/utils/functions.js";
-import { useSettingStore } from "@/stores/settingstore.js";
 import TimeSeriesChart from "@/components/TimeSeriesChart.vue";
 import { detectTimeSeriesStructure } from "@/utils/chartUtils.js";
+import { useTableDataStore } from "@/stores/filedatastore.js";
+import { useNotificationStore } from "@/stores/notificationstore.js";
+import { useSettingStore } from "@/stores/settingstore.js";
+import { useSheetStore } from '@/stores/sheetStore';
+import { postData } from "@/utils/functions.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
 const settingStore = useSettingStore();
+const sheetStore = useSheetStore();
 
 const sheetNames = ref([]);
-const selectedSheet = ref("");
 const fileData = ref({});
 const rowData = ref([]);
 const columnDefs = ref([]);
 const mdText = ref("");
 const jsonEditText = ref("");
-const gridApi = ref(null);
-
+const originalText = ref("");
+const gridApi = shallowRef(null);
 const saving = ref(false);
 const mdDirty = ref(false);
 const csvDirty = ref(false);
 const jsonDirty = ref(false);
-const xlsxDirtyBySheet = ref({});
-
+const xlsxDirty = ref(false);
 const activeView = ref("editor"); // "editor" | "plot"
+const selectedCount = ref(0)
+const rowSelectionOptions = {
+  mode: "multiRow",
+  enableSelectionWithoutKeys: false,
+  enableClickSelection: false,
+}
 
-const currentXlsxDirty = computed(() => !!xlsxDirtyBySheet.value[selectedSheet.value]);
-
+const hasSelection = computed(() => selectedCount.value > 0);
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
+
+function markDirty() {
+  // .md editor does not use grid, so it's ignored here
+  const t = data_store.daata?.filetype
+  if (t === 'csv') csvDirty.value = true
+  else if (t === 'json') jsonDirty.value = true
+  else if (t === 'xlsx') markXlsxDirty();
+}
+function markXlsxDirty() {
+  sheetStore.markDirty(sheetStore.activeSheet, true)
+  sheetStore.toggleSheetDataUpdated()
+  xlsxDirty.value = true
+}
+
+function clearXlsxDirty(sheet) {
+  Object.keys(sheetStore.sheetsByName).forEach((key) => sheetStore.markDirty(key, false))
+  sheetStore.toggleSheetDataUpdated()
+  xlsxDirty.value = false
+}
 
 const isTimeSeriesData = computed(() => {
   const structure = detectTimeSeriesStructure(plotRows.value);
@@ -41,62 +65,131 @@ const isTimeSeriesData = computed(() => {
 });
 
 function onGridReady(params) {
-  gridApi.value = params.api;
+  gridApi.value = params.api
+
+  // Update selection count reactively
+  params.api.addEventListener('selectionChanged', () => {
+    selectedCount.value = params.api.getSelectedRows().length
+  })
+  // keyboard shortcuts for adding & removing rows
+  params.api.addEventListener('cellKeyDown', (e) => {
+    // Ctrl+Enter → add row
+    if (e.event?.ctrlKey && e.event?.key === 'Enter') {
+      onAddRow()
+    }
+    // Delete key → delete selected
+    if (e.event?.key === 'Delete') {
+      onDeleteSelected()
+    }
+  })
 }
 
 function onCellValueChanged() {
-  const ft = data_store.daata?.filetype;
-  if (ft === "csv") csvDirty.value = true;
-  if (ft === "xlsx") markXlsxDirty();
+  markDirty()
 }
 
 function clearRefs() {
   sheetNames.value = [];
-  selectedSheet.value = "";
   fileData.value = {};
   rowData.value = [];
   columnDefs.value = [];
   mdText.value = "";
   jsonEditText.value = "";
+  originalText.value = "";
   mdDirty.value = false;
   csvDirty.value = false;
   jsonDirty.value = false;
-  xlsxDirtyBySheet.value = {};
   activeView.value = "editor";
+  // Clear these manually because data_store.clear() causes a circular watcher loop because it clears data_store.daata
+  data_store.fname = ""
+  data_store.fpath = ""
+  data_store.dirty = false
 }
 
-function markXlsxDirty() {
-  const s = selectedSheet.value;
-  if (!s) return;
-  xlsxDirtyBySheet.value = { ...xlsxDirtyBySheet.value, [s]: true };
+// --- Add row ---
+function createBlankRow(newIndex) {
+  // Build a blank object that contains all data fields from columnDefs
+  const row = {__id: String(newIndex)}
+  return row
 }
 
-function clearXlsxDirty(sheet) {
-  xlsxDirtyBySheet.value = { ...xlsxDirtyBySheet.value, [sheet]: false };
+// Rebuilds rowData from currently displayed rows
+function syncRowDataFromGrid() {
+  const api = gridApi.value
+  const count = api.getDisplayedRowCount()
+  const rows = []
+  for (let i = 0; i < count; i++) {
+    rows.push(api.getDisplayedRowAtIndex(i).data)
+  }
+  rowData.value = rows
 }
 
-function updateTableFromExcel() {
-  const sheetObj = fileData.value?.[selectedSheet.value] ?? {};
-  const cols = sheetObj.columns ?? [];
-  const rows = sheetObj.rows ?? [];
-  const validationsByColumn = sheetObj.validationsByColumn ?? {};
+/* Adds a new row */
+function onAddRow() {
+  const api = gridApi.value
+  if (!api) return
+  let newIndexId = api.getDisplayedRowCount()
+  const newRow = createBlankRow(newIndexId)
+  api.applyTransaction({ add: [newRow] })
+  syncRowDataFromGrid()
+  markDirty()
 
+  // One‑time listener for when AG Grid has finished updating DOM
+  const listener = function () {
+    api.removeEventListener('rowDataUpdated', listener)
+    const lastIndex = api.getDisplayedRowCount() - 1
+    if (lastIndex < 0) return
+    api.ensureIndexVisible(lastIndex, 'bottom')
+    const firstEditableField = columnDefs.value.find(
+      c => c.field && c.field !== '__select__' && c.editable !== false
+    )?.field
+    if (firstEditableField) {
+      api.startEditingCell({
+        rowIndex: lastIndex,
+        colKey: firstEditableField
+      })
+    }
+  }
+  api.addEventListener('rowDataUpdated', listener)
+}
+
+/* Deletes selected rows */
+function onDeleteSelected() {
+  if (!gridApi.value) return
+  const selected = gridApi.value.getSelectedRows()
+  if (!selected?.length) return
+  // Remove from grid using a transaction
+  gridApi.value.applyTransaction({ remove: selected })
+  // Keep backing data in sync
+  const rows = []
+  gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+    rows.push(node.data)
+  })
+  rowData.value = rows
+  markDirty()
+}
+
+function updateTableWithActiveSheet() {
+  const sheetObj = sheetStore.sheetsByName[sheetStore.activeSheet] || {}
+  const cols = sheetObj.columns ?? []  // Columns
+  const validationsByColumn = sheetObj.columns?.validationsByColumn || {}
+  let rows = sheetObj.rows || []
+  // Add row numbers
+  rows = rows.map((r, i) => ({ __id: String(i), ...r }))
+  // Build AG Grid columns
   columnDefs.value = [
-    // Row index column
     {
       headerName: "#",
       valueGetter: "node.rowIndex + 1",
-      width: 75,
+      width: 60,
       pinned: "left",
-      cellClass: "bg-gray-50 font-medium text-left",
       editable: false,
+      sortable: false,
+      filter: false,
+      cellClass: "bg-blue-50 font-light text-xs text-left",
     },
-
-    // Data columns
-    ...cols.map((col) => {
-      const validationOptions = validationsByColumn[col];
-
-      // Excel dropdown → AG Grid select editor
+    ...cols.map(col => {
+      const validationOptions = validationsByColumn[col]
       if (Array.isArray(validationOptions) && validationOptions.length > 0) {
         return {
           headerName: col,
@@ -104,40 +197,38 @@ function updateTableFromExcel() {
           minWidth: 120,
           editable: true,
           cellEditor: "agSelectCellEditor",
-          cellEditorParams: {
-            values: validationOptions,
-          },
+          cellEditorParams: { values: validationOptions },
           cellClass: "bg-blue-50 ag-cell-dropdown",
           headerClass: "ag-header-dropdown",
           headerTooltip: "Select from predefined values",
-        };
+        }
       }
-
-      // Normal editable cell
       return {
         headerName: col,
         field: col,
         minWidth: 100,
         editable: true,
-      };
-    }),
-  ];
-
-  rowData.value = rows;
+      }
+    })
+  ]
+  // Update grid's reactive data source
+  rowData.value = rows
 }
 
 function updateTableFromCsv() {
   const cols = fileData.value?.columns ?? [];
-  const rows = fileData.value?.rows ?? [];
-
+  let rows = fileData.value?.rows ?? [];
+  rows = rows.map((r, i) => ({ __id: String(i), ...r }));
   columnDefs.value = [
     {
       headerName: "#",
       valueGetter: "node.rowIndex + 1",
-      width: 75,
+      width: 50,
       pinned: "left",
-      cellClass: "bg-gray-50 font-medium text-left",
       editable: false,
+      sortable: false,
+      filter: false,
+      cellClass: "bg-blue-50 font-light text-xs text-left",
     },
     ...cols.map((col) => ({
       headerName: col,
@@ -146,20 +237,27 @@ function updateTableFromCsv() {
       editable: true,
     })),
   ];
-
   rowData.value = rows;
 }
 
 async function newSheetSelected(sheetName) {
-  selectedSheet.value = sheetName;
-  updateTableFromExcel();
-  await nextTick();
-
-  if (activeView.value === "plot" && !isTimeSeriesData.value) {
-    activeView.value = "editor";
+  const api = gridApi.value
+  const prev = sheetStore.activeSheet
+  // Save current sheet before switching
+  if (prev && api) {
+    sheetStore.captureFromGrid(prev, api)
   }
+  // Switch sheet
+  sheetStore.setActiveSheet(sheetName)
+  // Apply sheet data from store
+  updateTableWithActiveSheet()
+  await nextTick()
+  // Enable editor or plot view
+  if (activeView.value === "plot" && !isTimeSeriesData.value) {
+    activeView.value = "editor"
+  }
+  sheetStore.toggleSheetDataUpdated()
 }
-
 
 function looksLikeExcelDateNumber(n) {
   return typeof n === "number" && n > 20000 && n < 80000;
@@ -172,78 +270,82 @@ function excelSerialToISO(n) {
 
 const plotRows = computed(() => {
   return (rowData.value ?? []).map((r) => {
-    const out = { ...r };
+    // Remove __id (i.e. row number) while copying the rest of the fields
+    const { __id, ...out } = r;
+
     for (const k of Object.keys(out)) {
       const v = out[k];
-      if (looksLikeExcelDateNumber(v)) out[k] = excelSerialToISO(v);
+      if (looksLikeExcelDateNumber(v)) {
+        out[k] = excelSerialToISO(v);
+      }
     }
+
     return out;
   });
 });
 
+/* Clears everything when selected project changes */
+watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
+  if (newVal !== oldVal) {
+    clearRefs()
+  }
+})
 
-watch(
-  () => data_store.daata,
+watch(() => data_store.daata,
   async (newItems) => {
     if (!newItems || Object.keys(newItems).length === 0) {
-      clearRefs();
-      return;
+      clearRefs()
+      return
     }
-
-    const fileType = newItems.filetype;
-    fileData.value = newItems.data;
-
-    mdDirty.value = false;
-    csvDirty.value = false;
-    jsonDirty.value = false;
-
-    if (fileType === "xlsx") {
-      sheetNames.value = Object.keys(fileData.value ?? {});
-      selectedSheet.value = sheetNames.value[0] ?? "";
-
-      const init = {};
-      for (const s of sheetNames.value) init[s] = false;
-      xlsxDirtyBySheet.value = init;
-
-      updateTableFromExcel();
-      await nextTick();
-
-      activeView.value = isTimeSeriesData.value ? "plot" : "editor";
-    } else if (fileType === "csv") {
+    sheetStore.clearAllSheets()  // important!
+    const fileType = newItems.filetype
+    fileData.value = newItems.data
+    if (fileType === 'xlsx') {
+      sheetNames.value = Object.keys(fileData.value || {})
+      sheetStore.setActiveSheet(sheetNames.value[0] || "")  // Select first sheet
+      // Load all sheets into the store
+      for (const s of sheetNames.value) {
+        const raw = fileData.value[s]
+        const rows = Array.isArray(raw) ? raw : (raw?.rows || [])
+        const columns = Array.isArray(raw) ? raw : (raw?.columns || [])
+        const meta = Array.isArray(raw) ? {} : (raw?.meta || {})
+        sheetStore.upsertSheet(s, rows, columns, meta, false)
+      }
+      updateTableWithActiveSheet()
+      await nextTick()
+      activeView.value = isTimeSeriesData.value ? "plot" : "editor"
+      sheetStore.toggleSheetDataUpdated()
+    }
+    else if (fileType === "csv") {
       sheetNames.value = [];
-      selectedSheet.value = "";
-      xlsxDirtyBySheet.value = {};
-
       updateTableFromCsv();
       await nextTick();
-
       activeView.value = isTimeSeriesData.value ? "plot" : "editor";
-    } else if (fileType === "json") {
+    }
+    else if (fileType === "json") {
       sheetNames.value = [];
-      selectedSheet.value = "";
-      xlsxDirtyBySheet.value = {};
       rowData.value = [];
       columnDefs.value = [];
       mdText.value = "";
-
       try {
         jsonEditText.value = JSON.stringify(fileData.value, null, 2);
-      } catch {
+      }
+      catch {
         jsonEditText.value = String(fileData.value);
       }
-
+      originalText.value = jsonEditText.value
       activeView.value = "editor";
-    } else if (fileType === "md") {
+    }
+    else if (fileType === "md") {
       sheetNames.value = [];
-      selectedSheet.value = "";
-      xlsxDirtyBySheet.value = {};
       rowData.value = [];
       columnDefs.value = [];
       jsonEditText.value = "";
-
       mdText.value = fileData.value?.text ?? "";
+      originalText.value = mdText.value
       activeView.value = "editor";
-    } else {
+    }
+    else {
       console.warn(`Unsupported fileType: ${fileType}`);
       clearRefs();
     }
@@ -251,12 +353,16 @@ watch(
   { immediate: true }
 );
 
-watch(mdText, () => {
-  if (data_store.daata?.filetype === "md") mdDirty.value = true;
+watch(mdText, (editedText) => {
+  if (editedText !== originalText.value) {
+    if (data_store.daata?.filetype === "md") mdDirty.value = true;
+    }
 });
 
-watch(jsonEditText, () => {
-  if (data_store.daata?.filetype === "json") jsonDirty.value = true;
+watch(jsonEditText, (editedText) => {
+  if (editedText !== originalText.value) {
+    if (data_store.daata?.filetype === "json") jsonDirty.value = true;
+  }
 });
 
 async function saveCurrentFile() {
@@ -264,79 +370,116 @@ async function saveCurrentFile() {
     notify.show("No file path available to save.", 3000, "error");
     return;
   }
-
   const filetype = data_store.daata?.filetype;
 
-  let payloadType = null;
-  let payloadData = null;
-  let dirtyRef = null;
-
   if (filetype === "md") {
-    payloadType = "md";
-    payloadData = { text: mdText.value };
-    dirtyRef = mdDirty;
-  } else if (filetype === "csv") {
-    payloadType = "csv";
-    if (!gridApi.value) {
-      notify.show("Grid not ready yet.", 3000, "error");
-      return;
-    }
+    saving.value = true;
+    const response = await postData("save_file", {
+      path: data_store.fpath,
+      filetype: "md",
+      payloadData: { text: mdText.value },
+      meta: {}
+    }, notify)
+
+    saving.value = false;
+    if (response.success) mdDirty.value = false;
+    notify.show("Saved", 2000, "info");
+    return;
+  }
+
+  if (filetype === "csv") {
+    if (!gridApi.value) return notify.show("Grid not ready yet.", 3000, "error");
     gridApi.value.stopEditing();
 
     const rows = [];
-    gridApi.value.forEachNode((node) => rows.push(node.data));
-    payloadData = rows;
-    dirtyRef = csvDirty;
-  } else if (filetype === "json") {
-    payloadType = "json";
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonEditText.value);
-    } catch (e) {
-      notify.show(`Invalid JSON: ${e}`, 5000, "error");
-      return;
-    }
-    payloadData = parsed;
-    dirtyRef = jsonDirty;
-  } else if (filetype === "xlsx") {
-    payloadType = "xlsx";
-    if (!gridApi.value) {
-      notify.show("Grid not ready yet.", 3000, "error");
-      return;
-    }
-    gridApi.value.stopEditing();
-
-    const rows = [];
-    gridApi.value.forEachNode((node) => rows.push(node.data));
-    payloadData = rows;
-
-    const sheetObj = fileData.value?.[selectedSheet.value];
-    const cols = sheetObj?.columns ?? [];
+    gridApi.value.forEachNode(node => rows.push(node.data));
 
     saving.value = true;
-    const configs = { path: data_store.fpath, filetype: payloadType, payloadData: payloadData, meta: { sheet: selectedSheet.value, columns: cols } }
-    const response = await postData("save_file", configs, notify)
+    const response = await postData("save_file", {
+      path: data_store.fpath,
+      filetype: "csv",
+      payloadData: rows,
+      meta: {}
+    }, notify)
+
     saving.value = false;
-    if (!response.success) {
-      return
-    }
-    clearXlsxDirty(selectedSheet.value);
+    if (response.success) csvDirty.value = false;
     notify.show("Saved", 2000, "info");
-    return
-  } else {
-    notify.show(`Save not implemented for ${filetype}`, 3000, "error");
-    return
+    return;
   }
 
-  saving.value = true;
-  const configs = { path: data_store.fpath, filetype: payloadType, payloadData: payloadData, meta: {} }
-  const response = await postData("save_file", configs, notify)
-  saving.value = false;
-  if (!response.success) {
-    return
+  if (filetype === "json") {
+    let parsed;
+    try { parsed = JSON.parse(jsonEditText.value); }
+    catch (e) {
+      return notify.show(`Invalid JSON: ${e}`, 5000, "error");
+    }
+
+    saving.value = true;
+    const response = await postData("save_file", {
+      path: data_store.fpath,
+      filetype: "json",
+      payloadData: parsed,
+      meta: {}
+    }, notify)
+
+    saving.value = false;
+    if (response.success) jsonDirty.value = false;
+    notify.show("Saved", 2000, "info");
+    return;
   }
-  if (dirtyRef) dirtyRef.value = false;
-  notify.show("Saved", 2000, "info");
+
+  if (filetype === "xlsx") {
+    const api = gridApi.value;
+    if (!api) return notify.show("Grid not ready yet.", 3000, "error");
+    // Stop edit mode
+    api.stopEditing();
+    // Capture current sheet into store
+    sheetStore.captureFromGrid(sheetStore.activeSheet, api);
+
+    function filterIdFromRows(rows) {
+      /* Removes __id from all rows.
+      rows is a list of objects eg.
+      rows = [{ __id: 0 , scenario: Base }, { __id: 1, scenario: Myscen }]
+      */
+      let newRows = []
+      for (let i=0; i < rows.length; i++) {
+        if ("__id" in rows[i]) {
+          const {__id, ...newRow} = rows[i]
+          newRows[i] = newRow
+        }
+        else {
+          newRows[i] = rows[i]
+        }
+      }
+      return newRows
+    }
+
+    // Build workbook payload (contains data from all sheets)
+    const workbook = {};
+    for (const [sheetName, sheetObj] of Object.entries(sheetStore.sheetsByName)) {
+      let rows = filterIdFromRows(sheetObj.rows)
+      workbook[sheetName] = {
+        rows: rows,
+        columns: sheetObj.columns,
+        meta: sheetObj.meta
+      };
+    }
+    saving.value = true;
+    const response = await postData("save_file", {
+      path: data_store.fpath,
+      filetype: "xlsx",
+      payloadData: workbook,
+      meta: {}
+    }, notify)
+    saving.value = false;
+    if (!response.success) return;
+    // Clear dirty flags for all sheets
+    clearXlsxDirty()
+    notify.show("Saved all sheets", 2000, "info");
+    return;
+  }
+  notify.show(`Save not implemented for ${filetype}`, 3000, "error");
 }
 </script>
 
@@ -369,7 +512,12 @@ async function saveCurrentFile() {
 
     <!-- Header row -->
     <div class="flex items-center justify-between text-gray-600 my-2 mb-4">
-      <div class="truncate">{{ data_store.fname }}</div>
+      <div class="truncate">{{ data_store.fname }}
+        <span v-if="data_store.daata?.filetype === 'md' && mdDirty">*</span>
+        <span v-else-if="data_store.daata?.filetype === 'csv' && csvDirty">*</span>
+        <span v-else-if="data_store.daata?.filetype === 'json' && jsonDirty">*</span>
+        <span v-else-if="data_store.daata?.filetype === 'xlsx' && xlsxDirty">*</span>
+      </div>
 
       <button
         v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
@@ -378,7 +526,7 @@ async function saveCurrentFile() {
           (data_store.daata?.filetype === 'md' && !mdDirty) ||
           (data_store.daata?.filetype === 'csv' && !csvDirty) ||
           (data_store.daata?.filetype === 'json' && !jsonDirty) ||
-          (data_store.daata?.filetype === 'xlsx' && !currentXlsxDirty) ||
+          (data_store.daata?.filetype === 'xlsx' && !xlsxDirty) ||
           saving
         "
         @click="saveCurrentFile"
@@ -387,30 +535,8 @@ async function saveCurrentFile() {
       </button>
     </div>
 
-    <!-- Dirty indicators -->
-    <div v-if="data_store.daata?.filetype === 'md' && mdDirty" class="text-xs text-gray-500 mb-2">
-      Unsaved changes
-    </div>
-    <div v-if="data_store.daata?.filetype === 'csv' && csvDirty" class="text-xs text-gray-500 mb-2">
-      Unsaved changes
-    </div>
-    <div v-if="data_store.daata?.filetype === 'json' && jsonDirty" class="text-xs text-gray-500 mb-2">
-      Unsaved changes
-    </div>
-    <div v-if="data_store.daata?.filetype === 'xlsx' && currentXlsxDirty" class="text-xs text-gray-500 mb-2">
-      Unsaved changes in {{ selectedSheet }}
-    </div>
-
     <!-- EDITOR VIEW -->
     <div v-if="activeView === 'editor'">
-      <SelectSheetButtons
-        v-if="selectedSheet"
-        :sheets="sheetNames"
-        :activeIndex="0"
-        :activeSheet="selectedSheet"
-        @update:activeSheet="newSheetSelected($event)"
-      />
-
       <textarea
         v-if="data_store.daata?.filetype === 'md'"
         v-model="mdText"
@@ -423,25 +549,49 @@ async function saveCurrentFile() {
         class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
-      <div v-else-if="columnDefs.length" class="w-full h-80 overflow-auto">
-        <AgGridVue
-          class="w-full h-full"
-          :domLayout="'normal'"
-          :columnDefs="columnDefs"
-          :rowData="rowData"
-          @grid-ready="onGridReady"
-          @cell-value-changed="onCellValueChanged"
-          :rowBuffer="10"
-          :rowHeight="40"
-          :animateRows="true"
-          :rowSelection.enableClickSelection="false"
-          :suppressColumnVirtualization="false"
-          :suppressCellFocus="true"
-          :suppressAnimationFrame="true"
-          :enableCellTextSelection="false"
-          :singleClickEdit="true"
-          :stopEditingWhenCellsLoseFocus="true"
-        />
+      <div v-else-if="columnDefs.length" class="w-full h-80 flex flex-col">
+        <div v-if="data_store.daata?.filetype === 'xlsx'">
+          <SelectSheetButtons @update:activeSheet="newSheetSelected($event)" />
+        </div>
+        <!-- Toolbar -->
+        <div class="flex items-center gap-2 mt-2 shrink-0">
+          <button
+              class="px-3 py-1 rounded border border-b-0 border-gray-400 bg-white hover:bg-gray-100"
+              @click="onAddRow"
+              title="Add a new row at the end">
+            + Add row
+          </button>
+          <button
+              class="px-3 py-1 rounded border border-b-0 border-gray-400 bg-white hover:bg-gray-100 disabled:opacity-50"
+              :disabled="!hasSelection"
+              @click="onDeleteSelected"
+              title="Delete selected rows">
+            <i class="fa-regular fa-trash-can"></i> Delete selected
+          </button>
+          <span class="text-sm text-gray-500" v-if="selectedCount">
+            {{ selectedCount }} selected
+          </span>
+        </div>
+
+        <!-- Scrollable grid container -->
+        <div class="flex-1 overflow-auto">
+          <AgGridVue
+              class="w-full h-full"
+              :domLayout="'normal'"
+              :columnDefs="columnDefs"
+              :rowData="rowData"
+              @grid-ready="onGridReady"
+              @cell-value-changed="onCellValueChanged"
+              :rowBuffer="10"
+              :rowHeight="40"
+              :animateRows="true"
+              :rowSelection="rowSelectionOptions"
+              :suppressColumnVirtualization="false"
+              :suppressCellFocus="true"
+              :singleClickEdit="true"
+              :stopEditingWhenCellsLoseFocus="true"
+          />
+        </div>
       </div>
 
       <div v-else class="p-4 text-gray-500">
