@@ -17,5 +17,4 @@ _config
 siteopt_data.worktrees/
 test_spinetoolbox_project/results.csv
 test_spinetoolbox_project/.spinetoolbox/items/python_tool/output
-data/
 siteoptapp/frontend/src/token.txt
