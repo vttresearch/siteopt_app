@@ -88,6 +88,51 @@ function onCellValueChanged() {
   markDirty()
 }
 
+// Returns next cell if available
+const getNextCellSameRow = (params) => {
+  const api = params.api;
+  const columns = api.getAllDisplayedColumns();
+  const prev = params.previousCellPosition;
+  const colIndex = columns.findIndex(c => c.getId() === prev.column.getId());
+  const nextIndex = colIndex + 1;
+  // If last column, stay on same cell
+  if (nextIndex >= columns.length) {
+    return {
+      rowIndex: prev.rowIndex,
+      column: prev.column
+    };
+  }
+  return {
+    rowIndex: prev.rowIndex,
+    column: columns[nextIndex]
+  };
+};
+
+// Called when pressing Tab
+const tabToNextCell = (params) => {
+  return getNextCellSameRow(params);
+};
+
+// On Enter, stop editing, on Tab, move to next cell and start editing
+const onCellKeyDown = (params) => {
+  const key = params.event.key;
+  if (key === 'Enter') {
+    params.api.stopEditing()
+    return
+  }
+  if (key === 'Tab') {
+    setTimeout(() => {
+      const cell = params.api.getFocusedCell();
+      if (!cell) return;
+
+      params.api.startEditingCell({
+        rowIndex: cell.rowIndex,
+        colKey: cell.column.getId()
+      });
+    });
+  }
+};
+
 function clearRefs() {
   sheetNames.value = [];
   fileData.value = {};
@@ -99,6 +144,7 @@ function clearRefs() {
   mdDirty.value = false;
   csvDirty.value = false;
   jsonDirty.value = false;
+  xlsxDirty.value = false;
   activeView.value = "editor";
   // Clear these manually because data_store.clear() causes a circular watcher loop because it clears data_store.daata
   data_store.fname = ""
@@ -372,6 +418,24 @@ async function saveCurrentFile() {
   }
   const filetype = data_store.daata?.filetype;
 
+  function filterIdFromRows(rows) {
+    /* Removes __id from all rows.
+    rows is a list of objects eg.
+    rows = [{ __id: 0 , scenario: Base }, { __id: 1, scenario: Myscen }]
+    */
+    let newRows = []
+    for (let i=0; i < rows.length; i++) {
+      if ("__id" in rows[i]) {
+        const {__id, ...newRow} = rows[i]
+        newRows[i] = newRow
+      }
+      else {
+        newRows[i] = rows[i]
+      }
+    }
+    return newRows
+  }
+
   if (filetype === "md") {
     saving.value = true;
     const response = await postData("save_file", {
@@ -391,9 +455,9 @@ async function saveCurrentFile() {
     if (!gridApi.value) return notify.show("Grid not ready yet.", 3000, "error");
     gridApi.value.stopEditing();
 
-    const rows = [];
+    let rows = [];
     gridApi.value.forEachNode(node => rows.push(node.data));
-
+    rows = filterIdFromRows(rows)
     saving.value = true;
     const response = await postData("save_file", {
       path: data_store.fpath,
@@ -436,25 +500,6 @@ async function saveCurrentFile() {
     api.stopEditing();
     // Capture current sheet into store
     sheetStore.captureFromGrid(sheetStore.activeSheet, api);
-
-    function filterIdFromRows(rows) {
-      /* Removes __id from all rows.
-      rows is a list of objects eg.
-      rows = [{ __id: 0 , scenario: Base }, { __id: 1, scenario: Myscen }]
-      */
-      let newRows = []
-      for (let i=0; i < rows.length; i++) {
-        if ("__id" in rows[i]) {
-          const {__id, ...newRow} = rows[i]
-          newRows[i] = newRow
-        }
-        else {
-          newRows[i] = rows[i]
-        }
-      }
-      return newRows
-    }
-
     // Build workbook payload (contains data from all sheets)
     const workbook = {};
     for (const [sheetName, sheetObj] of Object.entries(sheetStore.sheetsByName)) {
@@ -577,19 +622,22 @@ async function saveCurrentFile() {
         <div class="flex-1 overflow-auto">
           <AgGridVue
               class="w-full h-full"
-              :domLayout="'normal'"
+              :domLayout="'autoHeight'"
               :columnDefs="columnDefs"
               :rowData="rowData"
               @grid-ready="onGridReady"
               @cell-value-changed="onCellValueChanged"
+              @cell-key-down="onCellKeyDown"
               :rowBuffer="10"
               :rowHeight="40"
               :animateRows="true"
               :rowSelection="rowSelectionOptions"
               :suppressColumnVirtualization="false"
-              :suppressCellFocus="true"
+              :navigateCells="true"
+              :suppressCellFocus="false"
               :singleClickEdit="true"
               :stopEditingWhenCellsLoseFocus="true"
+              :tabToNextCell="tabToNextCell"
           />
         </div>
       </div>

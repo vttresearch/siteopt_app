@@ -35,6 +35,10 @@
     @apply !bg-white hover:!bg-gray-50;
   }
 
+  .ag-cell.ag-cell-focus {
+  @apply bg-green-200;
+  }
+
   .ag-row-selected {
     @apply !bg-blue-100;
   }

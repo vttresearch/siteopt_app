@@ -53,7 +53,7 @@ onMounted(async () => {
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <template v-if="settingStore.backendAvailable">
             <div v-show="activeTab === 'projects'" class="col-span-3 flex flex-col gap-6">
-              <div class="col-span-2 bg-white rounded-xl shadow-md relative p-4">
+              <div class="col-span-3 bg-white rounded-xl shadow-md relative p-4">
                 <DataEditorPanel />
               </div>
               <div class="col-span-3 bg-white rounded-xl shadow-md relative p-4">
