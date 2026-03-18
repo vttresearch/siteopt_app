@@ -244,6 +244,7 @@ async function executeSelected(local) {
     eventSource.close();
     eventSource = null;
     clearExecutionInProgress()
+    refreshScenarios()
   });
   eventSource.addEventListener("error", (event) => {
     executionOutput.value.push(`[error event] ${event.data}`)

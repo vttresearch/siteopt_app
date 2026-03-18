@@ -66,6 +66,68 @@ def get_client_work_root(client_id: str) -> str:
     """
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
 
+def list_results(project_path):
+    root = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output"
+
+    if not root.exists():
+        return {}
+
+    runs = {}
+
+    for scenario_dir in root.iterdir():
+        if not scenario_dir.is_dir():
+            continue
+
+        scenario_name = scenario_dir.name
+
+        for run_dir in scenario_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+
+            results_file = run_dir / "results.xlsx"
+            if not results_file.exists():
+                continue
+
+            run_name = run_dir.name
+
+            if run_name not in runs:
+                runs[run_name] = []
+
+            runs[run_name].append({
+                "scenario": scenario_name,
+                "run": run_name,
+                "path": str(results_file)
+            })
+
+    for run_name in runs:
+        runs[run_name].sort(key=lambda x: x["scenario"].lower())
+
+    return dict(sorted(runs.items(), key=lambda x: x[0], reverse=True))
+
+def list_projects_with_results(client_id):
+    config = get_client_config(client_id)
+    projects = config.get("work_folders", {})
+
+    projects_with_results = []
+
+    for name, path in projects.items():
+        results_root = Path(path) / ".spinetoolbox" / "items" / "extract_results" / "output"
+
+        if not results_root.exists():
+            continue
+
+        # check if any results.xlsx exists
+        has_results = any(results_root.rglob("results.xlsx"))
+
+        if has_results:
+            projects_with_results.append({
+                "name": name,
+                "path": path
+            })
+
+    projects_with_results.sort(key=lambda x: x["name"].lower())
+
+    return projects_with_results
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -272,6 +334,17 @@ def post(request, action):
         print(f"Removing scenario {data['scenario_name']}")
         response = remove_scenario(client_id, data["scenario_name"], data["work_folder"])
         return response
+    elif action == "list_results":
+        project_name = data["project_name"]
+        config = get_client_config(client_id)
+        project_path = config["work_folders"].get(project_name)
+        if not project_path:
+            return JsonResponse({"success": False, "error": "Project not found"})
+        results = list_results(project_path)
+        return JsonResponse({"success": True, "data": results})
+    elif action == "list_projects_with_results":
+        projects = list_projects_with_results(client_id)
+        return JsonResponse({"success": True, "data": projects})
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
@@ -748,51 +821,35 @@ def _save_json(fpath: str, data, meta: dict):
 def _save_xlsx(fpath: str, data, meta: dict):
     """
     Expects:
-      data = list of row objects (same as CSV save)
+      data = dictionary containing the whole workbook
       meta = {"sheet": "SheetName", "columns": ["A","B",...]}
     """
     if not fpath.endswith(".xlsx"):
-        return {"success": False, "error": "Not a .xlsx file."}
-
-    sheet_name = meta.get("sheet")
-    columns = meta.get("columns")
-
-    if not sheet_name:
-        return {"success": False, "error": "Missing meta.sheet for xlsx save."}
-    if not isinstance(data, list):
-        return {"success": False, "error": "xlsx save expects a list of row objects."}
-
+        return {"success": False, "error": "Not an .xlsx file."}
+    if not isinstance(data, dict):
+        return {"success": False, "error": "xlsx save expects a dictionary containing sheets and wb data."}
     wb = openpyxl.load_workbook(fpath)
-    if sheet_name not in wb.sheetnames:
-        return {"success": False, "error": f"Sheet not found: {sheet_name}"}
-
-    ws = wb[sheet_name]
-
-    if not columns:
-        columns = []
-        for c in range(1, ws.max_column + 1):
-            v = ws.cell(row=1, column=c).value
-            if v is None:
-                break
-            columns.append(str(v))
-        if not columns:
-            cols_set = set()
-            for row in data:
-                if isinstance(row, dict):
-                    cols_set.update(row.keys())
-            columns = list(cols_set)
-
-    ws.delete_rows(1, ws.max_row)
-
-    for c, col in enumerate(columns, start=1):
-        ws.cell(row=1, column=c, value=col)
-
-    for r_i, row in enumerate(data, start=2):
-        if not isinstance(row, dict):
-            return {"success": False, "error": "Each XLSX row must be an object/dict."}
-        for c_i, col in enumerate(columns, start=1):
-            ws.cell(row=r_i, column=c_i, value=row.get(col, ""))
-
+    # Loop all sheets
+    for sheet_name in data.keys():
+        if sheet_name not in wb.sheetnames:
+            print(f"Sheet {sheet_name} not found in wb {fpath}. Skipping...")
+            continue
+        ws = wb[sheet_name]
+        columns = data[sheet_name]["columns"]
+        rows = data[sheet_name]["rows"]
+        # print(f"Processing sheet {sheet_name}. Columns: {columns}")
+        # print(f"rows:{rows}")
+        ws.delete_rows(1, ws.max_row)
+        # Make header
+        for c, col in enumerate(columns, start=1):
+            ws.cell(row=1, column=c, value=col)
+        # Add rows
+        for r_i, row in enumerate(rows, start=2):
+            if not isinstance(row, dict):
+                return {"success": False, "error": "Each XLSX row must be an object/dict."}
+            for c_i, col in enumerate(columns, start=1):
+                ws.cell(row=r_i, column=c_i, value=row.get(col, ""))
+    # Save workbook
     wb.save(fpath)
     return {"success": True}
 
@@ -809,7 +866,6 @@ def save_file(client_id: str, fpath: str, filetype: str, data, meta: dict):
 
     save_handlers = {
         "md": _save_md,
-        # later:
         "json": _save_json,
         "csv": _save_csv,
         "xlsx": _save_xlsx,

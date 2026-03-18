@@ -35,6 +35,8 @@ services:
       - "8000:8000"
     networks:
       - docker_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: >
       bash -lc "
         source /opt/venv/bin/activate &&

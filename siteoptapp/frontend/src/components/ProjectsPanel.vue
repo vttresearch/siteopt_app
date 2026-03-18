@@ -21,10 +21,6 @@ const showMakeProjectPrompt = ref(false)
 const showMakeExampleProjectPrompt = ref(false)
 const showMakeTestProjectPrompt = ref(false)
 
-function setActiveProject(i) {
-  settingStore.activeProjectIndex = i
-}
-
 function validFolderName(name) {
   const folderNameRegex = /^(\/?[a-z0-9A-Z\-]+)+$/  // No special characters allowed
   return folderNameRegex.test(name);
@@ -90,9 +86,10 @@ async function postMakeWorkFolder(pathKey, projectName) {
   }
   await fetchSettings();
   await fetchWorkFolderFiles();
-  notify.show(`New project ${projectName} created`, 2000, "info")
-  const index = Object.keys(settingStore.workFolders).indexOf(projectName);
-  settingStore.setActiveProjectIndex(index-1)
+  notify.show(`New project ${workFolderName.value} created`, 2000, "info")
+  const index = Object.keys(settingStore.workFolders).indexOf(workFolderName.value);
+  settingStore.setActiveProjectIndex(index >= 0 ? index : 0)
+  workFolderName.value = ""
   clearCreating()
 }
 
@@ -186,7 +183,7 @@ async function restoreProject(c) {
         variant="secondary"
         class="relative pr-8"
         :class="i === settingStore.activeProjectIndex && 'ring-2 ring-blue-500'"
-        @click="setActiveProject(i)"
+        @click="settingStore.setActiveProjectIndex(i)"
       >
         {{ tree?.name ?? `Project ${i + 1}` }}
         <span
