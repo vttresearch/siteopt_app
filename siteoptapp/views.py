@@ -54,74 +54,57 @@ def get_config_file_dir(client_id) -> Path:
 
 
 def get_client_work_root(client_id: str) -> str:
-    """
-    Root directory containing all work folders for this client.
-    Must be a path that BOTH backend and spine_engine containers can access.
-    """
+    """Root directory containing all work folders for this client.
+    Must be a path that BOTH backend and spine_engine containers can access."""
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
+
 
 def list_results(project_path):
     root = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output"
-
     if not root.exists():
         return {}
-
     runs = {}
-
     for scenario_dir in root.iterdir():
         if not scenario_dir.is_dir():
             continue
-
         scenario_name = scenario_dir.name
-
         for run_dir in scenario_dir.iterdir():
             if not run_dir.is_dir():
                 continue
-
             results_file = run_dir / "results.xlsx"
             if not results_file.exists():
                 continue
-
             run_name = run_dir.name
-
             if run_name not in runs:
                 runs[run_name] = []
-
             runs[run_name].append({
                 "scenario": scenario_name,
                 "run": run_name,
                 "path": str(results_file)
             })
-
     for run_name in runs:
         runs[run_name].sort(key=lambda x: x["scenario"].lower())
-
     return dict(sorted(runs.items(), key=lambda x: x[0], reverse=True))
+
 
 def list_projects_with_results(client_id):
     config = get_client_config(client_id)
     projects = config.get("work_folders", {})
-
     projects_with_results = []
-
     for name, path in projects.items():
         results_root = Path(path) / ".spinetoolbox" / "items" / "extract_results" / "output"
-
         if not results_root.exists():
             continue
-
         # check if any results.xlsx exists
         has_results = any(results_root.rglob("results.xlsx"))
-
         if has_results:
             projects_with_results.append({
                 "name": name,
                 "path": path
             })
-
     projects_with_results.sort(key=lambda x: x["name"].lower())
-
     return projects_with_results
+
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -137,6 +120,15 @@ def settings(request):
         client_id = uuid.uuid4()
         new_client = True
     client_config = get_client_config(client_id)
+    work_root = get_client_work_root(client_id)
+    active_work_folders = {}
+    # Edit work_folders so when in container, only the projects in the container work folder are returned
+    for key, value in client_config["work_folders"].items():
+        # key is project name, value is the path
+        if value.startswith(work_root):
+            active_work_folders[key] = value
+    client_config["work_folders"] = active_work_folders
+    print(f"client_config work_folders:{client_config['work_folders']}")
     response = JsonResponse({"success": True, "data": {"client_id": client_id, "configs": client_config}})
     if new_client:
         # httponly=False makes sure that we can access it from JavaScript
@@ -165,10 +157,8 @@ def remove_work_folder(client_id: str, work_folder_name: str):
     config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
     cfg = read_config_file(str(config_fpath))
     work_folders = cfg.get("work_folders", {})
-
     if work_folder_name not in work_folders:
         return {"success": False, "error": f"Unknown work folder: {work_folder_name}"}
-
     # Soft remove: only remove from config, keep files on disk
     work_folders.pop(work_folder_name, None)
     edit_config_file(config_fpath, {"work_folders": work_folders})
@@ -181,11 +171,9 @@ def list_existing_work_folders(client_id: str):
     root = get_client_work_root(client_id)
     if not os.path.exists(root):
         return {"success": True, "data": []}
-
     cfg = read_config_file(str(config_fpath))
     active = cfg.get("work_folders", {})
     active_paths = set(os.path.abspath(p) for p in active.values())
-
     out = []
     for entry in os.listdir(root):
         p = os.path.join(root, entry)
@@ -197,9 +185,7 @@ def list_existing_work_folders(client_id: str):
         # (optional) sanity check: looks like a Spine Toolbox project
         if not validate_project_path(p)["success"]:
             continue
-
         out.append({"name": entry, "path": p})
-
     out.sort(key=lambda x: x["name"].lower())
     return {"success": True, "data": out}
 

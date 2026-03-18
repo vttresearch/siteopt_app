@@ -13,8 +13,7 @@ export const useSettingStore = defineStore('settingsData', () => {
   const creatingTestProjectFolder = ref(false);
   const loadingProjects = ref(false);
   const backendAvailable = ref(false);
-  const backendRetryAttempts = ref(0)
-
+  const backendRetryAttempts = ref(0);
 
   function setSettings(settings) {
     inputDataPath.value = settings["input_data_path"];
