@@ -261,6 +261,19 @@ def remove_scenario(client_id, scenario_name, project_name):
     return JsonResponse({"success": True, "data": {}})
 
 
+def delete_project(client_id, path):
+    if not os.path.exists(path):
+        return JsonResponse({"success": False, "error": f"Deleting project failed. Path {path} doesn't exist."})
+    # Remove path from disk
+    try:
+        shutil.rmtree(path)
+    except OSError as e:
+        return JsonResponse({"success": False, "error": f"Deleting project failed. [OSError] {e}"})
+    # No need to edit config file because the project name and path have been removed from the config file
+    # when the tab was closed.
+    return JsonResponse({"success": True, "data": {}})
+
+
 @csrf_protect
 def post(request, action):
     """Handles data posted by the frontend.
@@ -325,6 +338,10 @@ def post(request, action):
     elif action == "list_projects_with_results":
         projects = list_projects_with_results(client_id)
         return JsonResponse({"success": True, "data": projects})
+    elif action == "delete_project":
+        print(f"Deleting project {data['name']} path {data['path']}")
+        response = delete_project(client_id, data["path"])
+        return response
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
@@ -578,6 +595,40 @@ def fetch_work_folder(request, folder_name):
     tree["name"] = dirname  # same as 'name'
     tree["path"] = base_path
     return JsonResponse({"success": True, "data": tree})
+
+
+def fetch_current_input_folder(request, folder_name):
+    """Returns the files under current_input folder of a given folder (project) name.
+    The returned list format is such that it can be used directly in a frontend Toolbar template.
+    """
+    print(f"Returning current_input of {folder_name}")
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    config_d = get_client_config(client_id)
+    work_folders_dict = config_d.get("work_folders", {})
+    p = work_folders_dict.get(folder_name)
+    if not os.path.exists(p):
+        return JsonResponse({"success": False, "error": f"Project folder {p} does not exist"})
+    input_path = os.path.join(p, "current_input")
+    # folders = ["", "connections", "demand", "nodes", "other_units", "production", "representative_periods", "storages"]
+    folders = [f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))]
+    folders = [""] + folders  # Add root folder
+    categories = []
+    # categories: [{name: "Basic", value: "", options: [{label: scenarios.xlsx, value: scenarios.xlsx}, {}]}, ...]
+    for folder in folders:
+        entry = {}
+        p = os.path.join(input_path, folder)
+        if not folder:
+            entry["name"] = "Basic"
+            entry["value"] = ""
+        else:
+            entry["name"] = folder.replace("_", " ").capitalize()
+            entry["value"] = folder
+        entry["options"] = []
+        for filename in os.listdir(p):
+            if os.path.isfile(os.path.join(p, filename)):
+                entry["options"].append({"label": filename, "value": filename})
+        categories.append(entry)
+    return JsonResponse({"success": True, "data": categories})
 
 
 def fetch_data(fpath):

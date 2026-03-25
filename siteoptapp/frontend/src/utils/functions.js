@@ -1,5 +1,6 @@
 import { useNotificationStore } from '@/stores/notificationstore.js'
 import { useSettingStore } from "@/stores/settingstore.js";
+import { useResultStore } from "@/stores/resultstore.js";
 import { API_BASE } from "@/config.js";
 
 
@@ -94,7 +95,7 @@ export async function fetchWorkFolderFiles() {
   settingStore.loadingProjects = true
   if (Object.keys(settingStore.workFolders).length === 0) {
     settingStore.setWorkFolderFiles([])
-    settingStore.setActiveProjectIndex(0)
+    settingStore.setActiveProjectIndex(null)
     settingStore.loadingProjects = false
     return
   }
@@ -141,6 +142,51 @@ export async function fetchWorkFolder(workFolderName) {
     settingStore.projectIndexUpdated = idx
   }
   settingStore.loadingProjects = false
+}
+
+
+
+/**
+ * Fetches the contents of current_input file tree of a given project.
+ *
+ * @param {string} projectName - Project folder name.
+ *
+ */
+export async function fetchCurrentInputFiles(projectName) {
+  const settingStore = useSettingStore()
+  const notify = useNotificationStore()
+  if (!projectName) {
+    notify.show("[FIXME] Fetching current input files failed. Project name missing.")
+    return
+  }
+  const response = await getData(`fetch_current_input_folder/${projectName}`, notify)
+  if (!response.success) {
+    notify.show(`${response.error}`)
+    return
+  }
+  const contents = response.data
+  settingStore.setCurrentInputFiles(contents)
+}
+
+/**
+ * Fetches the results of a given project.
+ *
+ * @param {string} projectName - Project folder name.
+ *
+ */
+export async function fetchResults(projectName) {
+  const resultStore = useResultStore()
+  const notify = useNotificationStore()
+  if (!projectName) {
+    notify.show("[FIXME] Fetching results failed. Project name missing.")
+    return
+  }
+  const r = await postData("list_results",{ project_name: projectName }, notify)
+  if (!r?.success) {
+    return false
+  }
+  resultStore.runs = r.data || {}
+  return true
 }
 
 

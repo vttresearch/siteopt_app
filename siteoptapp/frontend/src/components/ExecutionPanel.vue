@@ -39,6 +39,13 @@ const returnFocusEl = ref(null)
 
 /* Refreshes file tree when user selects a project */
 watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
+  /*
+  if (newVal === null) {
+    scenarios.value = []
+    selectedScenarios.value = []
+    execType.value = ""
+  }
+  */
   if (newVal !== oldVal) {
     refreshScenarios()
     selectedScenarios.value = []
@@ -52,14 +59,6 @@ onUnmounted(() => {
     eventSource.close();
   }
 })
-
-
-const workDirName = computed(() => {
-  if (settingStore.activeProjectIndex in Object.keys(settingStore.workFolderFiles)) {
-    return settingStore.workFolderFiles[settingStore.activeProjectIndex].name
-  }
-  else return null
-});
 
 const coloredOutput = computed(() => {
   return executionOutput.value.map(line => converter.toHtml(line))
@@ -88,9 +87,9 @@ watch(coloredOutput, async () => {
 watch(executionFinished, async (newExecutionFinished) => {
   if (newExecutionFinished) {
     console.log("Execution finished")
-    if (workDirName.value !== null) {
+    if (settingStore.activeProjectPath !== "") {
       // Fetch project folder files again to see output files
-      await fetchWorkFolder(workDirName.value)
+      await fetchWorkFolder(settingStore.activeProjectPath)
     }
   }
 });
@@ -113,7 +112,7 @@ function newScenarioNameIsValid(name) {
 
 async function refreshScenarios() {
   refreshingScenarios.value = true
-  const configs = {db_key: "scenario", work_folder: workDirName.value}
+  const configs = {db_key: "scenario", work_folder: settingStore.activeProjectPath}
   const response = await postData("fetch_input_db_data", configs, notify)
   if (!response.success) {
     console.error("fetching input db data failed")
@@ -135,7 +134,7 @@ async function confirmAddScenario(n) {
   }
   console.log(`Adding scenario '${name}'`)
   refreshingScenarios.value = true
-  const configs = {scenario_name: name, work_folder: workDirName.value}
+  const configs = {scenario_name: name, work_folder: settingStore.activeProjectPath}
   const response = await postData("add_scenario", configs, notify)
   if (!response.success) {
     console.error("Adding scenario failed")
@@ -165,7 +164,7 @@ async function confirmRemoveScenario() {
   console.log("Removing scenario:", itemToRemove.value)
   selectedScenarios.value = selectedScenarios.value.filter(s => s !== itemToRemove.value)
   refreshingScenarios.value = true
-  const configs = {scenario_name: itemToRemove.value, work_folder: workDirName.value}
+  const configs = {scenario_name: itemToRemove.value, work_folder: settingStore.activeProjectPath}
   const response = await postData("remove_scenario", configs, notify)
   if (!response.success) {
     console.error("Removing scenario failed")
@@ -195,19 +194,14 @@ function clearExecutionInProgress() {
   remoteExecutionInProgress.value = false
 }
 
-/* Returns true if selected execution type should have at least one scenario selected, false otherwise. */
+/* Returns true if selected execution task should have at least one scenario selected, false otherwise. */
 function execTypeNeedsScenario() {
   return execType.value === "all" || execType.value === "opt2" || execType.value === "opt3"
 }
 
 async function executeSelected(local) {
   if (execType.value === "") {
-    notify.show("Please select execution Type", 1000, "info")
-    clearExecutionInProgress()
-    return
-  }
-  if (workDirName.value === null) {
-    notify.show("Please select a project to execute", 5000, "info")
+    notify.show("Please select a Task to execute", 1000, "info")
     clearExecutionInProgress()
     return
   }
@@ -216,13 +210,19 @@ async function executeSelected(local) {
     clearExecutionInProgress()
     return
   }
-  notify.show(`Executing ${execTypes[execType.value]} for project ${workDirName.value}`, 5000, "info")
+  notify.show(`Executing ${execTypes[execType.value]} for project ${settingStore.activeProjectPath}`, 5000, "info")
   const configs = {
-    work_dir_name: workDirName.value,
+    work_dir_name: settingStore.activeProjectPath,
     execution_type: execType.value,
     local_execution: local,
     scenarios: selectedScenarios.value
   }
+
+  // REMOVE THESE BEFORE SHIPPING
+  localExecutionInProgress.value = false
+  return
+
+
   const response = await postData("execute", configs, notify)
   if (!response.success) {
     clearExecutionInProgress()
@@ -237,7 +237,7 @@ async function executeSelected(local) {
   eventSource = new EventSource(streamUrl);
   eventSource.addEventListener("done", (event) => {
     if (event.data !== "0") {
-      notify.show(`Executing project ${workDirName.value} failed`, 10000, "error")
+      notify.show(`Executing project ${settingStore.activeProjectPath} failed`, 10000, "error")
       executionOutput.value.push("Execution failed");
     }
     console.log("Execution process exit code:", event.data);
@@ -260,11 +260,13 @@ async function executeSelected(local) {
 </script>
 
 <template>
-  <div class="mb-3 text-lg font-semibold text-gray-800">Execution [{{ workDirName }}]</div>
+
+  <div class="mb-3 text-lg font-semibold text-gray-800">Execution</div>
+
   <div>
 
-    <!-- Execution types -->
-    <span class="text-gray-800 italic">Execution type</span>
+    <!-- Tasks to execute -->
+    <span class="text-gray-800 italic">Task to execute</span>
     <div class="flex flex-wrap justify-start items-center gap-4 p-4">
       <BaseButton
         variant="secondary"

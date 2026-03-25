@@ -85,7 +85,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
     return
   }
   await fetchSettings();
-  await fetchWorkFolderFiles();
+  // await fetchWorkFolderFiles();
   notify.show(`New project ${projectName} created`, 2000, "info")
   const index = Object.keys(settingStore.workFolders).indexOf(projectName);
   settingStore.setActiveProjectIndex(index >= 0 ? index : 0)
@@ -99,38 +99,7 @@ function clearCreating() {
   settingStore.creatingTestProjectFolder = false
 }
 
-async function openRestore() {
-  restoring.value = true
-  const response = await postData("list_existing_work_folders", {}, notify)
-  restoring.value = false
-  if (response.success) {
-    restoreCandidates.value = response.data ?? []
-    restoreOpen.value = true
-  }
-}
 
-async function removeProject(name) {
-  if (!name) return
-  const ok = confirm(`Remove "${name}" from view? Files stay on disk.`)
-  if (!ok) return
-
-  const response = await postData("remove_work_folder", {"folder_name": name}, notify)
-  if (response.success) {
-    await fetchSettings()
-    await fetchWorkFolderFiles()
-    notify.show("Removed from view", 2000, "info")
-  }
-}
-
-async function restoreProject(c) {
-  const response = await postData("add_existing_work_folder", {"name": c.name, "path": c.path}, notify)
-  if (response.success) {
-    restoreOpen.value = false
-    await fetchSettings()
-    await fetchWorkFolderFiles()
-    notify.show("Project restored", 2000, "info")
-  }
-}
 
 </script>
 
@@ -174,56 +143,6 @@ async function restoreProject(c) {
     </button>
   </div>
 
-  <!-- Tabs row -->
-  <div v-if="!settingStore.loadingProjects" class="my-3">
-    <div v-if="Array.isArray(settingStore.workFolderFiles) && settingStore.workFolderFiles.length" class="flex flex-wrap gap-2">
-      <div v-for="(tree, i) in settingStore.workFolderFiles" :key="tree?.name ?? i" class="flex items-stretch">
-      <BaseButton
-        variant="secondary"
-        class="relative pr-8"
-        :class="i === settingStore.activeProjectIndex && 'ring-2 ring-blue-500'"
-        @click="settingStore.setActiveProjectIndex(i)"
-      >
-        {{ tree?.name ?? `Project ${i + 1}` }}
-        <span
-          class="absolute right-2 top-1/2 -translate-y-1/2
-                text-red-600 hover:text-red-800 cursor-pointer"
-          title="Remove from view"
-          @click.stop="removeProject(tree?.name)"
-        >
-          ✕
-        </span>
-      </BaseButton>
-      </div>
-    </div>
-    <div v-if="restoreOpen" class="mb-3 border border-gray-300 rounded p-3 bg-gray-50">
-      <div class="flex items-center justify-between mb-2">
-        <div class="font-semibold text-gray-800">Restore project</div>
-        <BaseButton variant="ghost" @click="restoreOpen = false">Close</BaseButton>
-      </div>
-
-      <div v-if="restoreCandidates.length === 0" class="text-sm text-gray-600">
-        No hidden projects found.
-      </div>
-      <div v-else class="space-y-2">
-        <BaseButton
-            v-for="c in restoreCandidates"
-            :key="c.path"
-            variant="secondary"
-            class="w-full justify-start text-left"
-            @click="restoreProject(c)"
-        >
-          <div class="w-full">
-            <div class="font-medium">{{ c.name }}</div>
-            <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
-          </div>
-        </BaseButton>
-      </div>
-    </div>
-  </div>
-  <div v-else>
-    <Spinner message="Loading..." class="col-span-1 md:col-span-3" />
-  </div>
 
   <AskNamePrompt
       :visible="showMakeProjectPrompt"

@@ -1,9 +1,9 @@
 <script setup>
-import { computed, onMounted, watch, ref } from "vue"
+import { computed, watch, ref, onMounted } from "vue"
 import { useSettingStore } from "@/stores/settingstore.js"
 import { useNotificationStore } from "@/stores/notificationstore.js"
-import { postData } from "@/utils/functions.js"
-
+import { useResultStore } from "@/stores/resultstore.js";
+import { postData, fetchResults } from "@/utils/functions.js"
 import DashboardPanel from "@/components/DashboardPanel.vue"
 import ResultsTable from "@/components/ResultsTable.vue"
 import ScenarioComparisonPanel from "@/components/ScenarioComparisonPanel.vue"
@@ -16,18 +16,45 @@ import { mergeScenarioSheets } from "@/utils/chartUtils.js"
 
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
+const resultStore = useResultStore()
 const loadingResults = ref(false)
+const hasResults = ref(false)
 const columnDefs = ref([])
 const rowData = ref([])
-const runs = ref({})
 const selectedRun = ref(null)
 const selectedRunFiles = ref([])
-const resultProjects = ref([])
-const selectedProject = ref(null)
 const activeTab = ref("plots")
 const controlClass = computed(() => getDashboardControlClass())
 const loadingCardClass = computed(() => getDashboardLoadingCardClass())
 const pageEmptyClass = computed(() => getDashboardPageEmptyClass())
+
+onMounted(async () => {
+  // Should handle case when switching between Data & Execution and Results tabs
+  await fetchResultsList()
+})
+
+watch(() => settingStore.activeProjectIndex, async (newIndex, oldIndex) => {
+  if (newIndex !== oldIndex) {
+    selectedRun.value = null
+    selectedRunFiles.value = []
+    columnDefs.value = []
+    rowData.value = []
+    activeTab.value = "plots"
+    hasResults.value = false
+    await fetchResultsList()
+  }
+})
+
+watch(selectedRun, async () => {
+  if (!selectedRun.value) {
+    selectedRunFiles.value = []
+    columnDefs.value = []
+    rowData.value = []
+    return
+  }
+  selectedRunFiles.value = resultStore.runs[selectedRun.value] || []
+  await openResultsForRun()
+})
 
 function getTabClass(tabName) {
   return activeTab.value === tabName
@@ -36,27 +63,20 @@ function getTabClass(tabName) {
 }
 
 async function fetchResultsList() {
-  if (!selectedProject.value) return
+  if (!settingStore.activeProjectName) return
 
-  const r = await postData(
-    "list_results",
-    { project_name: selectedProject.value },
-    notify
-  )
-
-  if (!r?.success) {
-    runs.value = {}
+  const r = await fetchResults(settingStore.activeProjectName)
+  if (!r) {
     selectedRun.value = null
     selectedRunFiles.value = []
     columnDefs.value = []
     rowData.value = []
     return
   }
-
-  runs.value = r.data || {}
-
-  const firstRun = Object.keys(runs.value)[0]
-
+  if (resultStore.runs) {
+    hasResults.value = true
+  }
+  const firstRun = Object.keys(resultStore.runs)[0]
   if (!firstRun) {
     selectedRun.value = null
     selectedRunFiles.value = []
@@ -64,29 +84,12 @@ async function fetchResultsList() {
     rowData.value = []
     return
   }
-
   selectedRun.value = firstRun
-}
-
-async function fetchProjectsWithResults() {
-  const r = await postData("list_projects_with_results", {}, notify)
-
-  if (!r?.success) {
-    resultProjects.value = []
-    return
-  }
-
-  resultProjects.value = r.data || []
-
-  if (resultProjects.value.length > 0) {
-    selectedProject.value = resultProjects.value[0].name
-  }
 }
 
 function updateTableFromCsv(csvData) {
   const cols = csvData?.columns ?? []
   const rows = csvData?.rows ?? []
-
   columnDefs.value = [
     {
       headerName: "#",
@@ -107,7 +110,6 @@ function updateTableFromCsv(csvData) {
       resizable: true
     }))
   ]
-
   rowData.value = rows
 }
 
@@ -117,23 +119,18 @@ async function openResultsForRun() {
     rowData.value = []
     return
   }
-
   loadingResults.value = true
-
   try {
     const filesWithData = []
-
     for (const fileEntry of selectedRunFiles.value) {
       const r = await postData(
         "fetch_data",
         { full_path: fileEntry.path },
         notify
       )
-
       if (!r?.success) {
         continue
       }
-
       const fileType = r.data?.filetype
       const fileData = r.data?.data
 
@@ -141,7 +138,6 @@ async function openResultsForRun() {
         const sheets = fileData && typeof fileData === "object" ? fileData : {}
         const firstSheetName = Object.keys(sheets)[0]
         const firstSheet = firstSheetName ? sheets[firstSheetName] : null
-
         if (firstSheet?.columns?.length) {
           filesWithData.push({
             scenario: fileEntry.scenario,
@@ -155,70 +151,23 @@ async function openResultsForRun() {
         })
       }
     }
-
     if (!filesWithData.length) {
       notify.show("No readable result files found for this run.", 4000, "error")
       columnDefs.value = []
       rowData.value = []
       return
     }
-
     const merged = mergeScenarioSheets(filesWithData)
     updateTableFromCsv(merged)
-  } finally {
+  }
+  finally {
     loadingResults.value = false
   }
 }
-
-onMounted(async () => {
-  await fetchProjectsWithResults()
-})
-
-watch(
-  () => settingStore.activeProjectIndex,
-  async () => {
-    runs.value = {}
-    selectedRun.value = null
-    selectedRunFiles.value = []
-    columnDefs.value = []
-    rowData.value = []
-    activeTab.value = "plots"
-
-    await fetchProjectsWithResults()
-  }
-)
-
-watch(selectedProject, async () => {
-  runs.value = {}
-  selectedRun.value = null
-  selectedRunFiles.value = []
-  columnDefs.value = []
-  rowData.value = []
-  activeTab.value = "plots"
-
-  await fetchResultsList()
-})
-
-watch(selectedRun, async () => {
-  if (!selectedRun.value) {
-    selectedRunFiles.value = []
-    columnDefs.value = []
-    rowData.value = []
-    return
-  }
-
-  selectedRunFiles.value = runs.value[selectedRun.value] || []
-  await openResultsForRun()
-})
-
 </script>
 
 <template>
-  <div v-if="!resultProjects.length" class="p-4 text-gray-500">
-    No projects with results available.
-  </div>
-
-  <div v-else class="max-w-[1600px] mx-auto space-y-6">
+  <div class="max-w-[1600px] mx-auto space-y-6">
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div>
         <h1 class="text-2xl font-semibold text-gray-800">Results Dashboard</h1>
@@ -226,26 +175,8 @@ watch(selectedRun, async () => {
           Browse model result files and compare scenario outputs.
         </p>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Project
-        </label>
-
-        <select
-          v-model="selectedProject"
-          :class="controlClass"
-        >
-          <option
-            v-for="p in resultProjects"
-            :key="p.name"
-            :value="p.name"
-          >
-            {{ p.name }}
-          </option>
-        </select>
-      </div>
       <div
-        v-if="Object.keys(runs).length"
+        v-if="Object.keys(resultStore.runs).length"
         class="flex flex-col gap-3 sm:flex-row sm:items-end"
       >
         <div>
@@ -257,7 +188,7 @@ watch(selectedRun, async () => {
             :class="controlClass"
           >
             <option
-              v-for="runName in Object.keys(runs)"
+              v-for="runName in Object.keys(resultStore.runs)"
               :key="runName"
               :value="runName"
             >
@@ -293,7 +224,7 @@ watch(selectedRun, async () => {
     </div>
 
     <div
-      v-else-if="!Object.keys(runs).length"
+      v-else-if="!Object.keys(resultStore.runs).length"
       :class="pageEmptyClass"
     >
       Run the model to generate result files.
@@ -304,8 +235,8 @@ watch(selectedRun, async () => {
         <DashboardPanel title="Scenario comparison">
           <ScenarioComparisonPanel
             :data="rowData"
-            :fileName="selectedProject && selectedRun
-            ? `${selectedProject} – ${selectedRun}`
+            :fileName="settingStore.activeProjectName && selectedRun
+            ? `${settingStore.activeProjectName} – ${selectedRun}`
             : 'results'"
           />
         </DashboardPanel>

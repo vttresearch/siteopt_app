@@ -1,9 +1,10 @@
 <script setup>
-import { ref, watch, computed, nextTick, shallowRef, toRaw } from "vue";
+import { ref, watch, computed, nextTick, shallowRef } from "vue";
 import { AgGridVue } from "ag-grid-vue3";
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import Spinner from "@/components/Spinner.vue";
 import TimeSeriesChart from "@/components/TimeSeriesChart.vue";
+import CategoryToolbar from "@/components/CategoryToolbar.vue";
 import { detectTimeSeriesStructure } from "@/utils/chartUtils.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
@@ -15,7 +16,6 @@ const data_store = useTableDataStore();
 const notify = useNotificationStore();
 const settingStore = useSettingStore();
 const sheetStore = useSheetStore();
-
 const sheetNames = ref([]);
 const fileData = ref({});
 const rowData = ref([]);
@@ -30,13 +30,13 @@ const csvDirty = ref(false);
 const jsonDirty = ref(false);
 const xlsxDirty = ref(false);
 const activeView = ref("editor"); // "editor" | "plot"
-const selectedCount = ref(0)
+const selectedCount = ref(0);
+const selected = ref(null);
 const rowSelectionOptions = {
   mode: "multiRow",
   enableSelectionWithoutKeys: false,
   enableClickSelection: false,
 }
-
 const hasSelection = computed(() => selectedCount.value > 0);
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
 
@@ -529,34 +529,37 @@ async function saveCurrentFile() {
 </script>
 
 <template>
+
+  <div class="mb-3 text-lg font-semibold text-gray-800">Data Editor</div>
+  <CategoryToolbar />
+
+  <!-- View tabs -->
+  <div class="flex gap-2 my-3">
+    <button
+      class="px-3 py-1 rounded border"
+      :class="activeView === 'editor' ? 'bg-blue-600 text-white' : 'bg-white'"
+      @click="activeView = 'editor'"
+    >
+      Editor
+    </button>
+
+    <button
+      class="px-3 py-1 rounded border disabled:opacity-50"
+      :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
+      @click="activeView = 'plot'"
+      :disabled="!isTimeSeriesData"
+      title="Requires a time/date column + numeric columns"
+    >
+      Plot
+    </button>
+  </div>
+
   <Spinner v-if="data_store.loading" message="Loading data..." class="col-auto" />
 
   <div v-else>
-    <div class="mb-3 text-lg font-semibold text-gray-800">Data Editor</div>
-
-    <!-- View tabs -->
-    <div class="flex gap-2 mb-3">
-      <button
-        class="px-3 py-1 rounded border"
-        :class="activeView === 'editor' ? 'bg-blue-600 text-white' : 'bg-white'"
-        @click="activeView = 'editor'"
-      >
-        Editor
-      </button>
-
-      <button
-        class="px-3 py-1 rounded border disabled:opacity-50"
-        :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
-        @click="activeView = 'plot'"
-        :disabled="!isTimeSeriesData"
-        title="Requires a time/date column + numeric columns"
-      >
-        Plot
-      </button>
-    </div>
 
     <!-- Header row -->
-    <div class="flex items-center justify-between text-gray-600 my-2 mb-4">
+    <div class="flex items-center justify-between text-gray-600 my-2 mb-2">
       <div class="truncate">{{ data_store.fname }}
         <span v-if="data_store.daata?.filetype === 'md' && mdDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'csv' && csvDirty">*</span>
@@ -583,21 +586,18 @@ async function saveCurrentFile() {
     <!-- EDITOR VIEW -->
     <div v-if="activeView === 'editor'">
       <textarea
-        v-if="data_store.daata?.filetype === 'md'"
+        v-if="data_store.daata?.filetype === 'md' && mdText"
         v-model="mdText"
         class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
       <textarea
-        v-else-if="data_store.daata?.filetype === 'json'"
+        v-else-if="data_store.daata?.filetype === 'json' && jsonEditText"
         v-model="jsonEditText"
         class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
-      <div v-else-if="columnDefs.length" class="w-full h-80 flex flex-col">
-        <div v-if="data_store.daata?.filetype === 'xlsx'">
-          <SelectSheetButtons @update:activeSheet="newSheetSelected($event)" />
-        </div>
+      <div v-else-if="columnDefs.length" class="w-full h-100 flex flex-col">
         <!-- Toolbar -->
         <div class="flex items-center gap-2 mt-2 shrink-0">
           <button
@@ -622,17 +622,15 @@ async function saveCurrentFile() {
         <div class="flex-1 overflow-auto">
           <AgGridVue
               class="w-full h-full"
-              :domLayout="'autoHeight'"
               :columnDefs="columnDefs"
               :rowData="rowData"
               @grid-ready="onGridReady"
               @cell-value-changed="onCellValueChanged"
               @cell-key-down="onCellKeyDown"
               :rowBuffer="10"
-              :rowHeight="40"
-              :animateRows="true"
+              :rowHeight="35"
+              :animateRows="false"
               :rowSelection="rowSelectionOptions"
-              :suppressColumnVirtualization="false"
               :navigateCells="true"
               :suppressCellFocus="false"
               :singleClickEdit="true"
@@ -640,10 +638,15 @@ async function saveCurrentFile() {
               :tabToNextCell="tabToNextCell"
           />
         </div>
+        <!-- Sheets -->
+        <div v-if="data_store.daata?.filetype === 'xlsx'">
+          <SelectSheetButtons @update:activeSheet="newSheetSelected($event)" />
+        </div>
+
       </div>
 
       <div v-else class="p-4 text-gray-500">
-        {{ hasWorkFolders ? "Select a file to view data." : "Create a new project to begin." }}
+        {{ hasWorkFolders ? "Select a category and file to view data." : "Create a new project to begin." }}
       </div>
     </div>
 
