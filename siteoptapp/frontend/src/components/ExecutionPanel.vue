@@ -3,7 +3,7 @@ import { ref, onUnmounted, watch, computed, nextTick } from 'vue';
 import AnsiToHtml from "ansi-to-html"
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
-import { postData, fetchWorkFolder } from "@/utils/functions.js";
+import { postData, fetchResults } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
@@ -87,10 +87,8 @@ watch(coloredOutput, async () => {
 watch(executionFinished, async (newExecutionFinished) => {
   if (newExecutionFinished) {
     console.log("Execution finished")
-    if (settingStore.activeProjectPath !== "") {
-      // Fetch project folder files again to see output files
-      await fetchWorkFolder(settingStore.activeProjectPath)
-    }
+    // TODO: Fix case if user changes the project while execution is in progress
+    await fetchResults(settingStore.activeProjectName)
   }
 });
 
