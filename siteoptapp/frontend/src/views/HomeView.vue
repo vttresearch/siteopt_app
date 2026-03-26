@@ -10,7 +10,6 @@ import BackendConnectionStatusPanel from "@/components/BackendConnectionStatusPa
 import {
   checkBackendReady,
   fetchSettings,
-  fetchWorkFolderFiles,
   fetchCurrentInputFiles,
   fetchResults
 } from "@/utils/functions.js";
@@ -23,7 +22,6 @@ onMounted(async () => {
   const ready = await checkBackendReady()
   if (ready) {
     await fetchSettings()
-    // await fetchWorkFolderFiles()
     if (Object.keys(settingStore.workFolders ?? []).length > 0) {
       settingStore.setActiveProject(0)
       console.log("settingStore.workFolders:", settingStore.workFolders)

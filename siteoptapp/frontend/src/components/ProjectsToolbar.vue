@@ -5,7 +5,7 @@ import Spinner from "@/components/Spinner.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
-import { fetchSettings, fetchWorkFolderFiles, postData } from "@/utils/functions.js";
+import { fetchSettings, postData } from "@/utils/functions.js";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 
@@ -145,8 +145,6 @@ async function deleteProject() {
       notify
   )
   if (response.success) {
-    // await fetchSettings()
-    // await fetchWorkFolderFiles()
     // Remove entry from restoreCandidates.value
     restoreCandidates.value = restoreCandidates.value.filter(item => item.name !== projectToDelete.value.name)
     console.log("restoreCandidates.value", restoreCandidates.value)
@@ -177,7 +175,6 @@ async function postMakeWorkFolder(pathKey, projectName) {
     return
   }
   await fetchSettings();
-  // await fetchWorkFolderFiles();
   notify.show(`New project ${projectName} created`, 2000, "info")
   const index = Object.keys(settingStore.workFolders).indexOf(projectName);
   settingStore.setActiveProjectIndex(index >= 0 ? index : 0)

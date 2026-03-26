@@ -217,12 +217,6 @@ async function executeSelected(local) {
     local_execution: local,
     scenarios: selectedScenarios.value
   }
-
-  // REMOVE THESE BEFORE SHIPPING
-  localExecutionInProgress.value = false
-  return
-
-
   const response = await postData("execute", configs, notify)
   if (!response.success) {
     clearExecutionInProgress()
