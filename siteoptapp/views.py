@@ -1031,7 +1031,7 @@ def get_items_to_execute(exec_type):
     if exec_type == "all":
         return []
     elif exec_type == "opt1":
-        # Load data into input data DS (20 items)
+        # Load data into input data DS (22 items)
         return [
             "connections input",
             "diverting units",
@@ -1053,6 +1053,8 @@ def get_items_to_execute(exec_type):
             "import object parameters wide",
             "scenario importer",
             "Input data",
+            "Copy DB",
+            "input with repr periods"
         ]
     elif exec_type == "opt2":
         # Run 'Optimize full period' (5 items)
