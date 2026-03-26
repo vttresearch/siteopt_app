@@ -212,7 +212,7 @@ async function executeSelected(local) {
   }
   notify.show(`Executing ${execTypes[execType.value]} for project ${settingStore.activeProjectPath}`, 5000, "info")
   const configs = {
-    work_dir_name: settingStore.activeProjectPath,
+    work_dir_name: settingStore.activeProjectName,
     execution_type: execType.value,
     local_execution: local,
     scenarios: selectedScenarios.value
