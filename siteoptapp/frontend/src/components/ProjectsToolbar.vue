@@ -5,7 +5,7 @@ import Spinner from "@/components/Spinner.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
-import { fetchSettings, postData } from "@/utils/functions.js";
+import { fetchSettings, postData, fetchCurrentInputFiles } from "@/utils/functions.js";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 
@@ -121,6 +121,7 @@ async function restoreProject(c) {
     const index = settingStore.workFolders.length -1
     console.log(`restoreProject() index:${index}`)
     settingStore.setActiveProject(index >= 0 ? index : null)
+    await fetchCurrentInputFiles(settingStore.activeProjectName)
     notify.show(`Project ${c.name} restored`, 2000, "info")
   }
 }
@@ -177,7 +178,8 @@ async function postMakeWorkFolder(pathKey, projectName) {
   await fetchSettings();
   notify.show(`New project ${projectName} created`, 2000, "info")
   const index = Object.keys(settingStore.workFolders).indexOf(projectName);
-  settingStore.setActiveProjectIndex(index >= 0 ? index : 0)
+  settingStore.setActiveProject(index >= 0 ? index : 0)
+  await fetchCurrentInputFiles(settingStore.activeProjectName)
   settingStore.creatingProjectFolder = false
 }
 
