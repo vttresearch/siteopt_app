@@ -93,7 +93,7 @@ async function fetchFileContents(fname, fpath) {
       <div
         v-if="openCategory === category.value"
         class="absolute left-0 mt-2 w-60 bg-white border border-gray-200
-               rounded-md shadow-lg z-10"
+               rounded-md shadow-lg z-50"
       >
         <button
           v-for="opt in category.options"

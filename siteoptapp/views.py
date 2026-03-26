@@ -263,7 +263,8 @@ def remove_scenario(client_id, scenario_name, project_name):
 
 def delete_project(client_id, path):
     if not os.path.exists(path):
-        return JsonResponse({"success": False, "error": f"Deleting project failed. Path {path} doesn't exist."})
+        # Return True because it's probably been deleted manually
+        return JsonResponse({"success": True, "data": {}})
     # Remove path from disk
     try:
         shutil.rmtree(path)
@@ -1065,7 +1066,7 @@ def get_items_to_execute(exec_type):
             "Extract results",
         ]
     elif exec_type == "opt3":
-        # Run 'Optimize with representative periods' (8 items)
+        # Run 'Optimize with representative periods' (9 items)
         return [
             "Input data",
             "repr periods template",

@@ -145,7 +145,6 @@ function clearRefs() {
   csvDirty.value = false;
   jsonDirty.value = false;
   xlsxDirty.value = false;
-  activeView.value = "editor";
   // Clear these manually because data_store.clear() causes a circular watcher loop because it clears data_store.daata
   data_store.fname = ""
   data_store.fpath = ""
@@ -298,10 +297,6 @@ async function newSheetSelected(sheetName) {
   // Apply sheet data from store
   updateTableWithActiveSheet()
   await nextTick()
-  // Enable editor or plot view
-  if (activeView.value === "plot" && !isTimeSeriesData.value) {
-    activeView.value = "editor"
-  }
   sheetStore.toggleSheetDataUpdated()
 }
 
@@ -359,14 +354,15 @@ watch(() => data_store.daata,
       }
       updateTableWithActiveSheet()
       await nextTick()
-      activeView.value = isTimeSeriesData.value ? "plot" : "editor"
+      // Default to editor always with Excel files
+      activeView.value = "editor"
       sheetStore.toggleSheetDataUpdated()
     }
     else if (fileType === "csv") {
       sheetNames.value = [];
       updateTableFromCsv();
       await nextTick();
-      activeView.value = isTimeSeriesData.value ? "plot" : "editor";
+      // Don't set activeView here so that the UI stays in previous view. Plot view, when switching between csv files
     }
     else if (fileType === "json") {
       sheetNames.value = [];
@@ -533,68 +529,72 @@ async function saveCurrentFile() {
   <div class="mb-3 text-lg font-semibold text-gray-800">Data Editor</div>
   <CategoryToolbar />
 
-  <!-- View tabs -->
-  <div class="flex gap-2 my-3">
-    <button
-      class="px-3 py-1 rounded border"
-      :class="activeView === 'editor' ? 'bg-blue-600 text-white' : 'bg-white'"
-      @click="activeView = 'editor'"
-    >
-      Editor
-    </button>
+  <!-- View tabs, file name and save button -->
+  <div class="flex items-center justify-between text-gray-600 my-2 mb-2">
 
-    <button
-      class="px-3 py-1 rounded border disabled:opacity-50"
-      :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
-      @click="activeView = 'plot'"
-      :disabled="!isTimeSeriesData"
-      title="Requires a time/date column + numeric columns"
-    >
-      Plot
-    </button>
-  </div>
+    <div class="flex justify-start gap-2">
+      <button
+          class="px-3 py-1 rounded border"
+          :class="activeView === 'editor' ? 'bg-blue-600 text-white' : 'bg-white'"
+          @click="activeView = 'editor'"
+      >
+        Editor
+      </button>
 
-  <Spinner v-if="data_store.loading" message="Loading data..." class="col-auto" />
+      <button
+          class="px-3 py-1 rounded border disabled:opacity-50"
+          :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
+          @click="activeView = 'plot'"
+          :disabled="!isTimeSeriesData"
+          title="Requires a time/date column + numeric columns"
+      >
+        Plot
+      </button>
+    </div>
 
-  <div v-else>
-
-    <!-- Header row -->
-    <div class="flex items-center justify-between text-gray-600 my-2 mb-2">
+    <div class="flex justify-center flex-1 text-center">
       <div class="truncate">{{ data_store.fname }}
         <span v-if="data_store.daata?.filetype === 'md' && mdDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'csv' && csvDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'json' && jsonDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'xlsx' && xlsxDirty">*</span>
       </div>
+    </div>
 
+    <div class="flex justify-end">
       <button
-        v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
-        class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
-        :disabled="
+          v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
+          class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          :disabled="
           (data_store.daata?.filetype === 'md' && !mdDirty) ||
           (data_store.daata?.filetype === 'csv' && !csvDirty) ||
           (data_store.daata?.filetype === 'json' && !jsonDirty) ||
           (data_store.daata?.filetype === 'xlsx' && !xlsxDirty) ||
-          saving
-        "
-        @click="saveCurrentFile"
+          saving"
+          @click="saveCurrentFile"
       >
         {{ saving ? "Saving..." : "Save" }}
       </button>
     </div>
 
+  </div>
+
+  <div v-if="data_store.loading" class="w-full h-100 pt-10 flex flex-col">
+    <Spinner message="Loading data..." class="col-auto" />
+    </div>
+  <div v-else>
     <!-- EDITOR VIEW -->
     <div v-if="activeView === 'editor'">
       <textarea
         v-if="data_store.daata?.filetype === 'md' && mdText"
         v-model="mdText"
-        class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
+        class="w-full h-100 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
       <textarea
         v-else-if="data_store.daata?.filetype === 'json' && jsonEditText"
         v-model="jsonEditText"
-        class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
+        class="w-full h-100 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
       <div v-else-if="columnDefs.length" class="w-full h-100 flex flex-col">

@@ -15,8 +15,7 @@ const settingStore = useSettingStore()
 const execType = ref("")
 const executionOutput = ref([])
 const executionFinished = ref(false)
-const localExecutionInProgress = ref(false)
-const remoteExecutionInProgress = ref(false)
+const executionInProgress = ref(false)
 const refreshingScenarios = ref(false)
 let eventSource = null
 const converter = new AnsiToHtml();
@@ -174,22 +173,9 @@ async function confirmRemoveScenario() {
   itemToRemove.value = null
 }
 
-function executeSelectedLocal() {
-  executionFinished.value = false
-  localExecutionInProgress.value = true
-  executeSelected(true)
-}
-
-function executeSelectedRemote() {
-  executionFinished.value = false
-  remoteExecutionInProgress.value = true
-  executeSelected(false)
-}
-
 function clearExecutionInProgress() {
+  executionInProgress.value = false
   executionFinished.value = true
-  localExecutionInProgress.value = false
-  remoteExecutionInProgress.value = false
 }
 
 /* Returns true if selected execution task should have at least one scenario selected, false otherwise. */
@@ -197,7 +183,9 @@ function execTypeNeedsScenario() {
   return execType.value === "all" || execType.value === "opt2" || execType.value === "opt3"
 }
 
-async function executeSelected(local) {
+async function executeSelected() {
+  executionInProgress.value = true
+  executionFinished.value = false
   if (execType.value === "") {
     notify.show("Please select a Task to execute", 1000, "info")
     clearExecutionInProgress()
@@ -208,11 +196,12 @@ async function executeSelected(local) {
     clearExecutionInProgress()
     return
   }
-  notify.show(`Executing ${execTypes[execType.value]} for project ${settingStore.activeProjectPath}`, 5000, "info")
+  notify.show(`Executing ${execTypes[execType.value]} for project ${settingStore.activeProjectName}`, 5000, "info")
+  // local_execution is hard-coded to true until it's implemented
   const configs = {
     work_dir_name: settingStore.activeProjectName,
     execution_type: execType.value,
-    local_execution: local,
+    local_execution: true,
     scenarios: selectedScenarios.value
   }
   const response = await postData("execute", configs, notify)
@@ -229,7 +218,7 @@ async function executeSelected(local) {
   eventSource = new EventSource(streamUrl);
   eventSource.addEventListener("done", (event) => {
     if (event.data !== "0") {
-      notify.show(`Executing project ${settingStore.activeProjectPath} failed`, 10000, "error")
+      notify.show(`Executing project ${settingStore.activeProjectName} failed`, 10000, "error")
       executionOutput.value.push("Execution failed");
     }
     console.log("Execution process exit code:", event.data);
@@ -365,19 +354,11 @@ async function executeSelected(local) {
           class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
           type="button"
           :disabled="!execType"
-          @click="executeSelectedLocal">
-        <i v-if="localExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+          title="Select a task to execute"
+          @click="executeSelected">
+        <i v-if="executionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
         <i v-else class="fa-solid fa-play"></i>
-        <span class="text-nowrap">Execute (Local)</span>
-      </button>
-      <button
-          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-          type="button"
-          :disabled="!execType"
-          @click="executeSelectedRemote">
-        <i v-if="remoteExecutionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-        <i v-else class="fa-solid fa-play"></i>
-        <span class="text-nowrap">Execute (Remote)</span>
+        <span class="text-nowrap">Execute</span>
       </button>
     </div>
   </div>
