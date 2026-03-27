@@ -4,8 +4,7 @@ import ScenarioComparisonChart from "@/components/ScenarioComparisonChart.vue"
 import {
   CHART_THEME,
   detectScenarioStructure,
-  processScenarioComparisonData,
-  processCategorySummedData
+  processScenarioComparisonData
 } from "@/utils/chartUtils.js"
 import ChartSettingsModal from "@/components/ChartSettingsModal.vue"
 import CustomPlotModal from "@/components/CustomPlotModal.vue"
@@ -23,13 +22,9 @@ const props = defineProps({
 
 const chartHeight = ref(400)
 
-const showScenarioSumChart = ref(true)
-const showDefaultItemsChart = ref(true)
 const selectedCategories = ref([])
 const scenarioStructure = ref(null)
 
-const categoryTotalsOption = ref({})
-const defaultItemsOption = ref({})
 const categoryItemsChartOptions = ref({})
 
 const customPlotModalOpen = ref(false)
@@ -48,11 +43,6 @@ const DEFAULT_CHART_SETTINGS = () => ({
   orientation: "vertical"
 })
 
-const categoryTotalsSettings = ref(DEFAULT_CHART_SETTINGS())
-const defaultItemsSettings = ref({
-  ...DEFAULT_CHART_SETTINGS(),
-  hideZeroValues: true
-})
 const categoryItemsSettings = ref({})
 
 const settingsModalOpen = ref(false)
@@ -210,8 +200,6 @@ function toggleCategory(category) {
 
 function getSettingsForTarget(target) {
   if (!target) return DEFAULT_CHART_SETTINGS()
-  if (target === "categoryTotals") return { ...categoryTotalsSettings.value }
-  if (target === "defaultItems") return { ...defaultItemsSettings.value }
 
   if (target?.type === "customPlot" && target.id) {
     const plot = customPlots.value.find((p) => p.id === target.id)
@@ -240,76 +228,6 @@ function closeChartSettings() {
 
 function getCategoryItemsSettings(categoryName) {
   return categoryItemsSettings.value[categoryName] || DEFAULT_CHART_SETTINGS()
-}
-
-function updateCategoryTotalsChart() {
-  if (!scenarioStructure.value) {
-    categoryTotalsOption.value = {}
-    defaultItemsOption.value = {}
-    return
-  }
-
-  if (!scenarioStructure.value.hasSummaries) {
-    categoryTotalsOption.value = {}
-    defaultItemsOption.value = {}
-    return
-  }
-
-  const allScenarios = scenarioStructure.value.scenarios.map((s) => normalizeString(s))
-
-  const totalsSettings = categoryTotalsSettings.value
-  const totalsChartType =
-    totalsSettings.orientation === "vertical" ? "groupedBar" : "horizontalBar"
-
-  const totalsConfig = processCategorySummedData(
-    props.data,
-    scenarioStructure.value,
-    allScenarios,
-    totalsChartType,
-    totalsSettings.yAxisScale,
-    totalsSettings.useMinBarHeight,
-    totalsSettings.hideZeroValues
-  )
-
-  if (totalsConfig) {
-    totalsConfig.title = {
-      text: `Category totals: ${props.fileName}`,
-      left: "center",
-      textStyle: { fontSize: CHART_THEME.titleFontSize }
-    }
-    categoryTotalsOption.value = totalsConfig
-  } else {
-    categoryTotalsOption.value = {}
-  }
-
-  const allItems = (scenarioStructure.value.items || []).map((i) => normalizeString(i))
-  const itemSettings = defaultItemsSettings.value
-  const itemChartType =
-    itemSettings.orientation === "vertical" ? "groupedBar" : "horizontalBar"
-
-  const defaultConfig = processScenarioComparisonData(
-    props.data,
-    scenarioStructure.value,
-    allItems,
-    allScenarios,
-    itemChartType,
-    false,
-    [],
-    itemSettings.yAxisScale,
-    itemSettings.useMinBarHeight,
-    itemSettings.hideZeroValues
-  )
-
-  if (defaultConfig) {
-    defaultConfig.title = {
-      text: `All items: ${props.fileName}`,
-      left: "center",
-      textStyle: { fontSize: CHART_THEME.titleFontSize }
-    }
-    defaultItemsOption.value = applyTopNFilter(defaultConfig, itemSettings.topNValues)
-  } else {
-    defaultItemsOption.value = {}
-  }
 }
 
 function updateCategoryItemsChartFor(categoryName) {
@@ -401,13 +319,7 @@ function applyChartSettings(settings) {
     return
   }
 
-  if (target === "categoryTotals") {
-    categoryTotalsSettings.value = settings
-    updateCategoryTotalsChart()
-  } else if (target === "defaultItems") {
-    defaultItemsSettings.value = settings
-    updateCategoryTotalsChart()
-  } else if (target?.type === "customPlot" && target.id) {
+  if (target?.type === "customPlot" && target.id) {
     customPlots.value = customPlots.value.map((plot) => {
       if (plot.id !== target.id) return plot
 
@@ -512,8 +424,6 @@ function closeCustomPlot(plotId) {
 function initializeChart() {
   if (!props.data?.length) {
     scenarioStructure.value = null
-    categoryTotalsOption.value = {}
-    defaultItemsOption.value = {}
     categoryItemsChartOptions.value = {}
     customPlots.value = customPlots.value.map((plot) => ({
       ...plot,
@@ -527,8 +437,6 @@ function initializeChart() {
 
   if (!structure) {
     selectedCategories.value = []
-    categoryTotalsOption.value = {}
-    defaultItemsOption.value = {}
     categoryItemsChartOptions.value = {}
     customPlots.value = customPlots.value.map((plot) => ({
       ...plot,
@@ -537,13 +445,7 @@ function initializeChart() {
     return
   }
 
-  if (selectedCategories.value.length && structure.summaries) {
-    selectedCategories.value = selectedCategories.value.filter((sel) =>
-      structure.summaries.some((s) => normalizeString(s) === normalizeString(sel))
-    )
-  }
-
-  updateCategoryTotalsChart()
+  selectedCategories.value = structure.summaries ? [...structure.summaries] : []
 
   selectedCategories.value.forEach((category) => {
     updateCategoryItemsChartFor(category)
@@ -583,37 +485,6 @@ watch(
     <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
       <aside class="w-full lg:w-56 shrink-0 rounded-lg border border-gray-200 bg-white p-4 h-fit">
         <div class="space-y-3">
-          <div>
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              Overview
-            </p>
-            <button
-              type="button"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
-              :class="showScenarioSumChart
-                ? 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100'
-                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
-              @click="showScenarioSumChart = !showScenarioSumChart"
-            >
-              <span class="text-lg leading-none">📊</span>
-              <span>Scenario sum plot</span>
-            </button>
-          </div>
-
-          <div>
-            <button
-              type="button"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
-              :class="showDefaultItemsChart
-                ? 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100'
-                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
-              @click="showDefaultItemsChart = !showDefaultItemsChart"
-            >
-              <span class="text-lg leading-none">📋</span>
-              <span>Scenario comparison by item</span>
-            </button>
-          </div>
-
           <div v-if="availableSummaries.length">
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
               Summaries
@@ -630,7 +501,7 @@ watch(
               @click="toggleCategory(summary)"
             >
               <span class="text-lg leading-none">📈</span>
-              <span class="truncate">Plot {{ summary }}</span>
+              <span class="truncate">{{ summary }}</span>
             </button>
           </div>
 
@@ -651,70 +522,6 @@ watch(
       </aside>
 
       <div class="flex-1 min-w-0 overflow-auto pr-1">
-        <div
-          v-if="showScenarioSumChart"
-          class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
-        >
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-gray-800">Category totals</h4>
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                @click="openChartSettings('categoryTotals')"
-              >
-                Settings
-              </button>
-              <button
-                type="button"
-                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                @click="showScenarioSumChart = false"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-
-          <ScenarioComparisonChart
-            :option="categoryTotalsOption"
-            :height="chartHeight"
-            empty-message="No category totals data available."
-          />
-        </div>
-
-        <div
-          v-if="showDefaultItemsChart && defaultItemsOption && Object.keys(defaultItemsOption).length"
-          class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
-        >
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-gray-800">
-              Scenario comparison by item
-            </h4>
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                @click="openChartSettings('defaultItems')"
-              >
-                Settings
-              </button>
-              <button
-                type="button"
-                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                @click="showDefaultItemsChart = false"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-
-          <ScenarioComparisonChart
-            :option="defaultItemsOption"
-            :height="chartHeight"
-            empty-message="No item data available."
-          />
-        </div>
-
         <div
           v-for="category in selectedCategories"
           :key="category"
