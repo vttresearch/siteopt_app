@@ -236,41 +236,41 @@ async function postMakeWorkFolder(pathKey, projectName) {
     </div>
 
     <div class="relative">
-    <div v-if="restoreOpen" class="absolute top-0 left-0 w-full z-50 border border-gray-300 rounded p-3 bg-gray-50 shadow-xl">
-      <div class="flex items-center justify-between mb-2">
-        <div class="font-semibold text-gray-800">Restore project</div>
-        <BaseButton variant="ghost" @click="restoreOpen = false">Close</BaseButton>
-      </div>
+      <div v-if="restoreOpen" class="absolute top-0 left-0 w-full z-50 border border-gray-300 rounded p-3 bg-gray-50 shadow-xl">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-semibold text-gray-800">Restore project</div>
+          <BaseButton variant="ghost" @click="restoreOpen = false">Close</BaseButton>
+        </div>
 
-      <div v-if="restoreCandidates.length === 0" class="text-sm text-gray-600">
-        No hidden projects found.
-      </div>
-      <div v-else class="space-y-2">
-        <div v-for="c in restoreCandidates"
-             :key="c.path"
-             class="w-full px-3 py-2 flex justify-between bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-blue-500"
-             >
-          <div>
-            <div class="font-medium text-left">{{ c.name }}</div>
-            <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
-          </div>
-          <div class="flex items-center gap-4">
-            <button
-                class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-blue-500 hover:bg-blue-700"
-                :title="`Restore ${c.name}`"
-                @click="restoreProject(c)">
-              <i class="fa-regular fa-folder-open"></i>
-            </button>
-            <button
-                class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-red-500 hover:bg-red-700"
-                :title="`Delete ${c.name}`"
-                @click="askDeleteProject(c)">
-              <i class="fa-regular fa-trash-can"></i>
-            </button>
+        <div v-if="restoreCandidates.length === 0" class="text-sm text-gray-600">
+          No hidden projects found.
+        </div>
+        <div v-else class="space-y-2">
+          <div v-for="c in restoreCandidates"
+               :key="c.path"
+               class="w-full px-3 py-2 flex justify-between bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-blue-500"
+               >
+            <div>
+              <div class="font-medium text-left">{{ c.name }}</div>
+              <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
+            </div>
+            <div class="flex items-center gap-4">
+              <button
+                  class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-blue-500 hover:bg-blue-700"
+                  :title="`Restore ${c.name}`"
+                  @click="restoreProject(c)">
+                <i class="fa-regular fa-folder-open"></i>
+              </button>
+              <button
+                  class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-red-500 hover:bg-red-700"
+                  :title="`Delete ${c.name}`"
+                  @click="askDeleteProject(c)">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </div>
 
   </div>

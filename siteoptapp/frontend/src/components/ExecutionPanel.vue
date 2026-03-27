@@ -3,15 +3,18 @@ import { ref, onUnmounted, watch, computed, nextTick } from 'vue';
 import AnsiToHtml from "ansi-to-html"
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
+import { useTaskStore } from "@/stores/taskstore.js";
 import { postData, fetchResults } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
+import ExecutionProgressBar from "@/components/ExecutionProgressBar.vue";
 
 
 const notify = useNotificationStore()
 const settingStore = useSettingStore()
+const taskStore = useTaskStore()
 const execType = ref("")
 const executionOutput = ref([])
 const executionFinished = ref(false)
@@ -22,19 +25,13 @@ const converter = new AnsiToHtml();
 const outputEl = ref(null)
 const selectedScenarios = ref([])
 let shouldAutoScroll = true
-const execTypes = {
-  "all": "Complete workflow",
-  "opt1": "Prepare input data",
-  "opt2": "Optimize full period",
-  "opt3": "Optimize with representative periods",
-  "opt4": "Purge output Db",
-  }
 const scenarios = ref([])
 const showAddScenarioPrompt = ref(false)
 const confirmOpen = ref(false)
 const itemToRemove = ref(null)
 const confirmMessage = ref("")
 const returnFocusEl = ref(null)
+const showLog = ref(true)
 
 /* Refreshes file tree when user selects a project */
 watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
@@ -180,12 +177,15 @@ function clearExecutionInProgress() {
 
 /* Returns true if selected execution task should have at least one scenario selected, false otherwise. */
 function execTypeNeedsScenario() {
-  return execType.value === "all" || execType.value === "opt2" || execType.value === "opt3"
+  return execType.value === "Optimize full period" ||
+      execType.value === "Optimize with representative periods" ||
+      execType.value === "Complete workflow"
 }
 
 async function executeSelected() {
   executionInProgress.value = true
   executionFinished.value = false
+  taskStore.setCurrentTask(execType.value)
   if (execType.value === "") {
     notify.show("Please select a Task to execute", 1000, "info")
     clearExecutionInProgress()
@@ -196,11 +196,14 @@ async function executeSelected() {
     clearExecutionInProgress()
     return
   }
-  notify.show(`Executing ${execTypes[execType.value]} for project ${settingStore.activeProjectName}`, 5000, "info")
+  notify.show(`Running task ${execType.value} for project ${settingStore.activeProjectName}`, 5000, "info")
+  // Get an Array of project item names to execute
+  const executionTask = taskStore.tasks.filter((task) => task.name === execType.value)
+  const projectItems = executionTask[0].subtasks.map((subtask) => subtask.name)
   // local_execution is hard-coded to true until it's implemented
   const configs = {
     work_dir_name: settingStore.activeProjectName,
-    execution_type: execType.value,
+    executed_items: projectItems,
     local_execution: true,
     scenarios: selectedScenarios.value
   }
@@ -232,57 +235,49 @@ async function executeSelected() {
     eventSource.close();
     eventSource = null;
     clearExecutionInProgress()
-  })
+  });
+  eventSource.addEventListener("item_finished", (event) => {
+    // This listener removes the 'Execution ... finished' message from the execution log
+    let finishedSubtask = event.data
+    taskStore.markSubtaskDone(finishedSubtask)
+    taskStore.getNextSubtask()
+  });
   eventSource.onmessage = (event) => {
     executionOutput.value.push(event.data)
-  }
+  };
 }
 
+function setCurrentTask(taskName) {
+  execType.value = taskName
+  taskStore.setCurrentTask(taskName)
+  taskStore.setSubtasksPending(taskName)
+}
 </script>
 
 <template>
-
-  <div class="mb-3 text-lg font-semibold text-gray-800">Execution</div>
+  <div class="flex items-center justify-between">
+    <div class="mb-3 text-lg font-semibold text-gray-800">Execution</div>
+    <button
+        class="flex items-center gap-1 justify-center text-white rounded-md disabled:opacity-50 px-2 py-3 cursor-pointer"
+        type="button"
+        title="Recent projects"
+        @click="showLog = !showLog"
+        :class="showLog ? 'bg-blue-500 hover:bg-blue-700 shadow-lg' : 'bg-gray-500 hover:bg-gray-700'">
+      <i class="fa-solid fa-file-lines"></i>
+    </button>
+  </div>
 
   <div>
-
-    <!-- Tasks to execute -->
+    <!-- Task selection buttons -->
     <span class="text-gray-800 italic">Task to execute</span>
     <div class="flex flex-wrap justify-start items-center gap-4 p-4">
       <BaseButton
-        variant="secondary"
-        @click="execType = 'opt1'"
-        :class="execType === 'opt1' && 'ring-2 ring-blue-500'"
+          v-for="task in taskStore.tasks"
+          variant="secondary"
+          @click="setCurrentTask(task.name)"
+          :class="execType === task.name && 'ring-2 ring-blue-500'"
       >
-        {{ execTypes["opt1"] }}
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        @click="execType = 'opt2'"
-        :class="execType === 'opt2' && 'ring-2 ring-blue-500'"
-      >
-        {{ execTypes["opt2"] }}
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        @click="execType = 'opt3'"
-        :class="execType === 'opt3' && 'ring-2 ring-blue-500'"
-      >
-        {{ execTypes["opt3"] }}
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        @click="execType = 'all'"
-        :class="execType === 'all' && 'ring-2 ring-blue-500'"
-      >
-        {{ execTypes["all"] }}
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        @click="execType = 'opt4'"
-        :class="execType === 'opt4' && 'ring-2 ring-blue-500'"
-      >
-        {{ execTypes["opt4"] }}
+        {{ task.name }}
       </BaseButton>
     </div>
 
@@ -291,7 +286,7 @@ async function executeSelected() {
       <div class="flex justify-start items-center gap-8">
         <span class="pr-4 text-gray-800 italic">Scenarios</span>
         <button
-            class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+            class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
             type="button"
             :disabled="refreshingScenarios"
             @click="showAddScenarioPrompt = true">
@@ -348,10 +343,10 @@ async function executeSelected() {
       />
     </div>
 
-    <!-- Execute buttons -->
+    <!-- Execute button -->
     <div class="flex justify-start gap-4 pb-4">
       <button
-          class="flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
           type="button"
           :disabled="!execType"
           title="Select a task to execute"
@@ -361,10 +356,11 @@ async function executeSelected() {
         <span class="text-nowrap">Execute</span>
       </button>
     </div>
+    <ExecutionProgressBar />
   </div>
 
   <!-- Execution log -->
-  <div
+  <div v-if="showLog"
       class="relative bg-gray-900 text-gray-100 p-4 rounded overflow-y-auto h-80 max-h-96 font-mono text-sm shadow-inner"
       ref="outputEl"
       @scroll="handleScroll">

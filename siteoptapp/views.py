@@ -358,7 +358,7 @@ def prepare_execution(client_id, data):
         job_id,
         {
             "path": project_path,
-            "exec_type": data["execution_type"],
+            "exec_items": data["executed_items"],
             "local": data["local_execution"],
             "scenarios": data["scenarios"]
         },
@@ -381,13 +381,7 @@ def execute(request, job_id):
             yield f"event: error\ndata: Execution failed. Job {job_id} not ready after {timeout}s.\n\n"
             return
         ppath = job["path"]
-        exec_type = job["exec_type"]
-        try:
-            items_to_execute = get_items_to_execute(exec_type)
-        except NotImplementedError:
-            yield (f"event: error\ndata: Execution failed to start. Support "
-                   f"for execution type {exec_type} not implemented.")
-            return
+        items_to_execute = job["exec_items"]
         exec_locally = job["local"]
         project_path = Path(ppath).resolve()
         scenarios = job["scenarios"]
@@ -426,7 +420,18 @@ def execute(request, job_id):
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             for line in iter(proc.stdout.readline, b""):
                 line = line.decode("utf-8", "replace").strip()
-                yield f"data: {line}\n\n"
+                if line.startswith("Executing") and line.endswith("finished"):
+                    # This intercepts the 'Executing ... finished' output line and sends an event instead
+                    parsed_line = line.removeprefix("Executing").removesuffix("finished").strip()
+                    # Strip project item type
+                    parsed_line = parsed_line.removeprefix("Data Connection ")
+                    parsed_line = parsed_line.removeprefix("Tool ")
+                    parsed_line = parsed_line.removeprefix("Importer ")
+                    parsed_line = parsed_line.removeprefix("Data Store ")
+                    parsed_line = parsed_line.removeprefix("Merger ")
+                    yield f"event: item_finished\ndata: {parsed_line}\n\n"
+                else:
+                    yield f"data: {line}\n\n"
             proc.stdout.close()
             proc_retval = proc.wait()
             cache.delete(job_id)
@@ -1025,65 +1030,3 @@ def _extract_validations_by_column(wb, ws, columns):
                     validations[header] = options
 
     return validations
-
-
-def get_items_to_execute(exec_type):
-    if exec_type == "all":
-        return []
-    elif exec_type == "opt1":
-        # Load data into input data DS (22 items)
-        return [
-            "connections input",
-            "diverting units",
-            "storage input data",
-            "nodes",
-            "pv unit input",
-            "model specification",
-            "hp units input",
-            "Existing load",
-            "scenarios",
-            "convert connections",
-            "Load template",
-            "convert diverting units (1)",
-            "convert storages",
-            "convert nodes",
-            "convert VRE units",
-            "convert hp units",
-            "model spec importer",
-            "import object parameters wide",
-            "scenario importer",
-            "Input data",
-            "Copy DB",
-            "input with repr periods"
-        ]
-    elif exec_type == "opt2":
-        # Run 'Optimize full period' (5 items)
-        return [
-            "Input data",
-            "Copy DB",
-            "input with repr periods",
-            "Optimize",
-            "output db",
-            "Output recipe",
-            "Extract results",
-        ]
-    elif exec_type == "opt3":
-        # Run 'Optimize with representative periods' (9 items)
-        return [
-            "Input data",
-            "repr periods template",
-            "repr period selection settings",
-            "Select repr periods",
-            "input with repr periods",
-            "Optimize",
-            "output db",
-            "Output recipe",
-            "Extract results",
-        ]
-    elif exec_type == "opt4":
-        # Purges output db
-        # TODO: Not implemented
-        return ["Purge output db"]
-    else:
-        print(f"Unknown execution type: {exec_type}")
-        raise NotImplementedError()
