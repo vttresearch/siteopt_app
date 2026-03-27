@@ -284,6 +284,8 @@ export const CHART_STYLE_THEME = {
         axisLabel: {
           interval: 0,
           rotate: count > 20 ? 50 : count > 10 ? 35 : 20,
+          margin: 14,
+          verticalAlign: "top",
           width: CHART_STYLE_THEME.verticalLabelWidth,
           overflow: "break",
           fontSize: CHART_STYLE_THEME.axisLabelFontSize,
