@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onUnmounted, watch, computed, nextTick } from 'vue';
+import { ref, onUnmounted, onBeforeUnmount, watch, computed, nextTick } from 'vue';
 import AnsiToHtml from "ansi-to-html"
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
@@ -31,6 +31,11 @@ const returnFocusEl = ref(null)
 const showLog = ref(true)
 let eventSource = null
 let shouldAutoScroll = true
+let intervalId = null;
+
+onBeforeUnmount(() => {
+  clearInterval(intervalId);
+});
 
 /* Refreshes scenarios when the selected project changes */
 watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
@@ -131,10 +136,8 @@ function askRemoveScenario(scenario, triggerEl) {
 async function confirmRemoveScenario() {
   if (!itemToRemove.value) {
     // user clicked cancel
-    console.log("Removing scenario cancelled")
     return
   }
-  console.log("Removing scenario:", itemToRemove.value)
   selectedScenarios.value = selectedScenarios.value.filter(s => s !== itemToRemove.value)
   scenarioStore.loadingScenarios = true
   const configs = {scenario_name: itemToRemove.value, work_folder: settingStore.activeProjectPath}
@@ -152,10 +155,10 @@ async function confirmRemoveScenario() {
 function clearExecutionInProgress() {
   executionInProgress.value = false
   executionFinished.value = true
+  stopTimer()
 }
 
 function clearProgressBar() {
-  taskStore.subtasksDone = 0
   taskStore.clearSubtasks()
 }
 /* Returns true if selected execution task should have at least one scenario selected, false otherwise. */
@@ -182,6 +185,8 @@ async function executeSelected() {
   notify.show(`Running task ${execType.value} for project ${settingStore.activeProjectName}`, 5000, "info")
   // Clear progress bar
   clearProgressBar()
+  // Start timer
+  startTimer()
   // Get an Array of project item names to execute
   const executionTask = taskStore.tasks.filter((task) => task.name === execType.value)
   const projectItems = executionTask[0].subtasks.map((subtask) => subtask.name)
@@ -235,6 +240,18 @@ function setCurrentTask(taskName) {
   taskStore.setCurrentTask(taskName)
   taskStore.setSubtasksPending(taskName)
 }
+
+function startTimer() {
+  // reset is done in taskStore.clearSubtasks()
+  intervalId = setInterval(() => {
+    taskStore.incrementTimer()
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(intervalId);
+}
+
 </script>
 
 <template>

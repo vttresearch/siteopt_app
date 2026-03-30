@@ -38,8 +38,6 @@ function toggle(categoryName) {
 // selecting one option closes the dropdown
 function select(value) {
   selected.value = value;
-  console.log("Category", openCategory.value)
-  console.log("Filename", selected.value)
   if (!settingStore.activeProjectPath) {
     notify.show("Project path is not initialized. Please refresh the page.", 5000, "error")
     return

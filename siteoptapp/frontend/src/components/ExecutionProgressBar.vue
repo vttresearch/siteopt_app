@@ -30,6 +30,12 @@ const percentage = computed(() => {
   return Math.round((completedSubtasks.value / total) * 100);
 });
 
+const currentElapsed = computed(() => {
+  const task = taskStore.tasks.find(t => t.name === taskStore.currentTask);
+  if (!task) return 0;
+  return task.elapsed
+})
+
 </script>
 
 <template>
@@ -59,6 +65,9 @@ const percentage = computed(() => {
     <div class="flex items-center justify-between">
       <div class="text-sm text-gray-800">
         <b>Task:</b> {{ taskStore.currentTask }}
+      </div>
+      <div class="text-sm text-gray-800">
+        Time: {{ Math.floor(currentElapsed / 60) }}m {{ currentElapsed % 60 }}s
       </div>
       <div class="font-bold text-sm text-gray-800">
         Completed ({{ completedSubtasks }}/{{ allSubtasks.length }}) {{ percentage }}%

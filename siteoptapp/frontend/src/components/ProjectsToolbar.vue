@@ -61,7 +61,6 @@ function cancelMakeProject() {
 async function confirmMakeProject(n) {
   showMakeProjectPrompt.value = false
   restoreOpen.value = false
-  console.log(`creating project with name:${n.name} useExampleData:${n.exampleData}`)
   let name = n.name.trim()
   if (!await validateWorkFolderName(name)) return
   settingStore.creatingProjectFolder = true
@@ -119,7 +118,6 @@ async function restoreProject(c) {
     restoreOpen.value = false
     await fetchSettings()
     const index = settingStore.workFolders.length -1
-    console.log(`restoreProject() index:${index}`)
     settingStore.setActiveProject(index >= 0 ? index : null)
     await fetchInputFiles(settingStore.activeProjectName)
     await fetchScenarios(settingStore.activeProjectPath)
@@ -137,7 +135,6 @@ function askDeleteProject(c) {
 
 function cancelDeleteProject() {
   projectToDelete.value = {}
-  console.log("Deleting project cancelled")
 }
 
 async function deleteProject() {
@@ -149,7 +146,6 @@ async function deleteProject() {
   if (response.success) {
     // Remove entry from restoreCandidates.value
     restoreCandidates.value = restoreCandidates.value.filter(item => item.name !== projectToDelete.value.name)
-    console.log("restoreCandidates.value", restoreCandidates.value)
     notify.show(`Project ${projectToDelete.value.name} has been removed`)
   }
   projectToDelete.value = {}

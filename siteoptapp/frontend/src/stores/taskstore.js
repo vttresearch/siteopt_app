@@ -4,12 +4,13 @@ import { defineStore } from 'pinia'
 export const useTaskStore = defineStore('taskData', () => {
 
   const currentTask = ref("")
-  const currentSubtask = ref("")  // Unused at the moment
-  const subtasksPending = ref([])  // Unused at the moment
-  const subtasksDone = ref(0)
+  const currentSubtask = ref("")  // Unused
+  const subtasksPending = ref([])  // Unused
+  const subtasksDone = ref(0)  // Unused
   const tasks = ref([
     {
       name: "Prepare input data",
+      elapsed: 0,
       subtasks: [
           { name: "connections input", done: false, error: false },
           { name: "diverting units", done: false, error: false },
@@ -37,6 +38,7 @@ export const useTaskStore = defineStore('taskData', () => {
     },
     {
       name: "Optimize full period",
+      elapsed: 0,
       subtasks: [
           { name: "Input data", done: false, error: false },
           { name: "Copy DB", done: false, error: false },
@@ -49,6 +51,7 @@ export const useTaskStore = defineStore('taskData', () => {
     },
     {
       name: "Optimize with representative periods",
+      elapsed: 0,
       subtasks: [
           { name: "Input data", done: false, error: false },
           { name: "repr periods template", done: false, error: false },
@@ -63,6 +66,7 @@ export const useTaskStore = defineStore('taskData', () => {
     },
     {
       name: "Complete workflow",
+      elapsed: 0,
       subtasks: [
           { name: "connections input", done: false, error: false },
           { name: "diverting units", done: false, error: false },
@@ -98,6 +102,7 @@ export const useTaskStore = defineStore('taskData', () => {
     },
     {
       name: "Purge output Db",
+      elapsed: 0,
       subtasks: [
           { name: "Purge output db", done: false, error: false },
       ]
@@ -137,6 +142,7 @@ export const useTaskStore = defineStore('taskData', () => {
   function clearSubtasks() {
     const task = tasks.value.find(t => t.name === currentTask.value);
     if (!task) return;
+    task.elapsed = 0  // Reset timer
     task.subtasks.forEach(st => {
       st.done = false
       st.error = false
@@ -146,6 +152,7 @@ export const useTaskStore = defineStore('taskData', () => {
   /* Clears done and error for all subtasks in all tasks. */
   function clearAll() {
     tasks.value.forEach(task => {
+      task.elapsed = 0
       task.subtasks.forEach(st => {
         st.done = false;
         st.error = false;
@@ -153,15 +160,20 @@ export const useTaskStore = defineStore('taskData', () => {
     });
   }
 
+  /* Increments the elapsed time of the current task by one. */
+  function incrementTimer() {
+    const task = tasks.value.find(t => t.name === currentTask.value);
+    if (!task) return;
+    task.elapsed++
+  }
+
   return {
-    tasks,
     currentTask,
-    currentSubtask,
-    subtasksDone,
-    setCurrentTask,
-    getNextSubtask,
+    tasks,
     setSubtasksPending,
+    setCurrentTask,
     markSubtaskDone,
     clearSubtasks,
+    incrementTimer,
   }
 })

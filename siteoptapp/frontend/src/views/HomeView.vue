@@ -25,7 +25,6 @@ onMounted(async () => {
     await fetchSettings()
     if (Object.keys(settingStore.workFolders ?? []).length > 0) {
       settingStore.setActiveProject(0)
-      console.log("settingStore.workFolders:", settingStore.workFolders)
       await fetchInputFiles(settingStore.activeProjectName)
       await fetchResults(settingStore.activeProjectName)
       await fetchScenarios(settingStore.activeProjectPath)
