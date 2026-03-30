@@ -4,8 +4,8 @@ import { defineStore } from 'pinia'
 export const useTaskStore = defineStore('taskData', () => {
 
   const currentTask = ref("")
-  const currentSubtask = ref("")
-  const subtasksPending = ref([])
+  const currentSubtask = ref("")  // Unused at the moment
+  const subtasksPending = ref([])  // Unused at the moment
   const subtasksDone = ref(0)
   const tasks = ref([
     {
@@ -109,6 +109,9 @@ export const useTaskStore = defineStore('taskData', () => {
     currentTask.value = taskName
   }
 
+  /* Attempt to guess the current project item that's been executed.
+  * Not working properly and unused at the moment.
+  */
   function getNextSubtask() {
     if (subtasksPending.value.length > 0) {
       currentSubtask.value = subtasksPending.value.shift()
@@ -130,6 +133,26 @@ export const useTaskStore = defineStore('taskData', () => {
     subtask.error = false; // optional, clear error if needed
   }
 
+  /* Clears done and error for all subtasks in current task. */
+  function clearSubtasks() {
+    const task = tasks.value.find(t => t.name === currentTask.value);
+    if (!task) return;
+    task.subtasks.forEach(st => {
+      st.done = false
+      st.error = false
+    });
+  }
+
+  /* Clears done and error for all subtasks in all tasks. */
+  function clearAll() {
+    tasks.value.forEach(task => {
+      task.subtasks.forEach(st => {
+        st.done = false;
+        st.error = false;
+      });
+    });
+  }
+
   return {
     tasks,
     currentTask,
@@ -138,5 +161,7 @@ export const useTaskStore = defineStore('taskData', () => {
     setCurrentTask,
     getNextSubtask,
     setSubtasksPending,
-    markSubtaskDone }
+    markSubtaskDone,
+    clearSubtasks,
+  }
 })

@@ -9,7 +9,6 @@ const showDetails = ref(false)
 // All subtasks in current task
 const allSubtasks = computed(() => {
   if (!taskStore.currentTask) return [];
-  taskStore.tasks.flatMap(t => t.subtasks)
   const currentTask = taskStore.tasks.filter((task) => task.name === taskStore.currentTask)
   return currentTask.flatMap(t => t.subtasks)
 });
@@ -19,7 +18,7 @@ const completedSubtasks = computed(() =>
   allSubtasks.value.filter(st => st.done && !st.error).length
 );
 
-// Error exists?
+// Error exists
 const hasError = computed(() =>
   allSubtasks.value.some(st => st.error)
 );
@@ -72,7 +71,7 @@ const percentage = computed(() => {
       Details...
     </button>
     <div class="relative">
-      <div v-if="showDetails" class="overflow-y-auto absolute top-0 left-0 w-full z-50 border border-gray-300 rounded p-3 bg-gray-50 shadow-xl">
+      <div v-if="showDetails" class="absolute top-0 left-0 w-full z-50 border border-gray-300 rounded p-3 bg-gray-50 shadow-xl">
         <div class="flex items-center justify-between mb-2">
           <div class="font-semibold text-gray-800">Project items</div>
           <BaseButton variant="ghost" @click="showDetails = false">Close</BaseButton>
@@ -81,12 +80,11 @@ const percentage = computed(() => {
         <div v-if="allSubtasks.length === 0" class="text-sm text-gray-600">
           No Execution in progress.
         </div>
-        <div v-else class="space-y-1">
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           <div v-for="c in allSubtasks"
                :key="c.name"
-               class="w-full px-3 py-1 flex justify-between items-center bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-blue-500"
-               >
-            <div class="font-medium text-left">{{ c.name }}</div>
+               class="px-3 py-1 flex justify-between items-center bg-gray-100 text-gray-800 hover:bg-gray-200">
+            <div class="font-medium">{{ c.name }}</div>
             <div v-if="c.done !== c.error">
               <i class="fa-regular fa-square-check text-green-600"></i>
             </div>
@@ -100,7 +98,5 @@ const percentage = computed(() => {
         </div>
       </div>
     </div>
-
-
   </div>
 </template>

@@ -1,6 +1,7 @@
 import { useNotificationStore } from '@/stores/notificationstore.js'
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useResultStore } from "@/stores/resultstore.js";
+import { useScenarioStore } from "@/stores/scenariostore.js";
 import { API_BASE } from "@/config.js";
 
 
@@ -152,7 +153,7 @@ export async function fetchWorkFolder(workFolderName) {
  * @param {string} projectName - Project folder name.
  *
  */
-export async function fetchCurrentInputFiles(projectName) {
+export async function fetchInputFiles(projectName) {
   const settingStore = useSettingStore()
   const notify = useNotificationStore()
   if (!projectName) {
@@ -186,6 +187,33 @@ export async function fetchResults(projectName) {
     return false
   }
   resultStore.runs = r.data || {}
+  return true
+}
+
+
+/**
+ * Fetches the scenarios of a given project.
+ *
+ * @param {string} projectPath - Full project path.
+ *
+ */
+export async function fetchScenarios(projectPath) {
+  const scenarioStore = useScenarioStore()
+  const notify = useNotificationStore()
+  if (!projectPath) {
+    notify.show("[FIXME] Fetching scenarios failed. Project path missing.")
+    return
+  }
+  scenarioStore.loadingScenarios = true
+  const configs = {db_key: "scenario", work_folder: projectPath}
+  const response = await postData("fetch_input_db_data", configs, notify)
+  if (!response.success) {
+    console.error(`fetching scenarios from input db failed for project ${projectPath}`)
+    scenarioStore.loadingScenarios = false
+    return false
+  }
+  scenarioStore.scenarios = response.data.scenarios || []
+  scenarioStore.loadingScenarios = false
   return true
 }
 

@@ -3,7 +3,7 @@ import { ref, watch, computed } from "vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postData, fetchCurrentInputFiles } from "@/utils/functions.js";
+import { postData, fetchInputFiles } from "@/utils/functions.js";
 
 const settingStore = useSettingStore()
 const dataStore = useTableDataStore()
@@ -25,7 +25,7 @@ const currentInputFilePath = computed(() => {
 watch(() => settingStore.activeProjectIndex, async (newIndex, oldIndex) => {
   if (newIndex !== oldIndex) {
     activeFilePath.value = ""
-    await fetchCurrentInputFiles(settingStore.activeProjectName)
+    await fetchInputFiles(settingStore.activeProjectName)
   }
 })
 

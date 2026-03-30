@@ -5,7 +5,7 @@ import Spinner from "@/components/Spinner.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
-import { fetchSettings, postData, fetchCurrentInputFiles } from "@/utils/functions.js";
+import { fetchSettings, postData, fetchInputFiles, fetchScenarios } from "@/utils/functions.js";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 
@@ -121,7 +121,8 @@ async function restoreProject(c) {
     const index = settingStore.workFolders.length -1
     console.log(`restoreProject() index:${index}`)
     settingStore.setActiveProject(index >= 0 ? index : null)
-    await fetchCurrentInputFiles(settingStore.activeProjectName)
+    await fetchInputFiles(settingStore.activeProjectName)
+    await fetchScenarios(settingStore.activeProjectPath)
     notify.show(`Project ${c.name} restored`, 2000, "info")
   }
 }
@@ -154,7 +155,7 @@ async function deleteProject() {
   projectToDelete.value = {}
 }
 
-async function openRestore() {
+async function openRestoreMenu() {
   if (restoreOpen.value) {
     // Make same button close the menu if it's open
     restoreOpen.value = false
@@ -176,15 +177,15 @@ async function postMakeWorkFolder(pathKey, projectName) {
     return
   }
   await fetchSettings();
-  notify.show(`New project ${projectName} created`, 2000, "info")
   const index = Object.keys(settingStore.workFolders).indexOf(projectName);
   settingStore.setActiveProject(index >= 0 ? index : 0)
-  await fetchCurrentInputFiles(settingStore.activeProjectName)
+  await fetchInputFiles(settingStore.activeProjectName)
   settingStore.creatingProjectFolder = false
+  // Fetch scenarios even though there aren't any in new projects but maybe there will be in the future
+  await fetchScenarios(settingStore.activeProjectPath)
+  notify.show(`New project ${projectName} created`, 2000, "info")
 }
-
 </script>
-
 
 <template>
   <div v-if="!settingStore.loadingProjects">
@@ -228,7 +229,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
           type="button"
           :disabled="settingStore.creatingProjectFolder || restoring"
           title="Recent projects"
-          @click="openRestore"
+          @click="openRestoreMenu"
           :class="restoreOpen ? 'bg-gray-500 hover:bg-gray-700' : 'bg-blue-500 hover:bg-blue-700 shadow-lg'">
         <i class="fa-solid fa-bars"></i>
       </button>

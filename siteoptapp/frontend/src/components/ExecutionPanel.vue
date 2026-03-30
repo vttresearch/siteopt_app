@@ -4,51 +4,42 @@ import AnsiToHtml from "ansi-to-html"
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useTaskStore } from "@/stores/taskstore.js";
-import { postData, fetchResults } from "@/utils/functions.js";
+import { useScenarioStore } from "@/stores/scenariostore.js";
+import { postData, fetchResults, fetchScenarios } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 import ExecutionProgressBar from "@/components/ExecutionProgressBar.vue";
 
-
 const notify = useNotificationStore()
 const settingStore = useSettingStore()
 const taskStore = useTaskStore()
+const scenarioStore = useScenarioStore()
 const execType = ref("")
 const executionOutput = ref([])
 const executionFinished = ref(false)
 const executionInProgress = ref(false)
-const refreshingScenarios = ref(false)
-let eventSource = null
 const converter = new AnsiToHtml();
 const outputEl = ref(null)
 const selectedScenarios = ref([])
-let shouldAutoScroll = true
-const scenarios = ref([])
 const showAddScenarioPrompt = ref(false)
 const confirmOpen = ref(false)
 const itemToRemove = ref(null)
 const confirmMessage = ref("")
 const returnFocusEl = ref(null)
 const showLog = ref(true)
+let eventSource = null
+let shouldAutoScroll = true
 
-/* Refreshes file tree when user selects a project */
-watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
-  /*
-  if (newVal === null) {
-    scenarios.value = []
-    selectedScenarios.value = []
-    execType.value = ""
-  }
-  */
+/* Refreshes scenarios when the selected project changes */
+watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
   if (newVal !== oldVal) {
-    refreshScenarios()
+    await fetchScenarios(settingStore.activeProjectPath)
     selectedScenarios.value = []
     execType.value = ""
   }
 })
-
 
 onUnmounted(() => {
   if (eventSource) {
@@ -85,12 +76,13 @@ watch(executionFinished, async (newExecutionFinished) => {
     console.log("Execution finished")
     // TODO: Fix case if user changes the project while execution is in progress
     await fetchResults(settingStore.activeProjectName)
+    await fetchScenarios(settingStore.activeProjectPath)
   }
 });
 
 function newScenarioNameIsValid(name) {
-  for (let i=0; i<scenarios.value.length; i++) {
-    if (scenarios.value[i].toLowerCase() === name.toLowerCase()) {
+  for (let i=0; i<scenarioStore.scenarios.length; i++) {
+    if (scenarioStore.scenarios[i].toLowerCase() === name.toLowerCase()) {
       notify.show(`Scenario ${name} already exists`, 5000, "error")
       return false
     }
@@ -104,19 +96,6 @@ function newScenarioNameIsValid(name) {
   return true
 }
 
-async function refreshScenarios() {
-  refreshingScenarios.value = true
-  const configs = {db_key: "scenario", work_folder: settingStore.activeProjectPath}
-  const response = await postData("fetch_input_db_data", configs, notify)
-  if (!response.success) {
-    console.error("fetching input db data failed")
-    refreshingScenarios.value = false
-    return
-  }
-  scenarios.value = response.data.scenarios
-  refreshingScenarios.value = false
-}
-
 async function confirmAddScenario(n) {
   showAddScenarioPrompt.value = false
   let name = n.trim()
@@ -127,15 +106,15 @@ async function confirmAddScenario(n) {
     return false
   }
   console.log(`Adding scenario '${name}'`)
-  refreshingScenarios.value = true
+  scenarioStore.loadingScenarios = true
   const configs = {scenario_name: name, work_folder: settingStore.activeProjectPath}
   const response = await postData("add_scenario", configs, notify)
   if (!response.success) {
     console.error("Adding scenario failed")
-    refreshingScenarios.value = false
+    scenarioStore.loadingScenarios = false
     return
   }
-  await refreshScenarios()
+  await fetchScenarios(settingStore.activeProjectPath)
 }
 
 function cancelAddScenario() {
@@ -157,16 +136,16 @@ async function confirmRemoveScenario() {
   }
   console.log("Removing scenario:", itemToRemove.value)
   selectedScenarios.value = selectedScenarios.value.filter(s => s !== itemToRemove.value)
-  refreshingScenarios.value = true
+  scenarioStore.loadingScenarios = true
   const configs = {scenario_name: itemToRemove.value, work_folder: settingStore.activeProjectPath}
   const response = await postData("remove_scenario", configs, notify)
   if (!response.success) {
     console.error("Removing scenario failed")
-    refreshingScenarios.value = false
+    scenarioStore.loadingScenarios = false
     itemToRemove.value = null
     return
   }
-  await refreshScenarios()
+  await fetchScenarios(settingStore.activeProjectPath)
   itemToRemove.value = null
 }
 
@@ -175,6 +154,10 @@ function clearExecutionInProgress() {
   executionFinished.value = true
 }
 
+function clearProgressBar() {
+  taskStore.subtasksDone = 0
+  taskStore.clearSubtasks()
+}
 /* Returns true if selected execution task should have at least one scenario selected, false otherwise. */
 function execTypeNeedsScenario() {
   return execType.value === "Optimize full period" ||
@@ -197,6 +180,8 @@ async function executeSelected() {
     return
   }
   notify.show(`Running task ${execType.value} for project ${settingStore.activeProjectName}`, 5000, "info")
+  // Clear progress bar
+  clearProgressBar()
   // Get an Array of project item names to execute
   const executionTask = taskStore.tasks.filter((task) => task.name === execType.value)
   const projectItems = executionTask[0].subtasks.map((subtask) => subtask.name)
@@ -228,7 +213,6 @@ async function executeSelected() {
     eventSource.close();
     eventSource = null;
     clearExecutionInProgress()
-    refreshScenarios()
   });
   eventSource.addEventListener("error", (event) => {
     executionOutput.value.push(`[error event] ${event.data}`)
@@ -240,7 +224,6 @@ async function executeSelected() {
     // This listener removes the 'Execution ... finished' message from the execution log
     let finishedSubtask = event.data
     taskStore.markSubtaskDone(finishedSubtask)
-    taskStore.getNextSubtask()
   });
   eventSource.onmessage = (event) => {
     executionOutput.value.push(event.data)
@@ -288,23 +271,23 @@ function setCurrentTask(taskName) {
         <button
             class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
             type="button"
-            :disabled="refreshingScenarios"
+            :disabled="scenarioStore.loadingScenarios"
             @click="showAddScenarioPrompt = true">
-          <i v-if="refreshingScenarios" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+          <i v-if="scenarioStore.loadingScenarios" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
           <i v-else class="fa-solid fa-square-plus"></i>
           <span>Add Scenario</span>
         </button>
       </div>
 
       <div class="flex flex-wrap justify-start items-center gap-4 p-4">
-        <template v-if="refreshingScenarios">
+        <template v-if="scenarioStore.loadingScenarios">
           <div>Loading scenarios...</div>
         </template>
-        <template v-else-if="scenarios.length === 0">
+        <template v-else-if="scenarioStore.scenarios.length === 0">
           <span>No scenarios found. Load default scenarios by running <i>Prepare input data</i>.</span>
         </template>
         <template v-else>
-            <div v-for="(scenario, i) in scenarios"
+            <div v-for="(scenario, i) in scenarioStore.scenarios"
                  :key="scenario"
                  class="flex items-center space-x-1 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md px-2">
               <input
@@ -348,7 +331,7 @@ function setCurrentTask(taskName) {
       <button
           class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
           type="button"
-          :disabled="!execType"
+          :disabled="!execType || executionInProgress"
           title="Select a task to execute"
           @click="executeSelected">
         <i v-if="executionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
