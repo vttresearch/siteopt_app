@@ -33,6 +33,21 @@ const rowSelectionOptions = {
 const defaultColDef = {
   editable: true,
   resizable: true,
+  suppressKeyboardEvent: (params) => {
+    const key = params.event?.key
+
+    // Let our custom cellKeyDown handler own Delete
+    if (key === "Delete") {
+      return true
+    }
+
+    // Let our custom shortcut own Ctrl+Enter
+    if (key === "Enter" && params.event?.ctrlKey) {
+      return true
+    }
+
+    return false
+  }
 }
 
 const hasSelection = computed(() => selectedCount.value > 0);
@@ -349,10 +364,12 @@ function clearFocusedCell(api) {
   const focused = api.getFocusedCell()
   if (!focused) return false
 
-  const rowNode = api.getDisplayedRowAtIndex(focused.rowIndex)
   const field = focused.column?.getColId?.()
+  if (!field || field === "__id") return false
 
+  const rowNode = api.getDisplayedRowAtIndex(focused.rowIndex)
   const changed = clearCellValue(rowNode, field)
+
   if (changed) markDirty()
   return changed
 }
@@ -600,6 +617,8 @@ async function uploadAndReplace() {
               :suppressClickEdit="true"
               :enterNavigatesVertically="true"
               :enterNavigatesVerticallyAfterEdit="true"
+              :undoRedoCellEditing="true"
+              :undoRedoCellEditingLimit="100"
           />
         </div>
         <!-- Sheets -->
