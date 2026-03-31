@@ -14,6 +14,8 @@
  * should be handled in chartStyleUtils.js
  */
 
+import { CHART_STYLE_THEME } from "@/utils/chartStyleUtils.js"
+
 /**
  * Detect if a CSV dataset contains time series data
  * @param {Array} data - CSV data as array of objects
@@ -49,13 +51,6 @@ export function detectTimeSeriesStructure(data) {
   }
 }
 
-/**
- * Kept only for semantic chart-level defaults that are not part of shared visual theming.
- * Styling should mostly live in chartStyleUtils.js.
- */
-export const CHART_THEME = {
-  titleFontSize: 20
-}
 
 function normalizeStr(value) {
   return String(value ?? "").trim()
@@ -434,7 +429,7 @@ export function processCategorySummedData(
   }
 
   const useMin = useMinBarHeight && globalMax > 0
-  const minDisplay = useMin ? globalMax * 0.01 : 0
+  const minDisplay = useMin ? globalMax * CHART_STYLE_THEME.minDisplayRatio : 0
 
   const series = scenarios.map((name) => {
     const rawData = categoriesToShow.map((cat) => sums[name][cat] ?? 0)
@@ -567,7 +562,7 @@ export function processScenarioComparisonData(
   }
 
   const useMin = useMinBarHeight && globalMax > 0
-  const minDisplay = useMin ? globalMax * 0.01 : 0
+  const minDisplay = useMin ? globalMax * CHART_STYLE_THEME.minDisplayRatio : 0
 
   const series = scenarios.map((scenarioName, sIdx) => {
     const rawData = valuesMatrix[sIdx]
