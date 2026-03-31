@@ -2,7 +2,8 @@ export const CHART_STYLE_THEME = {
     legendFontSize: 12,
     axisLabelFontSize: 13,
     axisNameFontSize: 12,
-    titleFontSize: 16,
+    titleFontSize: 20,
+    minDisplayRatio: 0.03,
   
     horizontalLabelWidth: 130,
     verticalLabelWidth: 120,
@@ -284,6 +285,8 @@ export const CHART_STYLE_THEME = {
         axisLabel: {
           interval: 0,
           rotate: count > 20 ? 50 : count > 10 ? 35 : 20,
+          margin: 14,
+          verticalAlign: "top",
           width: CHART_STYLE_THEME.verticalLabelWidth,
           overflow: "break",
           fontSize: CHART_STYLE_THEME.axisLabelFontSize,
@@ -360,7 +363,6 @@ export const CHART_STYLE_THEME = {
       series: Array.isArray(option.series)
         ? option.series.map((seriesItem) => ({
             barMaxWidth: 36,
-            barMinHeight: 2,
             ...seriesItem
           }))
         : []
