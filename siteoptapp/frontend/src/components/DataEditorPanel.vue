@@ -92,24 +92,40 @@ const tabToNextCell = (params) => {
   return getNextCellSameRow(params);
 };
 
-// On Enter, stop editing, on Tab, move to next cell and start editing
 const onCellKeyDown = (params) => {
   const key = params.event.key;
+  const api = params.api;
+
   if (key === 'Enter') {
-    params.api.stopEditing()
+    api.stopEditing()
     return
   }
   if (key === 'Tab') {
-    setTimeout(() => {
-      const cell = params.api.getFocusedCell();
-      if (!cell) return;
-
-      params.api.startEditingCell({
-        rowIndex: cell.rowIndex,
-        colKey: cell.column.getId()
-      });
-    });
+    api.stopEditing()
+    return
   }
+
+  const isEditing = api.getEditingCells().length > 0
+  if (isEditing) return
+
+  const isPrintable = key.length === 1
+  if (!isPrintable) return
+
+  const focused = api.getFocusedCell()
+  if (!focused) return
+
+  const colDef = focused.column.getColDef()
+  if (colDef.editable === false) return
+
+  params.event.preventDefault()
+  const rowNode = api.getDisplayedRowAtIndex(focused.rowIndex)
+  if (rowNode) {
+    rowNode.setDataValue(focused.column.getId(), key)
+  }
+  api.startEditingCell({
+    rowIndex: focused.rowIndex,
+    colKey: focused.column.getId()
+  })
 };
 
 function clearRefs() {
@@ -567,8 +583,10 @@ async function uploadAndReplace() {
               :rowSelection="rowSelectionOptions"
               :navigateCells="true"
               :suppressCellFocus="false"
-              :singleClickEdit="true"
+              :singleClickEdit="false"
               :stopEditingWhenCellsLoseFocus="true"
+              :enterNavigatesVertically="false"
+              :enterNavigatesVerticallyAfterEdit="false"
               :tabToNextCell="tabToNextCell"
           />
         </div>
