@@ -16,8 +16,6 @@ const data_store = useTableDataStore();
 const notify = useNotificationStore();
 const settingStore = useSettingStore();
 const sheetStore = useSheetStore();
-const sheetNames = ref([]);
-const fileData = ref({});
 const rowData = ref([]);
 const columnDefs = ref([]);
 const originalText = ref("");
@@ -31,8 +29,33 @@ const rowSelectionOptions = {
   enableSelectionWithoutKeys: false,
   enableClickSelection: false,
 }
+
+const defaultColDef = {
+  editable: true,
+  resizable: true,
+}
+
 const hasSelection = computed(() => selectedCount.value > 0);
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
+
+function markDirty() {
+  // .md editor does not use grid, so it's ignored here
+  const t = data_store.daata?.filetype
+  if (t === 'csv') csvDirty.value = true
+  else if (t === 'json') jsonDirty.value = true
+  else if (t === 'xlsx') markXlsxDirty();
+}
+function markXlsxDirty() {
+  sheetStore.markDirty(sheetStore.activeSheet, true)
+  sheetStore.toggleSheetDataUpdated()
+  xlsxDirty.value = true
+}
+
+function clearXlsxDirty() {
+  Object.keys(sheetStore.sheetsByName).forEach((key) => sheetStore.markDirty(key, false))
+  sheetStore.toggleSheetDataUpdated()
+  xlsxDirty.value = false
+}
 
 const isTimeSeriesData = computed(() => {
   const structure = detectTimeSeriesStructure(plotRows.value);
@@ -56,81 +79,24 @@ function onGridReady(params) {
     if (e.event?.ctrlKey && e.event?.key === 'Enter') {
       onAddRow()
     }
-    // Delete key → delete selected
+    // Delete key → clear selected/focused cells
     if (e.event?.key === 'Delete') {
-      onDeleteSelected()
+      if (e.api.getEditingCells?.().length) return
+
+      const cleared = clearSelectionOrFocusedCell(e.api)
+      if (cleared) {
+        e.event.preventDefault()
+        e.event.stopPropagation()
+      }
     }
   })
 }
 
 function onCellValueChanged() {
-  data_store.markDirty()
+  markDirty()
 }
 
-// Returns next cell if available
-const getNextCellSameRow = (params) => {
-  const api = params.api;
-  const columns = api.getAllDisplayedColumns();
-  const prev = params.previousCellPosition;
-  const colIndex = columns.findIndex(c => c.getId() === prev.column.getId());
-  const nextIndex = colIndex + 1;
-  // If last column, stay on same cell
-  if (nextIndex >= columns.length) {
-    return {
-      rowIndex: prev.rowIndex,
-      column: prev.column
-    };
-  }
-  return {
-    rowIndex: prev.rowIndex,
-    column: columns[nextIndex]
-  };
-};
-
-// Called when pressing Tab
-const tabToNextCell = (params) => {
-  return getNextCellSameRow(params);
-};
-
-const onCellKeyDown = (params) => {
-  const key = params.event.key;
-  const api = params.api;
-
-  if (key === 'Enter') {
-    api.stopEditing()
-    return
-  }
-  if (key === 'Tab') {
-    api.stopEditing()
-    return
-  }
-
-  const isEditing = api.getEditingCells().length > 0
-  if (isEditing) return
-
-  const isPrintable = key.length === 1
-  if (!isPrintable) return
-
-  const focused = api.getFocusedCell()
-  if (!focused) return
-
-  const colDef = focused.column.getColDef()
-  if (colDef.editable === false) return
-
-  params.event.preventDefault()
-  const rowNode = api.getDisplayedRowAtIndex(focused.rowIndex)
-  if (rowNode) {
-    rowNode.setDataValue(focused.column.getId(), key)
-  }
-  api.startEditingCell({
-    rowIndex: focused.rowIndex,
-    colKey: focused.column.getId()
-  })
-};
-
 function clearRefs() {
-  sheetNames.value = [];
-  fileData.value = {};
   rowData.value = [];
   columnDefs.value = [];
   originalText.value = "";
@@ -169,29 +135,25 @@ function syncRowDataFromGrid() {
 function onAddRow() {
   const api = data_store.gridApi
   if (!api) return
-  let newIndexId = api.getDisplayedRowCount()
-  const newRow = createBlankRow(newIndexId)
+
+  const newRow = createBlankRow(api.getDisplayedRowCount())
   api.applyTransaction({ add: [newRow] })
   syncRowDataFromGrid()
   data_store.markDirty()
 
-  // One‑time listener for when AG Grid has finished updating DOM
-  const listener = function () {
-    api.removeEventListener('rowDataUpdated', listener)
+  nextTick(() => {
     const lastIndex = api.getDisplayedRowCount() - 1
     if (lastIndex < 0) return
-    api.ensureIndexVisible(lastIndex, 'bottom')
+
     const firstEditableField = columnDefs.value.find(
-      c => c.field && c.field !== '__select__' && c.editable !== false
+      c => c.field && c.field !== "__id" && c.editable !== false
     )?.field
-    if (firstEditableField) {
-      api.startEditingCell({
-        rowIndex: lastIndex,
-        colKey: firstEditableField
-      })
-    }
-  }
-  api.addEventListener('rowDataUpdated', listener)
+
+    if (!firstEditableField) return
+
+    api.ensureIndexVisible(lastIndex, "bottom")
+    api.setFocusedCell(lastIndex, firstEditableField)
+  })
 }
 
 /* Deletes selected rows */
@@ -280,9 +242,9 @@ function updateTableWithActiveSheet() {
   rowData.value = rows
 }
 
-function updateTableFromCsv() {
-  const cols = fileData.value?.columns ?? [];
-  let rows = fileData.value?.rows ?? [];
+function updateTableFromCsv(fileData) {
+  const cols = fileData?.columns ?? [];
+  let rows = fileData?.rows ?? [];
   rows = rows.map((r, i) => ({ __id: String(i), ...r }));
   columnDefs.value = [
     {
@@ -345,6 +307,61 @@ const plotRows = computed(() => {
   });
 });
 
+function getEditableFieldIds() {
+  return columnDefs.value
+    .filter(col => col.field && col.field !== "__id" && col.editable !== false)
+    .map(col => col.field)
+}
+
+function clearCellValue(rowNode, field) {
+  if (!rowNode || !field || field === "__id") return false
+
+  // Use "" for blank spreadsheet-like values in CSV/JSON editing.
+  // If you prefer AG Grid's default delete semantics, change this to null.
+  rowNode.setDataValue(field, "")
+  return true
+}
+
+function clearSelectedRows(api) {
+  const editableFields = getEditableFieldIds()
+  const selectedNodes = []
+
+  api.forEachNodeAfterFilterAndSort((node) => {
+    if (node.isSelected?.()) selectedNodes.push(node)
+  })
+
+  if (!selectedNodes.length) return false
+
+  let changed = false
+
+  for (const node of selectedNodes) {
+    for (const field of editableFields) {
+      changed = clearCellValue(node, field) || changed
+    }
+  }
+
+  if (changed) markDirty()
+  return changed
+}
+
+
+function clearFocusedCell(api) {
+  const focused = api.getFocusedCell()
+  if (!focused) return false
+
+  const rowNode = api.getDisplayedRowAtIndex(focused.rowIndex)
+  const field = focused.column?.getColId?.()
+
+  const changed = clearCellValue(rowNode, field)
+  if (changed) markDirty()
+  return changed
+}
+
+function clearSelectionOrFocusedCell(api) {
+  if (clearSelectedRows(api)) return true
+  return clearFocusedCell(api)
+}
+
 /* Clears everything when selected project changes */
 watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
   if (newVal !== oldVal) {
@@ -361,15 +378,13 @@ watch(() => data_store.daata,
     }
     sheetStore.clearAllSheets()  // important!
     const fileType = newItems.filetype
-    fileData.value = newItems.data
+    const fileData = newItems.data
     if (fileType === 'xlsx') {
-      // Default to editor view with Excel files
-      activeView.value = "editor"
-      sheetNames.value = Object.keys(fileData.value || {})
-      sheetStore.setActiveSheet(sheetNames.value[0] || "")  // Select first sheet
-      // Load all sheets into the store
-      for (const s of sheetNames.value) {
-        const raw = fileData.value[s]
+      const sheetNames = Object.keys(fileData || {})
+      sheetStore.setActiveSheet(sheetNames[0] || "")
+
+      for (const s of sheetNames) {
+        const raw = fileData[s]
         const rows = Array.isArray(raw) ? raw : (raw?.rows || [])
         const columns = Array.isArray(raw) ? raw : (raw?.columns || [])
         const meta = Array.isArray(raw) ? {} : (raw?.meta || {})
@@ -380,32 +395,29 @@ watch(() => data_store.daata,
       sheetStore.toggleSheetDataUpdated()
     }
     else if (fileType === "csv") {
-      sheetNames.value = [];
-      updateTableFromCsv();
+      updateTableFromCsv(fileData);
       await nextTick();
       // Don't set activeView here so that the UI stays in previous view. Plot view, when switching between csv files
     }
     else if (fileType === "json") {
-      sheetNames.value = [];
       rowData.value = [];
       columnDefs.value = [];
       data_store.mdText = "";
       try {
-        data_store.jsonEditText = JSON.stringify(fileData.value, null, 2);
+        jsonEditText.value = JSON.stringify(fileData, null, 2);
       }
       catch {
-        data_store.jsonEditText = String(fileData.value);
+        jsonEditText.value = String(fileData);
       }
       originalText.value = data_store.jsonEditText
       activeView.value = "editor";
     }
     else if (fileType === "md") {
-      sheetNames.value = [];
       rowData.value = [];
       columnDefs.value = [];
-      data_store.jsonEditText = "";
-      data_store.mdText = fileData.value?.text ?? "";
-      originalText.value = data_store.mdText
+      jsonEditText.value = "";
+      mdText.value = fileData?.text ?? "";
+      originalText.value = mdText.value
       activeView.value = "editor";
     }
     else {
@@ -561,7 +573,7 @@ async function uploadAndReplace() {
               :disabled="!hasSelection"
               @click="onDeleteSelected"
               title="Delete selected rows">
-            <i class="fa-regular fa-trash-can"></i> Delete selected
+            <i class="fa-regular fa-trash-can"></i> Delete selected rows
           </button>
           <span class="text-sm text-gray-500" v-if="selectedCount">
             {{ selectedCount }} selected
@@ -573,10 +585,10 @@ async function uploadAndReplace() {
           <AgGridVue
               class="w-full h-full"
               :columnDefs="columnDefs"
+              :defaultColDef="defaultColDef"
               :rowData="rowData"
               @grid-ready="onGridReady"
               @cell-value-changed="onCellValueChanged"
-              @cell-key-down="onCellKeyDown"
               :rowBuffer="10"
               :rowHeight="35"
               :animateRows="false"
@@ -585,9 +597,9 @@ async function uploadAndReplace() {
               :suppressCellFocus="false"
               :singleClickEdit="false"
               :stopEditingWhenCellsLoseFocus="true"
-              :enterNavigatesVertically="false"
-              :enterNavigatesVerticallyAfterEdit="false"
-              :tabToNextCell="tabToNextCell"
+              :suppressClickEdit="true"
+              :enterNavigatesVertically="true"
+              :enterNavigatesVerticallyAfterEdit="true"
           />
         </div>
         <!-- Sheets -->
