@@ -304,54 +304,27 @@ def delete_project(client_id, path):
     return JsonResponse({"success": True, "data": {}})
 
 
-def replace_file(client_id, file_path, file_data):
-    # filepath = data["fpath"]
-    print(f"filepath:{file_path}")
+@csrf_protect
+def upload_and_replace(request):
+    """Receives a file uploaded from the browser and replaces the current file."""
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    file_data = request.FILES.get("file")
+    file_path = request.POST.get("fpath")
+    print(f"Replacing file :{file_path}")
     # Delete old file
     if os.path.exists(file_path):
-        os.remove(file_path)
-
-    with open(file_path, "wb+") as destination:
-        for chunk in file_data.chunks():
-            destination.write(chunk)
-
+        try:
+            os.remove(file_path)
+        except OSError as e:
+            return JsonResponse({"success": False, "error": f"[OSError] Removing file {file_path} failed: {e}"})
+    # Make new file
+    try:
+        with open(file_path, "wb+") as destination:
+            for chunk in file_data.chunks():
+                destination.write(chunk)
+    except OSError as e:
+        return JsonResponse({"success": False, "error": f"[OSError] when replacing file {file_path}: {e}"})
     return JsonResponse({"success": True, "data": {}})
-
-    # Save new file
-    # with open(target_path, "wb+") as destination:
-    #    for chunk in uploaded_file.chunks():
-    #         destination.write(chunk)
-    # return JsonResponse({"status": "ok", "message": "File replaced successfully"})
-
-    # file_data = data["formData"]
-    # if not fileData:
-    #     print("No file uploaded")
-    #     return JsonResponse({"success": False, "error": "No file uploaded"})
-    # print(f"file_data:{fileData}")
-    # print(f"data:{data}")
-
-# def replace_file(request):
-#     if request.method == "POST":
-#         uploaded_file = request.FILES.get("file")
-#
-#         if not uploaded_file:
-#             return JsonResponse({"error": "No file uploaded"}, status=400)
-#
-#         # Path to the file on the server you want to replace
-#         target_path = os.path.join(settings.MEDIA_ROOT, "myfile.xlsx")
-#
-#         # Delete old file if exists
-#         if os.path.exists(target_path):
-#             os.remove(target_path)
-#
-#         # Save new file
-#         with open(target_path, "wb+") as destination:
-#             for chunk in uploaded_file.chunks():
-#                 destination.write(chunk)
-#
-#         return JsonResponse({"status": "ok", "message": "File replaced successfully"})
-#
-#     return JsonResponse({"error": "Invalid method"}, status=405)
 
 
 @csrf_protect
@@ -362,9 +335,8 @@ def post(request, action):
     Note: @csrf_protect decorator is needed for views that modify data (POST, PUT, DELETE)
     """
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    if action != "upload_file":
-        js = json.loads(request.body.decode("utf-8"))  # dict
-        data = js["data"]
+    js = json.loads(request.body.decode("utf-8"))  # dict
+    data = js["data"]
     if action == "make_work_folder":
         if "test_work_folder" in data.keys():
             print(f"[{client_id}] creating test project")
@@ -422,12 +394,6 @@ def post(request, action):
     elif action == "delete_project":
         print(f"Deleting project {data['name']} path {data['path']}")
         response = delete_project(client_id, data["path"])
-        return response
-    elif action == "upload_file":
-        file_data = request.FILES.get("file")
-        file_path = request.POST.get("fpath")
-        print(f"file_data:{file_data}")
-        response = replace_file(client_id, file_path, file_data)
         return response
     else:
         print(f"Unknown action: {action}")

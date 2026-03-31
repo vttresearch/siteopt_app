@@ -3,10 +3,9 @@ import { ref, watch, computed } from "vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { postData, fetchInputFiles } from "@/utils/functions.js";
+import { fetchInputFiles, fetchFileContents } from "@/utils/functions.js";
 
 const settingStore = useSettingStore()
-const dataStore = useTableDataStore()
 const notify = useNotificationStore()
 const selected = ref(null);
 const openCategory = ref(null);
@@ -29,14 +28,14 @@ watch(() => settingStore.activeProjectIndex, async (newIndex, oldIndex) => {
   }
 })
 
-// open/close categories
+/* Opens or closes categories */
 function toggle(categoryName) {
   openCategory.value =
     openCategory.value === categoryName ? null : categoryName;
 }
 
-// selecting one option closes the dropdown
-function select(value) {
+/* Downloads the selected file and updates data store. */
+async function select(value) {
   selected.value = value;
   if (!settingStore.activeProjectPath) {
     notify.show("Project path is not initialized. Please refresh the page.", 5000, "error")
@@ -51,22 +50,8 @@ function select(value) {
   }
   openCategory.value = null;
   activeFilePath.value = fpath
-  fetchFileContents(selected.value, fpath)
+  await fetchFileContents(selected.value, fpath)
 }
-
-async function fetchFileContents(fname, fpath) {
-  console.log(`Requesting file: ${fpath}`)
-  dataStore.clear()
-  dataStore.toggleLoading()
-  const response = await postData("fetch_data", {full_path: fpath}, notify)
-  if (!response.success) {
-    dataStore.toggleLoading()
-    return
-  }
-  dataStore.addData(fname, fpath, response.data)
-  dataStore.toggleLoading()
-}
-
 </script>
 
 <template>

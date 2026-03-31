@@ -1,5 +1,6 @@
 import { useNotificationStore } from '@/stores/notificationstore.js'
 import { useSettingStore } from "@/stores/settingstore.js";
+import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useResultStore } from "@/stores/resultstore.js";
 import { useScenarioStore } from "@/stores/scenariostore.js";
 import { API_BASE } from "@/config.js";
@@ -47,19 +48,15 @@ export async function postData(endpointSuffix, data, notify) {
 
 
 /**
- * Sends a request to backend using POST.
+ * Sends data to backend as-is (no Content-type).
  *
- * @param {string} endpointSuffix - The endpoint suffix to post to
- * @param {Object} data - An object containing some data
+ * @param {Object} data - An object containing data
  * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
- * The function performs:
- * - CSRF-protected POST request to the specified endpoint.
- * - Error handling for failed requests or unsuccessful responses.
- * - Displays error notifications using the provided `notify` utility.
+ *
  */
-export async function postFileData(endpointSuffix, data, notify) {
+export async function uploadFile(data, notify) {
   const csrfToken = getCookie("csrftoken");
-  const url = `${API_BASE}api/post/${endpointSuffix}/`;
+  const url = `${API_BASE}api/upload/`;
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -78,7 +75,7 @@ export async function postFileData(endpointSuffix, data, notify) {
       notify.show(`${r.error}`, 5000, "error");
       return false
     }
-    return r
+    return true
   } catch (err) {
     console.error(`Error posting ${data}:`, err);
     return false
@@ -186,6 +183,27 @@ export async function fetchWorkFolder(workFolderName) {
 }
 
 
+/**
+ * Fetches the contents of a given file.
+ *
+ * @param {string} fname - File name.
+ * @param {string} fpath - Full path to file (including the file name).
+ *
+ */
+export async function fetchFileContents(fname, fpath) {
+  console.log(`Downloading file: ${fpath}`)
+  const notify = useNotificationStore()
+  const dataStore = useTableDataStore()
+  dataStore.clear()
+  dataStore.toggleLoading()
+  const response = await postData("fetch_data", {full_path: fpath}, notify)
+  if (!response.success) {
+    dataStore.toggleLoading()
+    return
+  }
+  dataStore.addData(fname, fpath, response.data)
+  dataStore.toggleLoading()
+}
 
 /**
  * Fetches the contents of current_input file tree of a given project.

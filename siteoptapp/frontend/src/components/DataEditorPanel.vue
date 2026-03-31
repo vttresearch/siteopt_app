@@ -10,7 +10,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from '@/stores/sheetStore';
-import { postData, postFileData } from "@/utils/functions.js";
+import { postData, uploadFile, fetchFileContents } from "@/utils/functions.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
@@ -531,14 +531,9 @@ function handleFileSelect(event) {
 
 async function uploadAndReplace() {
   if (!selectedFileForUpload.value) return;
-  if (!data_store.fpath) {
-    notify.show("No file path available to replace.", 3000, "error");
-    return;
-  }
+  if (!data_store.fpath) return;
   const fpath = data_store.fpath
   const fname = data_store.fname
-  const filetype = data_store.daata?.filetype
-  console.log("selectedFileForUpload.value:", selectedFileForUpload.value)
   if (selectedFileForUpload.value.name !== fname) {
     notify.show(`Uploaded file name must match the current file name (${fname})`, 5000, "error")
     return
@@ -546,25 +541,14 @@ async function uploadAndReplace() {
   const formData = new FormData();
   formData.append("file", selectedFileForUpload.value)
   formData.append("fpath", fpath)
-
-  const success = await postFileData("upload_file", formData, notify)
+  const success = await uploadFile(formData, notify)
   if (!success) {
     return
   }
-  notify.show(`File ${fpath} replaced successfully`, 4000, "info")
+  notify.show(`File ${fname} has been replaced`, 8000, "info")
   // Reload file (same as categoryToolbar.fetchFileContents()
-  console.log(`Reloading file: ${fpath}`)
-  data_store.clear()
-  data_store.toggleLoading()
-  const response = await postData("fetch_data", {full_path: fpath}, notify)
-  if (!response.success) {
-    data_store.toggleLoading()
-    return
-  }
-  data_store.addData(fname, fpath, response.data)
-  data_store.toggleLoading()
+  await fetchFileContents(fname, fpath)
 }
-
 </script>
 
 <template>
@@ -604,7 +588,7 @@ async function uploadAndReplace() {
       </div>
     </div>
 
-    <div class="flex justify-end gap-2">
+    <div class="flex justify-end gap-5">
       <button
           v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
           class=" cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
@@ -618,16 +602,22 @@ async function uploadAndReplace() {
       >
         {{ saving ? "Saving..." : "Save" }}
       </button>
-      <input type="file" @change="handleFileSelect">
+
+      <input
+          v-if="data_store.fname"
+          type="file"
+          @change="handleFileSelect"
+          class="block w-auto text-sm text-gray-800 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0
+          file:bg-blue-600 file:text-white file:text-base hover:file:bg-blue-700 cursor-pointer"/>
       <button
           v-if="data_store.fname"
+          :disabled="!selectedFileForUpload"
           class="cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
           @click="uploadAndReplace"
       >
         Replace
       </button>
     </div>
-
   </div>
 
   <div v-if="data_store.loading" class="w-full h-100 pt-10 flex flex-col">
