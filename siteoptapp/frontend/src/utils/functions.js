@@ -47,6 +47,46 @@ export async function postData(endpointSuffix, data, notify) {
 
 
 /**
+ * Sends a request to backend using POST.
+ *
+ * @param {string} endpointSuffix - The endpoint suffix to post to
+ * @param {Object} data - An object containing some data
+ * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
+ * The function performs:
+ * - CSRF-protected POST request to the specified endpoint.
+ * - Error handling for failed requests or unsuccessful responses.
+ * - Displays error notifications using the provided `notify` utility.
+ */
+export async function postFileData(endpointSuffix, data, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/post/${endpointSuffix}/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'include',
+      body: data,
+    });
+    if (!response.ok) {
+      console.error("Invalid post:", await response.text());
+      return false
+    }
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(`${r.error}`, 5000, "error");
+      return false
+    }
+    return r
+  } catch (err) {
+    console.error(`Error posting ${data}:`, err);
+    return false
+  }
+}
+
+
+/**
  * Fetches data using GET from the specified API endpoint.
  *
  * @param {string} endpoint - The API endpoint suffix.

@@ -10,7 +10,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from '@/stores/sheetStore';
-import { postData } from "@/utils/functions.js";
+import { postData, postFileData } from "@/utils/functions.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
@@ -32,6 +32,8 @@ const xlsxDirty = ref(false);
 const activeView = ref("editor"); // "editor" | "plot"
 const selectedCount = ref(0);
 const selected = ref(null);
+const selectedFileForUpload = ref(null);
+
 const rowSelectionOptions = {
   mode: "multiRow",
   enableSelectionWithoutKeys: false,
@@ -522,6 +524,47 @@ async function saveCurrentFile() {
   }
   notify.show(`Save not implemented for ${filetype}`, 3000, "error");
 }
+
+function handleFileSelect(event) {
+  selectedFileForUpload.value = event.target.files[0];
+}
+
+async function uploadAndReplace() {
+  if (!selectedFileForUpload.value) return;
+  if (!data_store.fpath) {
+    notify.show("No file path available to replace.", 3000, "error");
+    return;
+  }
+  const fpath = data_store.fpath
+  const fname = data_store.fname
+  const filetype = data_store.daata?.filetype
+  console.log("selectedFileForUpload.value:", selectedFileForUpload.value)
+  if (selectedFileForUpload.value.name !== fname) {
+    notify.show(`Uploaded file name must match the current file name (${fname})`, 5000, "error")
+    return
+  }
+  const formData = new FormData();
+  formData.append("file", selectedFileForUpload.value)
+  formData.append("fpath", fpath)
+
+  const success = await postFileData("upload_file", formData, notify)
+  if (!success) {
+    return
+  }
+  notify.show(`File ${fpath} replaced successfully`, 4000, "info")
+  // Reload file (same as categoryToolbar.fetchFileContents()
+  console.log(`Reloading file: ${fpath}`)
+  data_store.clear()
+  data_store.toggleLoading()
+  const response = await postData("fetch_data", {full_path: fpath}, notify)
+  if (!response.success) {
+    data_store.toggleLoading()
+    return
+  }
+  data_store.addData(fname, fpath, response.data)
+  data_store.toggleLoading()
+}
+
 </script>
 
 <template>
@@ -561,10 +604,10 @@ async function saveCurrentFile() {
       </div>
     </div>
 
-    <div class="flex justify-end">
+    <div class="flex justify-end gap-2">
       <button
           v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
-          class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          class=" cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
           :disabled="
           (data_store.daata?.filetype === 'md' && !mdDirty) ||
           (data_store.daata?.filetype === 'csv' && !csvDirty) ||
@@ -574,6 +617,14 @@ async function saveCurrentFile() {
           @click="saveCurrentFile"
       >
         {{ saving ? "Saving..." : "Save" }}
+      </button>
+      <input type="file" @change="handleFileSelect">
+      <button
+          v-if="data_store.fname"
+          class="cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          @click="uploadAndReplace"
+      >
+        Replace
       </button>
     </div>
 
