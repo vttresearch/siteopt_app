@@ -10,7 +10,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from '@/stores/sheetStore';
-import { postData } from "@/utils/functions.js";
+import { postData, uploadFile, fetchFileContents } from "@/utils/functions.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
@@ -32,6 +32,8 @@ const xlsxDirty = ref(false);
 const activeView = ref("editor"); // "editor" | "plot"
 const selectedCount = ref(0);
 const selected = ref(null);
+const selectedFileForUpload = ref(null);
+
 const rowSelectionOptions = {
   mode: "multiRow",
   enableSelectionWithoutKeys: false,
@@ -522,6 +524,31 @@ async function saveCurrentFile() {
   }
   notify.show(`Save not implemented for ${filetype}`, 3000, "error");
 }
+
+function handleFileSelect(event) {
+  selectedFileForUpload.value = event.target.files[0];
+}
+
+async function uploadAndReplace() {
+  if (!selectedFileForUpload.value) return;
+  if (!data_store.fpath) return;
+  const fpath = data_store.fpath
+  const fname = data_store.fname
+  if (selectedFileForUpload.value.name !== fname) {
+    notify.show(`Uploaded file name must match the current file name (${fname})`, 5000, "error")
+    return
+  }
+  const formData = new FormData();
+  formData.append("file", selectedFileForUpload.value)
+  formData.append("fpath", fpath)
+  const success = await uploadFile(formData, notify)
+  if (!success) {
+    return
+  }
+  notify.show(`File ${fname} has been replaced`, 8000, "info")
+  // Reload file (same as categoryToolbar.fetchFileContents()
+  await fetchFileContents(fname, fpath)
+}
 </script>
 
 <template>
@@ -561,10 +588,10 @@ async function saveCurrentFile() {
       </div>
     </div>
 
-    <div class="flex justify-end">
+    <div class="flex justify-end gap-5">
       <button
           v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
-          class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          class=" cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
           :disabled="
           (data_store.daata?.filetype === 'md' && !mdDirty) ||
           (data_store.daata?.filetype === 'csv' && !csvDirty) ||
@@ -575,8 +602,22 @@ async function saveCurrentFile() {
       >
         {{ saving ? "Saving..." : "Save" }}
       </button>
-    </div>
 
+      <input
+          v-if="data_store.fname"
+          type="file"
+          @change="handleFileSelect"
+          class="block w-auto text-sm text-gray-800 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0
+          file:bg-blue-600 file:text-white file:text-base hover:file:bg-blue-700 cursor-pointer"/>
+      <button
+          v-if="data_store.fname"
+          :disabled="!selectedFileForUpload"
+          class="cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          @click="uploadAndReplace"
+      >
+        Replace
+      </button>
+    </div>
   </div>
 
   <div v-if="data_store.loading" class="w-full h-100 pt-10 flex flex-col">

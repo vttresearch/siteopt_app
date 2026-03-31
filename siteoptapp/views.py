@@ -305,6 +305,29 @@ def delete_project(client_id, path):
 
 
 @csrf_protect
+def upload_and_replace(request):
+    """Receives a file uploaded from the browser and replaces the current file."""
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    file_data = request.FILES.get("file")
+    file_path = request.POST.get("fpath")
+    print(f"Replacing file :{file_path}")
+    # Delete old file
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError as e:
+            return JsonResponse({"success": False, "error": f"[OSError] Removing file {file_path} failed: {e}"})
+    # Make new file
+    try:
+        with open(file_path, "wb+") as destination:
+            for chunk in file_data.chunks():
+                destination.write(chunk)
+    except OSError as e:
+        return JsonResponse({"success": False, "error": f"[OSError] when replacing file {file_path}: {e}"})
+    return JsonResponse({"success": True, "data": {}})
+
+
+@csrf_protect
 def post(request, action):
     """Handles data posted by the frontend.
     Requires that the POST from frontend includes csrftoken cookie and

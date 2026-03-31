@@ -1,5 +1,6 @@
 import { useNotificationStore } from '@/stores/notificationstore.js'
 import { useSettingStore } from "@/stores/settingstore.js";
+import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useResultStore } from "@/stores/resultstore.js";
 import { useScenarioStore } from "@/stores/scenariostore.js";
 import { API_BASE } from "@/config.js";
@@ -39,6 +40,42 @@ export async function postData(endpointSuffix, data, notify) {
       return false
     }
     return r
+  } catch (err) {
+    console.error(`Error posting ${data}:`, err);
+    return false
+  }
+}
+
+
+/**
+ * Sends data to backend as-is (no Content-type).
+ *
+ * @param {Object} data - An object containing data
+ * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
+ *
+ */
+export async function uploadFile(data, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/upload/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'include',
+      body: data,
+    });
+    if (!response.ok) {
+      console.error("Invalid post:", await response.text());
+      return false
+    }
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(`${r.error}`, 5000, "error");
+      return false
+    }
+    return true
   } catch (err) {
     console.error(`Error posting ${data}:`, err);
     return false
@@ -146,6 +183,27 @@ export async function fetchWorkFolder(workFolderName) {
 }
 
 
+/**
+ * Fetches the contents of a given file.
+ *
+ * @param {string} fname - File name.
+ * @param {string} fpath - Full path to file (including the file name).
+ *
+ */
+export async function fetchFileContents(fname, fpath) {
+  console.log(`Downloading file: ${fpath}`)
+  const notify = useNotificationStore()
+  const dataStore = useTableDataStore()
+  dataStore.clear()
+  dataStore.toggleLoading()
+  const response = await postData("fetch_data", {full_path: fpath}, notify)
+  if (!response.success) {
+    dataStore.toggleLoading()
+    return
+  }
+  dataStore.addData(fname, fpath, response.data)
+  dataStore.toggleLoading()
+}
 
 /**
  * Fetches the contents of current_input file tree of a given project.
