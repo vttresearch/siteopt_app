@@ -2,10 +2,10 @@
 import { ref, computed, watch } from "vue"
 import ScenarioComparisonChart from "@/components/ScenarioComparisonChart.vue"
 import {
-  CHART_THEME,
   detectScenarioStructure,
   processScenarioComparisonData
 } from "@/utils/chartUtils.js"
+import { CHART_STYLE_THEME } from "@/utils/chartStyleUtils.js"
 import ChartSettingsModal from "@/components/ChartSettingsModal.vue"
 import CustomPlotModal from "@/components/CustomPlotModal.vue"
 
@@ -263,7 +263,7 @@ function updateCategoryItemsChartFor(categoryName) {
     config.title = {
       text: `Items in "${categoryName}": ${props.fileName}`,
       left: "center",
-      textStyle: { fontSize: CHART_THEME.titleFontSize }
+      textStyle: { fontSize: CHART_STYLE_THEME.titleFontSize }
     }
 
     categoryItemsChartOptions.value = {
@@ -306,7 +306,7 @@ function buildCustomPlotOption(plotLike) {
   config.title = {
     text: plotLike.title,
     left: "center",
-    textStyle: { fontSize: CHART_THEME.titleFontSize }
+    textStyle: { fontSize: CHART_STYLE_THEME.titleFontSize }
   }
 
   return applyTopNFilter(config, plotLike.settings.topNValues)

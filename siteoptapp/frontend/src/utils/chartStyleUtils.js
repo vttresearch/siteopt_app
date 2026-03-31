@@ -2,7 +2,8 @@ export const CHART_STYLE_THEME = {
     legendFontSize: 12,
     axisLabelFontSize: 13,
     axisNameFontSize: 12,
-    titleFontSize: 16,
+    titleFontSize: 20,
+    minDisplayRatio: 0.03,
   
     horizontalLabelWidth: 130,
     verticalLabelWidth: 120,
@@ -362,7 +363,6 @@ export const CHART_STYLE_THEME = {
       series: Array.isArray(option.series)
         ? option.series.map((seriesItem) => ({
             barMaxWidth: 36,
-            barMinHeight: 2,
             ...seriesItem
           }))
         : []
