@@ -48,7 +48,7 @@ export async function postData(endpointSuffix, data, notify) {
 
 
 /**
- * Sends data to backend as-is (no Content-type).
+ * Sends data to backend using POST as-is (no Content-Type).
  *
  * @param {Object} data - An object containing data
  * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
@@ -122,64 +122,6 @@ export const fetchSettings = async () => {
     return
   }
   settingStore.setSettings(response.data.configs)
-}
-
-/**
- * Fetches the file trees of all available projects.
- */
-export async function fetchWorkFolderFiles() {
-  const settingStore = useSettingStore()
-  const notify = useNotificationStore()
-  settingStore.loadingProjects = true
-  if (Object.keys(settingStore.workFolders).length === 0) {
-    settingStore.setWorkFolderFiles([])
-    settingStore.setActiveProjectIndex(null)
-    settingStore.loadingProjects = false
-    return
-  }
-  const response = await getData("fetch_work_folders_tree", notify)
-  if (!response.success) {
-    notify.show(`${response.error}`)
-    settingStore.loadingProjects = false
-    return
-  }
-  const files = response.data
-  settingStore.setWorkFolderFiles(files)
-
-  if (settingStore.activeProjectIndex >= settingStore.workFolderFiles.length) {
-    settingStore.activeProjectIndex = Math.max(0, settingStore.workFolderFiles.length - 1)
-  }
-  settingStore.loadingProjects = false
-}
-
-
-/**
- * Fetches the file tree of a given project.
- *
- * @param {string} workFolderName - Work folder name.
- *
- */
-export async function fetchWorkFolder(workFolderName) {
-  const settingStore = useSettingStore()
-  const notify = useNotificationStore()
-  settingStore.loadingProjects = true
-
-  const response = await getData(`fetch_work_folder/${workFolderName}`, notify)
-  if (!response.success) {
-    notify.show(`${response.error}`)
-    settingStore.loadingProjects = false
-    return
-  }
-  const updatedTree = response.data
-  // Find project folder index and update that with the new tree
-  const idx = settingStore.workFolderFiles.findIndex(f => f.name === workFolderName);
-  if (idx !== -1) {
-    // preserve reactivity by using splice
-    settingStore.workFolderFiles.splice(idx, 1, updatedTree);
-    // Let FileSelectorPanel know that folder structure has been updated
-    settingStore.projectIndexUpdated = idx
-  }
-  settingStore.loadingProjects = false
 }
 
 

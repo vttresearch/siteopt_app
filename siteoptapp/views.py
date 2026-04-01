@@ -25,7 +25,6 @@ CONFIG_FILE = "config.json"
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
 EXAMPLE_INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox" / "example_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
-TEST_PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "test_spinetoolbox_project").resolve()
 SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
 WORK_ROOT = Path(Path(settings.BASE_DIR) / WORK_DIR).resolve()
 CONFIG_ROOT = Path(settings.BASE_DIR / "_config").resolve()
@@ -44,10 +43,6 @@ def get_example_input_data_path() -> str:
 
 def get_project_data_path() -> str:
     return str(PROJECT_DATA_DIR)
-
-
-def get_test_project_data_path() -> str:
-    return str(TEST_PROJECT_DATA_DIR)
 
 
 def get_config_file_dir(client_id) -> Path:
@@ -338,10 +333,7 @@ def post(request, action):
     js = json.loads(request.body.decode("utf-8"))  # dict
     data = js["data"]
     if action == "make_work_folder":
-        if "test_work_folder" in data.keys():
-            print(f"[{client_id}] creating test project")
-            json_response = make_test_work_folder(client_id, data["test_work_folder"])
-        elif "work_folder_with_example_data" in data.keys():
+        if "work_folder_with_example_data" in data.keys():
             print(f"[{client_id}] creating SiteOpt project with example data")
             json_response = make_work_folder(client_id, data["work_folder_with_example_data"], use_example_data=True)
         else:
@@ -568,93 +560,6 @@ def make_work_folder(client_id, work_folder_name, use_example_data=False):
     return {"success": True, "data": {}}
 
 
-def make_test_work_folder(client_id, work_folder_name):
-    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
-    configs = get_client_config(client_id) or {}
-    pdp = get_test_project_data_path()
-    if not validate_project_path(pdp)["success"]:
-        return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
-    client_root = Path(get_client_work_root(client_id))
-    work_dir = (client_root / work_folder_name).resolve()
-    try:
-        make_dir(str(work_dir))
-        ignored = (".git", ".idea", ".venv", ".gitignore", ".gitkeep", "*.md", "*.png", "*.yaml", "*.yml", "*.css", ".github", "docs")
-        shutil.copytree(pdp, str(work_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns(*ignored))
-    except OSError as e:
-        return {"success": False, "error": f"[OSError] [{e}] Creating test work dir failed"}
-    work_folders = configs["work_folders"]
-    if work_folder_name not in work_folders:
-        work_folders[work_folder_name] = str(work_dir)
-    edit_config_file(config_fpath, {"work_folders": work_folders})
-    return {"success": True, "data": {}}
-
-
-def build_tree(path, exclude_dirs=None):
-    exclude_dirs = set(os.path.abspath(d) for d in (exclude_dirs or []))
-    tree = {"children": []}
-    entries = os.listdir(path)
-    # Sort: files first, then directories
-    entries.sort(key=lambda e: os.path.isdir(os.path.join(path, e)))
-    for entry in entries:
-        full_path = os.path.join(path, entry)
-        abs_path = os.path.abspath(full_path)
-        # Skip excluded directories
-        if abs_path in exclude_dirs:
-            continue
-        if os.path.isdir(full_path):
-            tree["children"].append({
-                "name": entry,
-                "children": build_tree(full_path, exclude_dirs)["children"]
-            })
-        else:
-            tree["children"].append({"name": entry})
-    return tree
-
-
-def fetch_work_folders_tree(request):
-    """Builds and returns the directory tree of available work (project) folders in current context.
-    i.e. When in container, host work folders are not shown. When running on host, container work
-    folders are not shown."""
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    print(f"Client {client_id} is fetching work folder files")
-    config_d = get_client_config(client_id)
-    # config_d = read_config_file(config.config_path)
-    work_folders_dict = config_d.get("work_folders", {})
-    trees = list()
-    for name, p in work_folders_dict.items():
-        if not p.startswith(str(WORK_ROOT)):
-            # Skip folders not in current context
-            continue
-        if not os.path.exists(p):
-            print(f"Skipping {p}. Doesn't exist.")
-            continue
-        excluded_dirs = [os.path.join(p, ".git")]
-        tree = build_tree(p, excluded_dirs)
-        base_path, dirname = os.path.split(p)
-        tree["name"] = dirname  # same as 'name'
-        tree["path"] = base_path
-        trees.append(tree)
-    return JsonResponse({"success": True, "data": trees})
-
-
-def fetch_work_folder(request, folder_name):
-    """Returns the directory tree of a single work folder."""
-    print(f"Returning directory tree of {folder_name}")
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    config_d = get_client_config(client_id)
-    # config_d = read_config_file(config.config_path)
-    work_folders_dict = config_d.get("work_folders", {})
-    p = work_folders_dict.get(folder_name)
-    if not os.path.exists(p):
-        return JsonResponse({"success": False, "error": f"Updating project {folder_name} failed"})
-    excluded_dirs = [os.path.join(p, ".git")]
-    tree = build_tree(p, excluded_dirs)
-    base_path, dirname = os.path.split(p)
-    tree["name"] = dirname  # same as 'name'
-    tree["path"] = base_path
-    return JsonResponse({"success": True, "data": tree})
-
-
 def fetch_current_input_folder(request, folder_name):
     """Returns the files under current_input folder of a given folder (project) name.
     The returned list format is such that it can be used directly in a frontend Toolbar template.
@@ -795,7 +700,6 @@ def make_config_file(p):
     """
     d = {"input_data_path": get_input_data_path(),
          "project_data_path": get_project_data_path(),
-         "test_project_data_path": get_test_project_data_path(),
          "work_folders": {}}
     with open(p, "w") as fp:
         json.dump(d, fp, indent=4)
