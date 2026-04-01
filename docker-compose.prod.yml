@@ -1,0 +1,43 @@
+# Temporary two-service runtime: pulls pre-built images from your registry
+# No volumes are mounted, so SQLite data is lost when containers are removed.
+services:
+  backend:
+    image: registry.elexia.amct.pl/site_opt/backend:latest
+    environment:
+      - DJANGO_DEBUG=True
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+      - ENABLE_AI_ASSISTANT=True
+      - PYTHONUNBUFFERED=1
+      - RUNNING_IN_CONTAINER=True
+      - WORK_ROOT=/app/work_container
+      - CONFIG_ROOT=/app/work_container/_config
+      - AI_ASSISTANT_CONTEXT_DIR=/app/work_container
+      - AI_ASSISTANT_OLLAMA_REQUEST_TIMEOUT=1800
+      - AI_ASSISTANT_OLLAMA_REUSE_SDK_SESSION=true
+      - JULIA_NUM_THREADS=4
+      - OPENBLAS_NUM_THREADS=1
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - JULIA_JEMALLOC_CONF=background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000
+      - MALLOC_ARENA_MAX=2
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    command: >
+      bash -lc "
+        source /opt/venv/bin/activate &&
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: registry.elexia.amct.pl/site_opt/frontend:latest
+    ports:
+      - "5173:5173"
+    restart: unless-stopped

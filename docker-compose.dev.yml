@@ -1,0 +1,67 @@
+services:
+  backend:
+    image: registry.elexia.amct.pl/site_opt/backend:${BACKEND_TAG:-dev}
+    build:
+      context: .
+      dockerfile: Dockerfile.backend-dev
+    working_dir: /app
+    environment:
+      DJANGO_DEBUG: "True"
+      ENABLE_AI_ASSISTANT: "True"
+      PYTHONUNBUFFERED: "1"
+      RUNNING_IN_CONTAINER: "True"
+      WORK_ROOT: /app/work_container
+      CONFIG_ROOT: /app/work_container/_config
+      AI_ASSISTANT_CONTEXT_DIR: /app/work_container
+      AI_ASSISTANT_OLLAMA_REQUEST_TIMEOUT: "1800"
+      AI_ASSISTANT_OLLAMA_REUSE_SDK_SESSION: "true"
+      JULIA_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      "MKL_NUM_THREADS": "1"
+      JULIA_JEMALLOC_CONF: "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
+      MALLOC_ARENA_MAX: "2"
+    volumes:
+      - .:/app:rw
+      - siteopt_work:/app/work_container
+      - type: tmpfs
+        target: /app/siteoptatpp/frontend
+    ports:
+      - "8000:8000"
+    networks:
+      - docker_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      bash -lc "
+        source /opt/venv/bin/activate &&
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend-dev
+    image: registry.elexia.amct.pl/site_opt/frontend:${FRONTEND_TAG:-dev}
+    working_dir: /app
+    volumes:
+      - ./siteoptapp/frontend:/app:rw
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      NPM_CONFIG_CACHE: /root/.npm
+    command: /bin/sh -c "if [ ! -d node_modules ] || [ -z \"$(ls -A node_modules 2>/dev/null)\" ]; then npm ci; fi && npm run dev"
+    networks:
+      - docker_network
+    depends_on:
+      - backend
+
+volumes:
+  frontend_node_modules: {}
+  siteopt_work: {}
+
+networks:
+  docker_network:
+    driver: bridge

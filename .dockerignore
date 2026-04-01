@@ -28,3 +28,6 @@ work/
 # Editor
 .vscode/
 .idea/
+
+# Local tool state
+.copilot-docker/

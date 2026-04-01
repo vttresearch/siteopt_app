@@ -1,0 +1,14 @@
+FROM node:22.15-alpine
+
+WORKDIR /app
+
+# Copy package files from the frontend subfolder and install dependencies
+COPY siteoptapp/frontend/package*.json ./
+RUN npm ci --silent
+
+# Copy frontend source into the image (dev compose may mount over this)
+COPY siteoptapp/frontend/ ./
+
+EXPOSE 5173
+
+CMD ["/bin/sh", "-c", "npm install && npm run dev"]

@@ -53,6 +53,9 @@ COPY julia-setup.jl /app/julia-setup.jl
 COPY siteopt_toolbox /app/siteopt_toolbox
 RUN julia /app/julia-setup.jl
 
+# Copy application source so the image is runnable without bind mounts.
+COPY . /app
+
 EXPOSE 8000
 
 # Default command for dev (Overridden in docker-compose.yml to add migrations)
