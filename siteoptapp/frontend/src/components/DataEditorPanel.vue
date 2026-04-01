@@ -216,6 +216,26 @@ function onDeleteSelected() {
   markDirty()
 }
 
+/* Custom data type detector for Excel data.
+* If any row contains a string -> all cells in the column are strings.
+* If row has only numbers -> all cells in the column are numbers.
+* */
+function detectColumnDataType(rows, col) {
+  let allNumeric = true
+  for (const row of rows) {
+    const value = row[col]
+    // Skip null or empty cells
+    if (value == null || value === "") continue
+    // Check if numeric
+    if (typeof value === "number") continue
+    if (typeof value === "string" && value.trim() !== "" && !isNaN(Number(value))) continue
+    // If we reach here → value is string-like
+    allNumeric = false
+    break
+  }
+  return allNumeric ? "number" : "text"
+}
+
 function updateTableWithActiveSheet() {
   const sheetObj = sheetStore.sheetsByName[sheetStore.activeSheet] || {}
   const cols = sheetObj.columns ?? []  // Columns
@@ -237,6 +257,8 @@ function updateTableWithActiveSheet() {
     },
     ...cols.map(col => {
       const validationOptions = validationsByColumn[col]
+      // Detect data type from all rows
+      const dataType = detectColumnDataType(rows, col)
       if (Array.isArray(validationOptions) && validationOptions.length > 0) {
         return {
           headerName: col,
@@ -245,6 +267,7 @@ function updateTableWithActiveSheet() {
           editable: true,
           cellEditor: "agSelectCellEditor",
           cellEditorParams: { values: validationOptions },
+          cellDataType: 'text',
           cellClass: "bg-blue-50 ag-cell-dropdown",
           headerClass: "ag-header-dropdown",
           headerTooltip: "Select from predefined values",
@@ -255,6 +278,7 @@ function updateTableWithActiveSheet() {
         field: col,
         minWidth: 100,
         editable: true,
+        cellDataType: dataType,
       }
     })
   ]
