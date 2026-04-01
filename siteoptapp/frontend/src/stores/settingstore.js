@@ -5,7 +5,6 @@ export const useSettingStore = defineStore('settingsData', () => {
   const inputDataPath = ref(null);  // Initial value must be something else than the default value in config file
   const projectPath = ref(null);
   const workFolders = ref([]);
-  const workFolderFiles = ref([]);
   const activeProjectIndex = ref(null);
   const activeProjectName = ref("");
   const activeProjectPath = ref("");
@@ -22,7 +21,6 @@ export const useSettingStore = defineStore('settingsData', () => {
     workFolders.value = Object.entries(settings["work_folders"]).map(([name, path]) => ({
       name, path
     }));
-    // workFolders.value = settings["work_folders"]
   }
 
   function setInputDataPath(p) {
@@ -31,10 +29,6 @@ export const useSettingStore = defineStore('settingsData', () => {
 
   function setProjectPath(p) {
     projectPath.value = p;
-  }
-
-  function setWorkFolderFiles(files) {
-    workFolderFiles.value = files
   }
 
   function setActiveProject(ind) {
@@ -69,7 +63,6 @@ export const useSettingStore = defineStore('settingsData', () => {
     inputDataPath,
     projectPath,
     workFolders,
-    workFolderFiles,
     activeProjectIndex,
     activeProjectName,
     activeProjectPath,
@@ -82,7 +75,6 @@ export const useSettingStore = defineStore('settingsData', () => {
     setSettings,
     setInputDataPath,
     setProjectPath,
-    setWorkFolderFiles,
     setActiveProject,
     setActiveProjectIndex,
     setActiveProjectName,

@@ -5,7 +5,7 @@ import Spinner from "@/components/Spinner.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
-import { fetchSettings, postData } from "@/utils/functions.js";
+import { fetchSettings, postData, fetchInputFiles, fetchScenarios } from "@/utils/functions.js";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 
@@ -61,7 +61,6 @@ function cancelMakeProject() {
 async function confirmMakeProject(n) {
   showMakeProjectPrompt.value = false
   restoreOpen.value = false
-  console.log(`creating project with name:${n.name} useExampleData:${n.exampleData}`)
   let name = n.name.trim()
   if (!await validateWorkFolderName(name)) return
   settingStore.creatingProjectFolder = true
@@ -119,8 +118,9 @@ async function restoreProject(c) {
     restoreOpen.value = false
     await fetchSettings()
     const index = settingStore.workFolders.length -1
-    console.log(`restoreProject() index:${index}`)
     settingStore.setActiveProject(index >= 0 ? index : null)
+    await fetchInputFiles(settingStore.activeProjectName)
+    await fetchScenarios(settingStore.activeProjectPath)
     notify.show(`Project ${c.name} restored`, 2000, "info")
   }
 }
@@ -135,7 +135,6 @@ function askDeleteProject(c) {
 
 function cancelDeleteProject() {
   projectToDelete.value = {}
-  console.log("Deleting project cancelled")
 }
 
 async function deleteProject() {
@@ -147,13 +146,12 @@ async function deleteProject() {
   if (response.success) {
     // Remove entry from restoreCandidates.value
     restoreCandidates.value = restoreCandidates.value.filter(item => item.name !== projectToDelete.value.name)
-    console.log("restoreCandidates.value", restoreCandidates.value)
     notify.show(`Project ${projectToDelete.value.name} has been removed`)
   }
   projectToDelete.value = {}
 }
 
-async function openRestore() {
+async function openRestoreMenu() {
   if (restoreOpen.value) {
     // Make same button close the menu if it's open
     restoreOpen.value = false
@@ -175,14 +173,15 @@ async function postMakeWorkFolder(pathKey, projectName) {
     return
   }
   await fetchSettings();
-  notify.show(`New project ${projectName} created`, 2000, "info")
   const index = Object.keys(settingStore.workFolders).indexOf(projectName);
-  settingStore.setActiveProjectIndex(index >= 0 ? index : 0)
+  settingStore.setActiveProject(index >= 0 ? index : 0)
+  await fetchInputFiles(settingStore.activeProjectName)
   settingStore.creatingProjectFolder = false
+  // Fetch scenarios even though there aren't any in new projects but maybe there will be in the future
+  await fetchScenarios(settingStore.activeProjectPath)
+  notify.show(`New project ${projectName} created`, 2000, "info")
 }
-
 </script>
-
 
 <template>
   <div v-if="!settingStore.loadingProjects">
@@ -226,7 +225,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
           type="button"
           :disabled="settingStore.creatingProjectFolder || restoring"
           title="Recent projects"
-          @click="openRestore"
+          @click="openRestoreMenu"
           :class="restoreOpen ? 'bg-gray-500 hover:bg-gray-700' : 'bg-blue-500 hover:bg-blue-700 shadow-lg'">
         <i class="fa-solid fa-bars"></i>
       </button>
@@ -234,41 +233,41 @@ async function postMakeWorkFolder(pathKey, projectName) {
     </div>
 
     <div class="relative">
-    <div v-if="restoreOpen" class="absolute top-0 left-0 w-full z-50 border border-gray-300 rounded p-3 bg-gray-50 shadow-xl">
-      <div class="flex items-center justify-between mb-2">
-        <div class="font-semibold text-gray-800">Restore project</div>
-        <BaseButton variant="ghost" @click="restoreOpen = false">Close</BaseButton>
-      </div>
+      <div v-if="restoreOpen" class="absolute top-0 left-0 w-full z-50 border border-gray-300 rounded p-3 bg-gray-50 shadow-xl">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-semibold text-gray-800">Restore project</div>
+          <BaseButton variant="ghost" @click="restoreOpen = false">Close</BaseButton>
+        </div>
 
-      <div v-if="restoreCandidates.length === 0" class="text-sm text-gray-600">
-        No hidden projects found.
-      </div>
-      <div v-else class="space-y-2">
-        <div v-for="c in restoreCandidates"
-             :key="c.path"
-             class="w-full px-3 py-2 flex justify-between bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-blue-500"
-             >
-          <div>
-            <div class="font-medium text-left">{{ c.name }}</div>
-            <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
-          </div>
-          <div class="flex items-center gap-4">
-            <button
-                class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-blue-500 hover:bg-blue-700"
-                :title="`Restore ${c.name}`"
-                @click="restoreProject(c)">
-              <i class="fa-regular fa-folder-open"></i>
-            </button>
-            <button
-                class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-red-500 hover:bg-red-700"
-                :title="`Delete ${c.name}`"
-                @click="askDeleteProject(c)">
-              <i class="fa-regular fa-trash-can"></i>
-            </button>
+        <div v-if="restoreCandidates.length === 0" class="text-sm text-gray-600">
+          No hidden projects found.
+        </div>
+        <div v-else class="space-y-2">
+          <div v-for="c in restoreCandidates"
+               :key="c.path"
+               class="w-full px-3 py-2 flex justify-between bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-blue-500"
+               >
+            <div>
+              <div class="font-medium text-left">{{ c.name }}</div>
+              <div class="text-xs text-gray-500 truncate">{{ c.path }}</div>
+            </div>
+            <div class="flex items-center gap-4">
+              <button
+                  class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-blue-500 hover:bg-blue-700"
+                  :title="`Restore ${c.name}`"
+                  @click="restoreProject(c)">
+                <i class="fa-regular fa-folder-open"></i>
+              </button>
+              <button
+                  class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-red-500 hover:bg-red-700"
+                  :title="`Delete ${c.name}`"
+                  @click="askDeleteProject(c)">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </div>
 
   </div>

@@ -17,16 +17,14 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic import RedirectView
 from siteoptapp import views
 
 urlpatterns = [
     path('admin/doc/', include('django.contrib.admindocs.urls')),
     path("admin/", admin.site.urls),
-    path("api/fetch_work_folders_tree/", views.fetch_work_folders_tree, name="fetch_work_folders_tree"),
-    path("api/fetch_work_folder/<str:folder_name>/", views.fetch_work_folder, name="fetch_work_folder"),
     path("api/fetch_current_input_folder/<str:folder_name>/", views.fetch_current_input_folder, name="fetch_current_input_folder"),
     path("api/post/<str:action>/", views.post, name="post"),
+    path("api/upload/", views.upload_and_replace, name="upload_and_replace"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
     path("api/stream/execute/<str:job_id>", views.execute, name="execute"),
