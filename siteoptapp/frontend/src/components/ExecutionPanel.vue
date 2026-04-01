@@ -230,6 +230,11 @@ async function executeSelected() {
     let finishedSubtask = event.data
     taskStore.markSubtaskDone(finishedSubtask)
   });
+  eventSource.addEventListener("item_failed", (event) => {
+    // This listener removes the 'Execution ... failed' message from the execution log
+    let failedSubtask = event.data
+    taskStore.markSubtaskFailed(failedSubtask)
+  });
   eventSource.onmessage = (event) => {
     executionOutput.value.push(event.data)
   };
@@ -260,7 +265,7 @@ function stopTimer() {
     <button
         class="flex items-center gap-1 justify-center text-white rounded-md disabled:opacity-50 px-2 py-3 cursor-pointer"
         type="button"
-        title="Recent projects"
+        title="Show/hide Log"
         @click="showLog = !showLog"
         :class="showLog ? 'bg-blue-500 hover:bg-blue-700 shadow-lg' : 'bg-gray-500 hover:bg-gray-700'">
       <i class="fa-solid fa-file-lines"></i>

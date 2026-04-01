@@ -474,6 +474,16 @@ def execute(request, job_id):
                     parsed_line = parsed_line.removeprefix("Data Store ")
                     parsed_line = parsed_line.removeprefix("Merger ")
                     yield f"event: item_finished\ndata: {parsed_line}\n\n"
+                elif line.startswith("Executing") and line.endswith("failed"):
+                    # This intercepts the 'Executing ... failed' output line and sends an event instead
+                    parsed_line = line.removeprefix("Executing").removesuffix("failed").strip()
+                    # Strip project item type
+                    parsed_line = parsed_line.removeprefix("Data Connection ")
+                    parsed_line = parsed_line.removeprefix("Tool ")
+                    parsed_line = parsed_line.removeprefix("Importer ")
+                    parsed_line = parsed_line.removeprefix("Data Store ")
+                    parsed_line = parsed_line.removeprefix("Merger ")
+                    yield f"event: item_failed\ndata: {parsed_line}\n\n"
                 else:
                     yield f"data: {line}\n\n"
             proc.stdout.close()
