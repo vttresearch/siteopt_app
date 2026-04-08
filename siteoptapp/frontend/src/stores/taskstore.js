@@ -21,6 +21,8 @@ export const useTaskStore = defineStore('taskData', () => {
           { name: "hp units input", done: false, error: false },
           { name: "Existing load", done: false, error: false },
           { name: "scenarios", done: false, error: false },
+          { name: "Additional template", done: false, error: false },
+          { name: "Load mytemplate", done: false, error: false },
           { name: "convert connections", done: false, error: false },
           { name: "Load template", done: false, error: false },
           { name: "convert diverting units (1)", done: false, error: false },
@@ -77,6 +79,8 @@ export const useTaskStore = defineStore('taskData', () => {
           { name: "hp units input", done: false, error: false },
           { name: "Existing load", done: false, error: false },
           { name: "scenarios", done: false, error: false },
+          { name: "Additional template", done: false, error: false },
+          { name: "Load mytemplate", done: false, error: false },
           { name: "convert connections", done: false, error: false },
           { name: "Load template", done: false, error: false },
           { name: "convert diverting units (1)", done: false, error: false },
@@ -135,7 +139,14 @@ export const useTaskStore = defineStore('taskData', () => {
     const subtask = task.subtasks.find(s => s.name === subtaskName);
     if (!subtask) return;
     subtask.done = true;
-    subtask.error = false; // optional, clear error if needed
+  }
+
+  function markSubtaskFailed(subtaskName) {
+    const task = tasks.value.find(t => t.name === currentTask.value);
+    if (!task) return;
+    const subtask = task.subtasks.find(s => s.name === subtaskName);
+    if (!subtask) return;
+    subtask.error = true;
   }
 
   /* Clears done and error for all subtasks in current task. */
@@ -173,6 +184,7 @@ export const useTaskStore = defineStore('taskData', () => {
     setSubtasksPending,
     setCurrentTask,
     markSubtaskDone,
+    markSubtaskFailed,
     clearSubtasks,
     incrementTimer,
   }

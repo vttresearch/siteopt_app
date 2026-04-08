@@ -85,29 +85,43 @@ def list_results(project_path):
     if not root.exists():
         return {}
     runs = {}
-    for scenario_dir in root.iterdir():
-        if not scenario_dir.is_dir():
+    for timestamp_dir in root.iterdir():
+        if not timestamp_dir.is_dir():
             continue
-        scenario_name = scenario_dir.name
-        for run_dir in scenario_dir.iterdir():
-            if not run_dir.is_dir():
-                continue
-            results_file = run_dir / "results.xlsx"
-            if not results_file.exists():
-                continue
-            run_name = run_dir.name
-            group_key = _find_matching_group(run_name, runs.keys())
-            if group_key is None:
-                group_key = run_name
-            if group_key not in runs:
-                runs[group_key] = []
-            runs[group_key].append({
-                "scenario": scenario_name,
-                "run": run_name,
-                "path": str(results_file)
-            })
-    for run_name in runs:
-        runs[run_name].sort(key=lambda x: x["scenario"].lower())
+        results_file = timestamp_dir / "results.xlsx"
+        if not results_file.exists():
+            continue
+        run_name = timestamp_dir.name
+        runs[run_name] = []
+        runs[run_name].append({
+            "scenario": "skenaarion_nimi",
+            "run": run_name,
+            "path": str(results_file)
+        })
+
+    # for scenario_dir in root.iterdir():
+    #     if not scenario_dir.is_dir():
+    #         continue
+    #     scenario_name = scenario_dir.name
+    #     for run_dir in scenario_dir.iterdir():
+    #         if not run_dir.is_dir():
+    #             continue
+    #         results_file = run_dir / "results.xlsx"
+    #         if not results_file.exists():
+    #             continue
+    #         run_name = run_dir.name
+    #         group_key = _find_matching_group(run_name, runs.keys())
+    #         if group_key is None:
+    #             group_key = run_name
+    #         if group_key not in runs:
+    #             runs[group_key] = []
+    #         runs[group_key].append({
+    #             "scenario": scenario_name,
+    #             "run": run_name,
+    #             "path": str(results_file)
+    #         })
+    # for run_name in runs:
+    #     runs[run_name].sort(key=lambda x: x["scenario"].lower())
     return dict(sorted(runs.items(), key=lambda x: x[0], reverse=True))
 
 
@@ -474,6 +488,16 @@ def execute(request, job_id):
                     parsed_line = parsed_line.removeprefix("Data Store ")
                     parsed_line = parsed_line.removeprefix("Merger ")
                     yield f"event: item_finished\ndata: {parsed_line}\n\n"
+                elif line.startswith("Executing") and line.endswith("failed"):
+                    # This intercepts the 'Executing ... failed' output line and sends an event instead
+                    parsed_line = line.removeprefix("Executing").removesuffix("failed").strip()
+                    # Strip project item type
+                    parsed_line = parsed_line.removeprefix("Data Connection ")
+                    parsed_line = parsed_line.removeprefix("Tool ")
+                    parsed_line = parsed_line.removeprefix("Importer ")
+                    parsed_line = parsed_line.removeprefix("Data Store ")
+                    parsed_line = parsed_line.removeprefix("Merger ")
+                    yield f"event: item_failed\ndata: {parsed_line}\n\n"
                 else:
                     yield f"data: {line}\n\n"
             proc.stdout.close()
