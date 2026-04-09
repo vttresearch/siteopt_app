@@ -368,6 +368,8 @@ watch(() => data_store.daata,
     const fileType = newItems.filetype
     fileData.value = newItems.data
     if (fileType === 'xlsx') {
+      // Default to editor view with Excel files
+      activeView.value = "editor"
       sheetNames.value = Object.keys(fileData.value || {})
       sheetStore.setActiveSheet(sheetNames.value[0] || "")  // Select first sheet
       // Load all sheets into the store
@@ -380,8 +382,6 @@ watch(() => data_store.daata,
       }
       updateTableWithActiveSheet()
       await nextTick()
-      // Default to editor always with Excel files
-      activeView.value = "editor"
       sheetStore.toggleSheetDataUpdated()
     }
     else if (fileType === "csv") {
