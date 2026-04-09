@@ -14,6 +14,7 @@ export const useSettingStore = defineStore('settingsData', () => {
   const currentInputFiles = ref({})
   const backendAvailable = ref(false);
   const backendRetryAttempts = ref(0);
+  const executionInProgress = ref(false)
 
   function setSettings(settings) {
     inputDataPath.value = settings["input_data_path"];
@@ -72,6 +73,7 @@ export const useSettingStore = defineStore('settingsData', () => {
     currentInputFiles,
     backendAvailable,
     backendRetryAttempts,
+    executionInProgress,
     setSettings,
     setInputDataPath,
     setProjectPath,

@@ -19,7 +19,6 @@ const scenarioStore = useScenarioStore()
 const execType = ref("")
 const executionOutput = ref([])
 const executionFinished = ref(false)
-const executionInProgress = ref(false)
 const converter = new AnsiToHtml();
 const outputEl = ref(null)
 const selectedScenarios = ref([])
@@ -153,7 +152,7 @@ async function confirmRemoveScenario() {
 }
 
 function clearExecutionInProgress() {
-  executionInProgress.value = false
+  settingStore.executionInProgress = false
   executionFinished.value = true
   stopTimer()
 }
@@ -169,7 +168,7 @@ function execTypeNeedsScenario() {
 }
 
 async function executeSelected() {
-  executionInProgress.value = true
+  settingStore.executionInProgress = true
   executionFinished.value = false
   taskStore.setCurrentTask(execType.value)
   if (execType.value === "") {
@@ -293,7 +292,7 @@ function stopTimer() {
         <button
             class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
             type="button"
-            :disabled="scenarioStore.loadingScenarios"
+            :disabled="scenarioStore.loadingScenarios || settingStore.executionInProgress"
             @click="showAddScenarioPrompt = true">
           <i v-if="scenarioStore.loadingScenarios" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
           <i v-else class="fa-solid fa-square-plus"></i>
@@ -319,9 +318,11 @@ function stopTimer() {
                   :value="scenario"
                   v-model="selectedScenarios" />
               <label class=px-2 :for="`scenario-${i}`">{{ scenario }}</label>
-              <button v-if="scenario.toLowerCase()!=='base'"
-                  class="text-gray-400 hover:text-gray-700"
+              <button
+                  v-if="scenario.toLowerCase()!=='base'"
                   type="button"
+                  class="text-gray-400 hover:text-gray-700"
+                  :disabled="settingStore.executionInProgress"
                   @click="askRemoveScenario(scenario, $event.currentTarget)">
                 <i class="fa-regular fa-trash-can"></i>
               </button>
@@ -353,10 +354,10 @@ function stopTimer() {
       <button
           class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
           type="button"
-          :disabled="!execType || executionInProgress"
+          :disabled="!execType || settingStore.executionInProgress"
           title="Select a task to execute"
           @click="executeSelected">
-        <i v-if="executionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+        <i v-if="settingStore.executionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
         <i v-else class="fa-solid fa-play"></i>
         <span class="text-nowrap">Execute</span>
       </button>
