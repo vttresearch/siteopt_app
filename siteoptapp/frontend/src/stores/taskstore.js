@@ -162,6 +162,7 @@ export const useTaskStore = defineStore('taskData', () => {
 
   /* Clears done and error for all subtasks in all tasks. */
   function clearAll() {
+    currentTask.value = ""
     tasks.value.forEach(task => {
       task.elapsed = 0
       task.subtasks.forEach(st => {
@@ -186,6 +187,7 @@ export const useTaskStore = defineStore('taskData', () => {
     markSubtaskDone,
     markSubtaskFailed,
     clearSubtasks,
+    clearAll,
     incrementTimer,
   }
 })

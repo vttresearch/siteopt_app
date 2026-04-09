@@ -36,12 +36,13 @@ onBeforeUnmount(() => {
   clearInterval(intervalId);
 });
 
-/* Refreshes scenarios when the selected project changes */
+/* Refreshes scenarios and clears execution log when active project changes */
 watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
   if (newVal !== oldVal) {
     await fetchScenarios(settingStore.activeProjectPath)
     selectedScenarios.value = []
     execType.value = ""
+    executionOutput.value = []
   }
 })
 

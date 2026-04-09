@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
+import { useSettingStore } from "@/stores/settingstore.js";
 import { useTaskStore } from "@/stores/taskstore.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 
+const settingStore = useSettingStore()
 const taskStore = useTaskStore()
 const showDetails = ref(false)
 
@@ -34,6 +36,13 @@ const currentElapsed = computed(() => {
   const task = taskStore.tasks.find(t => t.name === taskStore.currentTask);
   if (!task) return 0;
   return task.elapsed
+})
+
+/* Closes Details... panel when active project changes */
+watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
+  if (newVal !== oldVal) {
+    showDetails.value = false
+  }
 })
 
 </script>

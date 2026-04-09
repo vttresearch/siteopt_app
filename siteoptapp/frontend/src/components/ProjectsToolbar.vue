@@ -5,6 +5,7 @@ import Spinner from "@/components/Spinner.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
+import { useTaskStore } from "@/stores/taskstore.js";
 import { fetchSettings, postData, fetchInputFiles, fetchScenarios } from "@/utils/functions.js";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
@@ -12,6 +13,7 @@ import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
 const dataStore = useTableDataStore()
+const taskStore = useTaskStore()
 const restoreOpen = ref(false)
 const restoring = ref(false)
 const restoreCandidates = ref(null)
@@ -94,6 +96,7 @@ async function confirmMakeProject(n) {
     await postMakeWorkFolder("work_folder", name)
   }
   // Activate the last tab
+  taskStore.clearAll()
   settingStore.setActiveProject(settingStore.workFolders.length -1)
 }
 
@@ -137,9 +140,16 @@ async function removeProjectFromTabs(name) {
   }
 }
 
+/* When project is switched by clicking a Tab. */
+function switchProject(i) {
+  taskStore.clearAll()
+  settingStore.setActiveProject(i)
+}
+
 async function restoreProject(c) {
   const response = await postData("add_existing_work_folder", {"name": c.name, "path": c.path}, notify)
   if (response.success) {
+    taskStore.clearAll()
     restoreOpen.value = false
     await fetchSettings()
     const index = settingStore.workFolders.length -1
@@ -220,7 +230,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
             class="px-4 py-2 rounded-t-md font-medium transition-colors"
             :class="item.name === settingStore.activeProjectName ? 'bg-white text-blue-600 border border-b-0 border-gray-300 -mb-px' : checkIfDisabled(item.name) ? 'bg-gray-200 text-gray-400': 'text-gray-600 hover:bg-white/70 cursor-pointer'"
             :title="projectTabTitle(item.name)"
-            @click="settingStore.setActiveProject(i)">
+            @click="switchProject(i)">
           {{ item.name }}
           <span
               class="cursor-pointer rounded-md ml-3 p-1"
