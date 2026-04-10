@@ -1,10 +1,11 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import BaseButton from "@/components/ui/BaseButton.vue";
 import Spinner from "@/components/Spinner.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
+import { useTaskStore } from "@/stores/taskstore.js";
 import { fetchSettings, postData, fetchInputFiles, fetchScenarios } from "@/utils/functions.js";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
 import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
@@ -12,6 +13,7 @@ import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
 const dataStore = useTableDataStore()
+const taskStore = useTaskStore()
 const restoreOpen = ref(false)
 const restoring = ref(false)
 const restoreCandidates = ref(null)
@@ -20,6 +22,29 @@ const confirmOpen = ref(false)
 const deletePromptTitle = ref("")
 const deletePromptMessage = ref("")
 const projectToDelete = ref({})
+
+/* Returns a boolean value whether the project tabs are disabled or not. */
+function checkIfDisabled(itemName) {
+  return settingStore.executionInProgress && itemName !== settingStore.activeProjectName
+}
+
+/* Returns a tooltip for project tabs */
+function projectTabTitle(itemName) {
+  if (checkIfDisabled(itemName)) {
+    return "Disabled until execution has finished"
+  }
+  if (itemName === settingStore.activeProjectName) {
+    return ""
+  }
+  return `Switch to project ${itemName}`
+}
+
+function projectCloseTabTitle(itemName){
+  if (itemName === settingStore.activeProjectName && settingStore.executionInProgress) {
+    return "Disabled until execution has finished"
+  }
+  return "Remove tab from view"
+}
 
 function validFolderName(name) {
   const folderNameRegex = /^(\/?[a-z0-9A-Z\-]+)+$/  // No special characters allowed
@@ -71,6 +96,7 @@ async function confirmMakeProject(n) {
     await postMakeWorkFolder("work_folder", name)
   }
   // Activate the last tab
+  taskStore.clearAll()
   settingStore.setActiveProject(settingStore.workFolders.length -1)
 }
 
@@ -91,6 +117,8 @@ async function validateWorkFolderName(name) {
 
 async function removeProjectFromTabs(name) {
   if (!name) return
+  // Disable when execution is in progress and the tab is active
+  if (settingStore.executionInProgress && name === settingStore.activeProjectName) return
   restoreOpen.value = false  // Close recent projects list if open
   let changeActiveProject = settingStore.activeProjectName === name
   const response = await postData("remove_work_folder", {"folder_name": name}, notify)
@@ -112,9 +140,16 @@ async function removeProjectFromTabs(name) {
   }
 }
 
+/* When project is switched by clicking a Tab. */
+function switchProject(i) {
+  taskStore.clearAll()
+  settingStore.setActiveProject(i)
+}
+
 async function restoreProject(c) {
   const response = await postData("add_existing_work_folder", {"name": c.name, "path": c.path}, notify)
   if (response.success) {
+    taskStore.clearAll()
     restoreOpen.value = false
     await fetchSettings()
     const index = settingStore.workFolders.length -1
@@ -191,14 +226,16 @@ async function postMakeWorkFolder(pathKey, projectName) {
         <div v-for="(item, i) in settingStore.workFolders" :key="item.name" class="flex items-stretch">
         <button
             type="button"
+            :disabled="checkIfDisabled(item.name)"
             class="px-4 py-2 rounded-t-md font-medium transition-colors"
-            :class="item.name === settingStore.activeProjectName ? 'bg-white text-blue-600 border border-b-0 border-gray-300 -mb-px' : 'text-gray-600 hover:bg-white/70 cursor-pointer'"
-            @click="settingStore.setActiveProject(i)">
+            :class="item.name === settingStore.activeProjectName ? 'bg-white text-blue-600 border border-b-0 border-gray-300 -mb-px' : checkIfDisabled(item.name) ? 'bg-gray-200 text-gray-400': 'text-gray-600 hover:bg-white/70 cursor-pointer'"
+            :title="projectTabTitle(item.name)"
+            @click="switchProject(i)">
           {{ item.name }}
           <span
               class="cursor-pointer rounded-md ml-3 p-1"
               :class="item.name === settingStore.activeProjectName ? 'text-red-600 hover:bg-gray-200' : 'text-gray-400 hover:bg-gray-200'"
-              title="Remove from view"
+              :title="projectCloseTabTitle(item.name)"
               @click.stop="removeProjectFromTabs(item.name)">
             ✕
           </span>
@@ -214,7 +251,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
       <button
           class="flex items-center gap-1 justify-center text-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-md disabled:opacity-50 px-2 py-2 cursor-pointer"
           type="button"
-          :disabled="settingStore.creatingProjectFolder"
+          :disabled="settingStore.creatingProjectFolder || settingStore.executionInProgress"
           @click="showMakeProjectPrompt=true">
         <i v-if="settingStore.creatingProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
         <i v-else class="fa-solid fa-square-plus"></i>
@@ -223,7 +260,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
       <button
           class="flex items-center gap-1 justify-center text-white rounded-md disabled:opacity-50 px-2 py-3 cursor-pointer"
           type="button"
-          :disabled="settingStore.creatingProjectFolder || restoring"
+          :disabled="settingStore.creatingProjectFolder || restoring || settingStore.executionInProgress"
           title="Recent projects"
           @click="openRestoreMenu"
           :class="restoreOpen ? 'bg-gray-500 hover:bg-gray-700' : 'bg-blue-500 hover:bg-blue-700 shadow-lg'">

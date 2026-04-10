@@ -19,7 +19,6 @@ const scenarioStore = useScenarioStore()
 const execType = ref("")
 const executionOutput = ref([])
 const executionFinished = ref(false)
-const executionInProgress = ref(false)
 const converter = new AnsiToHtml();
 const outputEl = ref(null)
 const selectedScenarios = ref([])
@@ -37,12 +36,13 @@ onBeforeUnmount(() => {
   clearInterval(intervalId);
 });
 
-/* Refreshes scenarios when the selected project changes */
+/* Refreshes scenarios and clears execution log when active project changes */
 watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
   if (newVal !== oldVal) {
     await fetchScenarios(settingStore.activeProjectPath)
     selectedScenarios.value = []
     execType.value = ""
+    executionOutput.value = []
   }
 })
 
@@ -153,7 +153,7 @@ async function confirmRemoveScenario() {
 }
 
 function clearExecutionInProgress() {
-  executionInProgress.value = false
+  settingStore.executionInProgress = false
   executionFinished.value = true
   stopTimer()
 }
@@ -169,7 +169,7 @@ function execTypeNeedsScenario() {
 }
 
 async function executeSelected() {
-  executionInProgress.value = true
+  settingStore.executionInProgress = true
   executionFinished.value = false
   taskStore.setCurrentTask(execType.value)
   if (execType.value === "") {
@@ -230,6 +230,11 @@ async function executeSelected() {
     let finishedSubtask = event.data
     taskStore.markSubtaskDone(finishedSubtask)
   });
+  eventSource.addEventListener("item_failed", (event) => {
+    // This listener removes the 'Execution ... failed' message from the execution log
+    let failedSubtask = event.data
+    taskStore.markSubtaskFailed(failedSubtask)
+  });
   eventSource.onmessage = (event) => {
     executionOutput.value.push(event.data)
   };
@@ -260,7 +265,7 @@ function stopTimer() {
     <button
         class="flex items-center gap-1 justify-center text-white rounded-md disabled:opacity-50 px-2 py-3 cursor-pointer"
         type="button"
-        title="Recent projects"
+        title="Show/hide Log"
         @click="showLog = !showLog"
         :class="showLog ? 'bg-blue-500 hover:bg-blue-700 shadow-lg' : 'bg-gray-500 hover:bg-gray-700'">
       <i class="fa-solid fa-file-lines"></i>
@@ -288,7 +293,7 @@ function stopTimer() {
         <button
             class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
             type="button"
-            :disabled="scenarioStore.loadingScenarios"
+            :disabled="scenarioStore.loadingScenarios || settingStore.executionInProgress"
             @click="showAddScenarioPrompt = true">
           <i v-if="scenarioStore.loadingScenarios" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
           <i v-else class="fa-solid fa-square-plus"></i>
@@ -314,9 +319,11 @@ function stopTimer() {
                   :value="scenario"
                   v-model="selectedScenarios" />
               <label class=px-2 :for="`scenario-${i}`">{{ scenario }}</label>
-              <button v-if="scenario.toLowerCase()!=='base'"
-                  class="text-gray-400 hover:text-gray-700"
+              <button
+                  v-if="scenario.toLowerCase()!=='base'"
                   type="button"
+                  class="text-gray-400 hover:text-gray-700"
+                  :disabled="settingStore.executionInProgress"
                   @click="askRemoveScenario(scenario, $event.currentTarget)">
                 <i class="fa-regular fa-trash-can"></i>
               </button>
@@ -348,10 +355,10 @@ function stopTimer() {
       <button
           class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
           type="button"
-          :disabled="!execType || executionInProgress"
+          :disabled="!execType || settingStore.executionInProgress"
           title="Select a task to execute"
           @click="executeSelected">
-        <i v-if="executionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
+        <i v-if="settingStore.executionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
         <i v-else class="fa-solid fa-play"></i>
         <span class="text-nowrap">Execute</span>
       </button>

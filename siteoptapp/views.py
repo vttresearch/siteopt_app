@@ -6,7 +6,6 @@ import shutil
 import uuid
 import subprocess
 import time
-from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import openpyxl
@@ -61,59 +60,22 @@ def get_client_work_root(client_id: str) -> str:
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
 
 
-def _parse_run_timestamp(run_name):
-    """Try to parse a run directory name as a datetime.
-
-    Expected format: ``YYYY-MM-DDTHH.MM.SS`` (dots instead of colons).
-    Returns a datetime object or *None* if parsing fails.
-    """
-    try:
-        return datetime.strptime(run_name, "%Y-%m-%dT%H.%M.%S")
-    except (ValueError, TypeError):
-        return None
-
-
-def _find_matching_group(run_name, group_keys, max_delta_seconds=120):
-    """Return the group key whose timestamp is within *max_delta_seconds* of
-    *run_name*, or *None* if no match is found."""
-    ts = _parse_run_timestamp(run_name)
-    if ts is None:
-        return None
-    for key in group_keys:
-        key_ts = _parse_run_timestamp(key)
-        if key_ts is not None and abs((ts - key_ts).total_seconds()) <= max_delta_seconds:
-            return key
-    return None
-
-
 def list_results(project_path):
     root = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output"
     if not root.exists():
         return {}
     runs = {}
-    for scenario_dir in root.iterdir():
-        if not scenario_dir.is_dir():
+    for run_dir in root.iterdir():
+        if not run_dir.is_dir():
             continue
-        scenario_name = scenario_dir.name
-        for run_dir in scenario_dir.iterdir():
-            if not run_dir.is_dir():
-                continue
-            results_file = run_dir / "results.xlsx"
-            if not results_file.exists():
-                continue
-            run_name = run_dir.name
-            group_key = _find_matching_group(run_name, runs.keys())
-            if group_key is None:
-                group_key = run_name
-            if group_key not in runs:
-                runs[group_key] = []
-            runs[group_key].append({
-                "scenario": scenario_name,
-                "run": run_name,
-                "path": str(results_file)
-            })
-    for run_name in runs:
-        runs[run_name].sort(key=lambda x: x["scenario"].lower())
+        results_file = run_dir / "results.xlsx"
+        if not results_file.exists():
+            continue
+        run_name = run_dir.name
+        runs[run_name] = [{
+            "run": run_name,
+            "path": str(results_file)
+        }]
     return dict(sorted(runs.items(), key=lambda x: x[0], reverse=True))
 
 
@@ -480,6 +442,16 @@ def execute(request, job_id):
                     parsed_line = parsed_line.removeprefix("Data Store ")
                     parsed_line = parsed_line.removeprefix("Merger ")
                     yield f"event: item_finished\ndata: {parsed_line}\n\n"
+                elif line.startswith("Executing") and line.endswith("failed"):
+                    # This intercepts the 'Executing ... failed' output line and sends an event instead
+                    parsed_line = line.removeprefix("Executing").removesuffix("failed").strip()
+                    # Strip project item type
+                    parsed_line = parsed_line.removeprefix("Data Connection ")
+                    parsed_line = parsed_line.removeprefix("Tool ")
+                    parsed_line = parsed_line.removeprefix("Importer ")
+                    parsed_line = parsed_line.removeprefix("Data Store ")
+                    parsed_line = parsed_line.removeprefix("Merger ")
+                    yield f"event: item_failed\ndata: {parsed_line}\n\n"
                 else:
                     yield f"data: {line}\n\n"
             proc.stdout.close()

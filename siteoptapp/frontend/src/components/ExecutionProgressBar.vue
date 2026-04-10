@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
+import { useSettingStore } from "@/stores/settingstore.js";
 import { useTaskStore } from "@/stores/taskstore.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 
+const settingStore = useSettingStore()
 const taskStore = useTaskStore()
 const showDetails = ref(false)
 
@@ -36,6 +38,13 @@ const currentElapsed = computed(() => {
   return task.elapsed
 })
 
+/* Closes Details... panel when active project changes */
+watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
+  if (newVal !== oldVal) {
+    showDetails.value = false
+  }
+})
+
 </script>
 
 <template>
@@ -44,7 +53,7 @@ const currentElapsed = computed(() => {
     <!-- Labels -->
     <div class="space-y-1">
       <div v-if="hasError" class="text-red-600 font-semibold">
-        Error detected — one or more subtasks failed
+        One or more subtasks failed. See Log for details.
       </div>
     </div>
 
@@ -94,11 +103,11 @@ const currentElapsed = computed(() => {
                :key="c.name"
                class="px-3 py-1 flex justify-between items-center bg-gray-100 text-gray-800 hover:bg-gray-200">
             <div class="font-medium">{{ c.name }}</div>
-            <div v-if="c.done !== c.error">
+            <div v-if="c.done">
               <i class="fa-regular fa-square-check text-green-600"></i>
             </div>
             <div v-else-if="c.error">
-              <i class="fa-regular fa-circle-xmark text-black"></i>
+              <i class="fa-solid fa-square-xmark text-red-500"></i>
             </div>
             <div v-else>
               <i class="fa-regular fa-square"></i>

@@ -12,7 +12,6 @@ import {
   getDashboardLoadingCardClass,
   getDashboardPageEmptyClass
 } from "@/utils/chartStyleUtils.js"
-import { mergeScenarioSheets } from "@/utils/chartUtils.js"
 
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
@@ -121,44 +120,37 @@ async function openResultsForRun() {
   }
   loadingResults.value = true
   try {
-    const filesWithData = []
-    for (const fileEntry of selectedRunFiles.value) {
-      const r = await postData(
-        "fetch_data",
-        { full_path: fileEntry.path },
-        notify
-      )
-      if (!r?.success) {
-        continue
-      }
-      const fileType = r.data?.filetype
-      const fileData = r.data?.data
-
-      if (fileType === "xlsx") {
-        const sheets = fileData && typeof fileData === "object" ? fileData : {}
-        const firstSheetName = Object.keys(sheets)[0]
-        const firstSheet = firstSheetName ? sheets[firstSheetName] : null
-        if (firstSheet?.columns?.length) {
-          filesWithData.push({
-            scenario: fileEntry.scenario,
-            sheetData: firstSheet
-          })
-        }
-      } else if (fileType === "csv") {
-        filesWithData.push({
-          scenario: fileEntry.scenario,
-          sheetData: fileData
-        })
-      }
-    }
-    if (!filesWithData.length) {
+    const fileEntry = selectedRunFiles.value[0]
+    const r = await postData(
+      "fetch_data",
+      { full_path: fileEntry.path },
+      notify
+    )
+    if (!r?.success) {
       notify.show("No readable result files found for this run.", 4000, "error")
       columnDefs.value = []
       rowData.value = []
       return
     }
-    const merged = mergeScenarioSheets(filesWithData)
-    updateTableFromCsv(merged)
+    const fileType = r.data?.filetype
+    const fileData = r.data?.data
+
+    if (fileType === "xlsx") {
+      const sheets = fileData && typeof fileData === "object" ? fileData : {}
+      const firstSheetName = Object.keys(sheets)[0]
+      const firstSheet = firstSheetName ? sheets[firstSheetName] : null
+      if (firstSheet?.columns?.length) {
+        updateTableFromCsv(firstSheet)
+      } else {
+        columnDefs.value = []
+        rowData.value = []
+      }
+    } else if (fileType === "csv") {
+      updateTableFromCsv(fileData)
+    } else {
+      columnDefs.value = []
+      rowData.value = []
+    }
   }
   finally {
     loadingResults.value = false
