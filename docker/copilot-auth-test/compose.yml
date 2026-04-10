@@ -1,0 +1,20 @@
+services:
+  copilot-auth-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        COPILOT_CLI_VERSION: ${COPILOT_CLI_VERSION:-1.0.14}
+        COPILOT_SDK_VERSION: ${COPILOT_SDK_VERSION:-0.2.1}
+    image: siteopt/copilot-auth-test:${COPILOT_CLI_VERSION:-1.0.14}
+    container_name: copilot-auth-test
+    tty: true
+    stdin_open: true
+    environment:
+      COPILOT_TEST_CWD: /tmp
+      COPILOT_TEST_PROMPT: "Reply exactly with: ok"
+    volumes:
+      - copilot_auth_home:/root/.copilot
+
+volumes:
+  copilot_auth_home: {}

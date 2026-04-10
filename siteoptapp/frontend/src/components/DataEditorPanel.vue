@@ -1,21 +1,21 @@
 <script setup>
-import { ref, watch, computed, nextTick, shallowRef, toRaw } from "vue";
+import { ref, watch, computed, nextTick, shallowRef } from "vue";
 import { AgGridVue } from "ag-grid-vue3";
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import Spinner from "@/components/Spinner.vue";
 import TimeSeriesChart from "@/components/TimeSeriesChart.vue";
+import CategoryToolbar from "@/components/CategoryToolbar.vue";
 import { detectTimeSeriesStructure } from "@/utils/chartUtils.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from '@/stores/sheetStore';
-import { postData } from "@/utils/functions.js";
+import { postData, uploadFile, fetchFileContents } from "@/utils/functions.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
 const settingStore = useSettingStore();
 const sheetStore = useSheetStore();
-
 const sheetNames = ref([]);
 const fileData = ref({});
 const rowData = ref([]);
@@ -30,13 +30,15 @@ const csvDirty = ref(false);
 const jsonDirty = ref(false);
 const xlsxDirty = ref(false);
 const activeView = ref("editor"); // "editor" | "plot"
-const selectedCount = ref(0)
+const selectedCount = ref(0);
+const selected = ref(null);
+const selectedFileForUpload = ref(null);
+
 const rowSelectionOptions = {
   mode: "multiRow",
   enableSelectionWithoutKeys: false,
   enableClickSelection: false,
 }
-
 const hasSelection = computed(() => selectedCount.value > 0);
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
 
@@ -88,6 +90,51 @@ function onCellValueChanged() {
   markDirty()
 }
 
+// Returns next cell if available
+const getNextCellSameRow = (params) => {
+  const api = params.api;
+  const columns = api.getAllDisplayedColumns();
+  const prev = params.previousCellPosition;
+  const colIndex = columns.findIndex(c => c.getId() === prev.column.getId());
+  const nextIndex = colIndex + 1;
+  // If last column, stay on same cell
+  if (nextIndex >= columns.length) {
+    return {
+      rowIndex: prev.rowIndex,
+      column: prev.column
+    };
+  }
+  return {
+    rowIndex: prev.rowIndex,
+    column: columns[nextIndex]
+  };
+};
+
+// Called when pressing Tab
+const tabToNextCell = (params) => {
+  return getNextCellSameRow(params);
+};
+
+// On Enter, stop editing, on Tab, move to next cell and start editing
+const onCellKeyDown = (params) => {
+  const key = params.event.key;
+  if (key === 'Enter') {
+    params.api.stopEditing()
+    return
+  }
+  if (key === 'Tab') {
+    setTimeout(() => {
+      const cell = params.api.getFocusedCell();
+      if (!cell) return;
+
+      params.api.startEditingCell({
+        rowIndex: cell.rowIndex,
+        colKey: cell.column.getId()
+      });
+    });
+  }
+};
+
 function clearRefs() {
   sheetNames.value = [];
   fileData.value = {};
@@ -99,7 +146,7 @@ function clearRefs() {
   mdDirty.value = false;
   csvDirty.value = false;
   jsonDirty.value = false;
-  activeView.value = "editor";
+  xlsxDirty.value = false;
   // Clear these manually because data_store.clear() causes a circular watcher loop because it clears data_store.daata
   data_store.fname = ""
   data_store.fpath = ""
@@ -169,6 +216,26 @@ function onDeleteSelected() {
   markDirty()
 }
 
+/* Custom data type detector for Excel data.
+* If any row contains a string -> all cells in the column are strings.
+* If row has only numbers -> all cells in the column are numbers.
+* */
+function detectColumnDataType(rows, col) {
+  let allNumeric = true
+  for (const row of rows) {
+    const value = row[col]
+    // Skip null or empty cells
+    if (value == null || value === "") continue
+    // Check if numeric
+    if (typeof value === "number") continue
+    if (typeof value === "string" && value.trim() !== "" && !isNaN(Number(value))) continue
+    // If we reach here → value is string-like
+    allNumeric = false
+    break
+  }
+  return allNumeric ? "number" : "text"
+}
+
 function updateTableWithActiveSheet() {
   const sheetObj = sheetStore.sheetsByName[sheetStore.activeSheet] || {}
   const cols = sheetObj.columns ?? []  // Columns
@@ -190,6 +257,8 @@ function updateTableWithActiveSheet() {
     },
     ...cols.map(col => {
       const validationOptions = validationsByColumn[col]
+      // Detect data type from all rows
+      const dataType = detectColumnDataType(rows, col)
       if (Array.isArray(validationOptions) && validationOptions.length > 0) {
         return {
           headerName: col,
@@ -198,6 +267,7 @@ function updateTableWithActiveSheet() {
           editable: true,
           cellEditor: "agSelectCellEditor",
           cellEditorParams: { values: validationOptions },
+          cellDataType: 'text',
           cellClass: "bg-blue-50 ag-cell-dropdown",
           headerClass: "ag-header-dropdown",
           headerTooltip: "Select from predefined values",
@@ -208,6 +278,7 @@ function updateTableWithActiveSheet() {
         field: col,
         minWidth: 100,
         editable: true,
+        cellDataType: dataType,
       }
     })
   ]
@@ -252,10 +323,6 @@ async function newSheetSelected(sheetName) {
   // Apply sheet data from store
   updateTableWithActiveSheet()
   await nextTick()
-  // Enable editor or plot view
-  if (activeView.value === "plot" && !isTimeSeriesData.value) {
-    activeView.value = "editor"
-  }
   sheetStore.toggleSheetDataUpdated()
 }
 
@@ -313,14 +380,15 @@ watch(() => data_store.daata,
       }
       updateTableWithActiveSheet()
       await nextTick()
-      activeView.value = isTimeSeriesData.value ? "plot" : "editor"
+      // Default to editor always with Excel files
+      activeView.value = "editor"
       sheetStore.toggleSheetDataUpdated()
     }
     else if (fileType === "csv") {
       sheetNames.value = [];
       updateTableFromCsv();
       await nextTick();
-      activeView.value = isTimeSeriesData.value ? "plot" : "editor";
+      // Don't set activeView here so that the UI stays in previous view. Plot view, when switching between csv files
     }
     else if (fileType === "json") {
       sheetNames.value = [];
@@ -372,6 +440,24 @@ async function saveCurrentFile() {
   }
   const filetype = data_store.daata?.filetype;
 
+  function filterIdFromRows(rows) {
+    /* Removes __id from all rows.
+    rows is a list of objects eg.
+    rows = [{ __id: 0 , scenario: Base }, { __id: 1, scenario: Myscen }]
+    */
+    let newRows = []
+    for (let i=0; i < rows.length; i++) {
+      if ("__id" in rows[i]) {
+        const {__id, ...newRow} = rows[i]
+        newRows[i] = newRow
+      }
+      else {
+        newRows[i] = rows[i]
+      }
+    }
+    return newRows
+  }
+
   if (filetype === "md") {
     saving.value = true;
     const response = await postData("save_file", {
@@ -391,9 +477,9 @@ async function saveCurrentFile() {
     if (!gridApi.value) return notify.show("Grid not ready yet.", 3000, "error");
     gridApi.value.stopEditing();
 
-    const rows = [];
+    let rows = [];
     gridApi.value.forEachNode(node => rows.push(node.data));
-
+    rows = filterIdFromRows(rows)
     saving.value = true;
     const response = await postData("save_file", {
       path: data_store.fpath,
@@ -436,25 +522,6 @@ async function saveCurrentFile() {
     api.stopEditing();
     // Capture current sheet into store
     sheetStore.captureFromGrid(sheetStore.activeSheet, api);
-
-    function filterIdFromRows(rows) {
-      /* Removes __id from all rows.
-      rows is a list of objects eg.
-      rows = [{ __id: 0 , scenario: Base }, { __id: 1, scenario: Myscen }]
-      */
-      let newRows = []
-      for (let i=0; i < rows.length; i++) {
-        if ("__id" in rows[i]) {
-          const {__id, ...newRow} = rows[i]
-          newRows[i] = newRow
-        }
-        else {
-          newRows[i] = rows[i]
-        }
-      }
-      return newRows
-    }
-
     // Build workbook payload (contains data from all sheets)
     const workbook = {};
     for (const [sheetName, sheetObj] of Object.entries(sheetStore.sheetsByName)) {
@@ -481,78 +548,121 @@ async function saveCurrentFile() {
   }
   notify.show(`Save not implemented for ${filetype}`, 3000, "error");
 }
+
+function handleFileSelect(event) {
+  selectedFileForUpload.value = event.target.files[0];
+}
+
+async function uploadAndReplace() {
+  if (!selectedFileForUpload.value) return;
+  if (!data_store.fpath) return;
+  const fpath = data_store.fpath
+  const fname = data_store.fname
+  if (selectedFileForUpload.value.name !== fname) {
+    notify.show(`Uploaded file name must match the current file name (${fname})`, 5000, "error")
+    return
+  }
+  const formData = new FormData();
+  formData.append("file", selectedFileForUpload.value)
+  formData.append("fpath", fpath)
+  const success = await uploadFile(formData, notify)
+  if (!success) {
+    return
+  }
+  notify.show(`File ${fname} has been replaced`, 8000, "info")
+  // Reload file (same as categoryToolbar.fetchFileContents()
+  await fetchFileContents(fname, fpath)
+}
 </script>
 
 <template>
-  <Spinner v-if="data_store.loading" message="Loading data..." class="col-auto" />
 
-  <div v-else>
-    <div class="mb-3 text-lg font-semibold text-gray-800">Data Editor</div>
+  <div class="mb-3 text-lg font-semibold text-gray-800">Data Editor</div>
+  <CategoryToolbar />
 
-    <!-- View tabs -->
-    <div class="flex gap-2 mb-3">
+  <!-- View tabs, file name and save button -->
+  <div class="flex items-center justify-between text-gray-600 my-2 mb-2">
+
+    <div class="flex justify-start gap-2">
       <button
-        class="px-3 py-1 rounded border"
-        :class="activeView === 'editor' ? 'bg-blue-600 text-white' : 'bg-white'"
-        @click="activeView = 'editor'"
+          class="px-3 py-1 rounded border"
+          :class="activeView === 'editor' ? 'bg-blue-600 text-white' : 'bg-white'"
+          @click="activeView = 'editor'"
       >
         Editor
       </button>
 
       <button
-        class="px-3 py-1 rounded border disabled:opacity-50"
-        :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
-        @click="activeView = 'plot'"
-        :disabled="!isTimeSeriesData"
-        title="Requires a time/date column + numeric columns"
+          class="px-3 py-1 rounded border disabled:opacity-50"
+          :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
+          @click="activeView = 'plot'"
+          :disabled="!isTimeSeriesData"
+          title="Requires a time/date column + numeric columns"
       >
         Plot
       </button>
     </div>
 
-    <!-- Header row -->
-    <div class="flex items-center justify-between text-gray-600 my-2 mb-4">
+    <div class="flex justify-center flex-1 text-center">
       <div class="truncate">{{ data_store.fname }}
         <span v-if="data_store.daata?.filetype === 'md' && mdDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'csv' && csvDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'json' && jsonDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'xlsx' && xlsxDirty">*</span>
       </div>
+    </div>
 
+    <div class="flex justify-end gap-5">
       <button
-        v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
-        class="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
-        :disabled="
+          v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
+          class=" cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          :disabled="
           (data_store.daata?.filetype === 'md' && !mdDirty) ||
           (data_store.daata?.filetype === 'csv' && !csvDirty) ||
           (data_store.daata?.filetype === 'json' && !jsonDirty) ||
           (data_store.daata?.filetype === 'xlsx' && !xlsxDirty) ||
-          saving
-        "
-        @click="saveCurrentFile"
+          saving"
+          @click="saveCurrentFile"
       >
         {{ saving ? "Saving..." : "Save" }}
       </button>
-    </div>
 
+      <input
+          v-if="data_store.fname"
+          type="file"
+          @change="handleFileSelect"
+          class="block w-auto text-sm text-gray-800 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0
+          file:bg-blue-600 file:text-white file:text-base hover:file:bg-blue-700 cursor-pointer"/>
+      <button
+          v-if="data_store.fname"
+          :disabled="!selectedFileForUpload"
+          class="cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          @click="uploadAndReplace"
+      >
+        Replace
+      </button>
+    </div>
+  </div>
+
+  <div v-if="data_store.loading" class="w-full h-100 pt-10 flex flex-col">
+    <Spinner message="Loading data..." class="col-auto" />
+    </div>
+  <div v-else>
     <!-- EDITOR VIEW -->
     <div v-if="activeView === 'editor'">
       <textarea
-        v-if="data_store.daata?.filetype === 'md'"
+        v-if="data_store.daata?.filetype === 'md' && mdText"
         v-model="mdText"
-        class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
+        class="w-full h-100 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
       <textarea
-        v-else-if="data_store.daata?.filetype === 'json'"
+        v-else-if="data_store.daata?.filetype === 'json' && jsonEditText"
         v-model="jsonEditText"
-        class="w-full h-80 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
+        class="w-full h-100 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
-      <div v-else-if="columnDefs.length" class="w-full h-80 flex flex-col">
-        <div v-if="data_store.daata?.filetype === 'xlsx'">
-          <SelectSheetButtons @update:activeSheet="newSheetSelected($event)" />
-        </div>
+      <div v-else-if="columnDefs.length" class="w-full h-100 flex flex-col">
         <!-- Toolbar -->
         <div class="flex items-center gap-2 mt-2 shrink-0">
           <button
@@ -577,25 +687,31 @@ async function saveCurrentFile() {
         <div class="flex-1 overflow-auto">
           <AgGridVue
               class="w-full h-full"
-              :domLayout="'normal'"
               :columnDefs="columnDefs"
               :rowData="rowData"
               @grid-ready="onGridReady"
               @cell-value-changed="onCellValueChanged"
+              @cell-key-down="onCellKeyDown"
               :rowBuffer="10"
-              :rowHeight="40"
-              :animateRows="true"
+              :rowHeight="35"
+              :animateRows="false"
               :rowSelection="rowSelectionOptions"
-              :suppressColumnVirtualization="false"
-              :suppressCellFocus="true"
+              :navigateCells="true"
+              :suppressCellFocus="false"
               :singleClickEdit="true"
               :stopEditingWhenCellsLoseFocus="true"
+              :tabToNextCell="tabToNextCell"
           />
         </div>
+        <!-- Sheets -->
+        <div v-if="data_store.daata?.filetype === 'xlsx'">
+          <SelectSheetButtons @update:activeSheet="newSheetSelected($event)" />
+        </div>
+
       </div>
 
       <div v-else class="p-4 text-gray-500">
-        {{ hasWorkFolders ? "Select a file to view data." : "Create a new project to begin." }}
+        {{ hasWorkFolders ? "Select a category and file to view data." : "Create a new project to begin." }}
       </div>
     </div>
 

@@ -1,5 +1,8 @@
 import { useNotificationStore } from '@/stores/notificationstore.js'
 import { useSettingStore } from "@/stores/settingstore.js";
+import { useTableDataStore } from "@/stores/filedatastore.js";
+import { useResultStore } from "@/stores/resultstore.js";
+import { useScenarioStore } from "@/stores/scenariostore.js";
 import { API_BASE } from "@/config.js";
 
 
@@ -37,6 +40,42 @@ export async function postData(endpointSuffix, data, notify) {
       return false
     }
     return r
+  } catch (err) {
+    console.error(`Error posting ${data}:`, err);
+    return false
+  }
+}
+
+
+/**
+ * Sends data to backend using POST as-is (no Content-Type).
+ *
+ * @param {Object} data - An object containing data
+ * @param {Object} notify - A notification utility with a `show(message, duration, type)` method for displaying errors.
+ *
+ */
+export async function uploadFile(data, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/upload/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'include',
+      body: data,
+    });
+    if (!response.ok) {
+      console.error("Invalid post:", await response.text());
+      return false
+    }
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(`${r.error}`, 5000, "error");
+      return false
+    }
+    return true
   } catch (err) {
     console.error(`Error posting ${data}:`, err);
     return false
@@ -281,6 +320,7 @@ export const assistantChatStream = async (
     const decoder = new TextDecoder("utf-8");
     let buffer = "";
     let finalPayload = null;
+    let errorPayload = null;
 
     const processEventBlock = (block) => {
       const lines = block.split("\n");
@@ -308,6 +348,7 @@ export const assistantChatStream = async (
       } else if (eventType === "status") {
         onStatus(parsed);
       } else if (eventType === "error") {
+        errorPayload = parsed;
         onError(parsed);
       } else if (eventType === "final") {
         finalPayload = parsed;
@@ -333,6 +374,9 @@ export const assistantChatStream = async (
     if (finalPayload) {
       return finalPayload;
     }
+    if (errorPayload) {
+      return errorPayload;
+    }
     return { success: false, error: "Stream completed without final payload." };
   } catch (error) {
     return { success: false, error: String(error) };
@@ -353,60 +397,97 @@ export const fetchSettings = async () => {
   settingStore.setSettings(response.data.configs)
 }
 
+
 /**
- * Fetches the file trees of all available projects.
+ * Fetches the contents of a given file.
+ *
+ * @param {string} fname - File name.
+ * @param {string} fpath - Full path to file (including the file name).
+ *
  */
-export async function fetchWorkFolderFiles() {
+export async function fetchFileContents(fname, fpath) {
+  console.log(`Downloading file: ${fpath}`)
+  const notify = useNotificationStore()
+  const dataStore = useTableDataStore()
+  dataStore.clear()
+  dataStore.toggleLoading()
+  const response = await postData("fetch_data", {full_path: fpath}, notify)
+  if (!response.success) {
+    dataStore.toggleLoading()
+    return
+  }
+  dataStore.addData(fname, fpath, response.data)
+  dataStore.toggleLoading()
+}
+
+/**
+ * Fetches the contents of current_input file tree of a given project.
+ *
+ * @param {string} projectName - Project folder name.
+ *
+ */
+export async function fetchInputFiles(projectName) {
   const settingStore = useSettingStore()
   const notify = useNotificationStore()
-  settingStore.loadingProjects = true
-  if (Object.keys(settingStore.workFolders).length === 0) {
-    settingStore.setWorkFolderFiles([])
-    settingStore.setActiveProjectIndex(0)
-    settingStore.loadingProjects = false
+  if (!projectName) {
+    notify.show("[FIXME] Fetching current input files failed. Project name missing.")
     return
   }
-  const response = await getData("fetch_work_folders_tree", notify)
+  const response = await getData(`fetch_current_input_folder/${projectName}`, notify)
   if (!response.success) {
     notify.show(`${response.error}`)
-    settingStore.loadingProjects = false
     return
   }
-  const files = response.data
-  settingStore.setWorkFolderFiles(files)
+  const contents = response.data
+  settingStore.setCurrentInputFiles(contents)
+}
 
-  if (settingStore.activeProjectIndex >= settingStore.workFolderFiles.length) {
-    settingStore.activeProjectIndex = Math.max(0, settingStore.workFolderFiles.length - 1)
+/**
+ * Fetches the results of a given project.
+ *
+ * @param {string} projectName - Project folder name.
+ *
+ */
+export async function fetchResults(projectName) {
+  const resultStore = useResultStore()
+  const notify = useNotificationStore()
+  if (!projectName) {
+    notify.show("[FIXME] Fetching results failed. Project name missing.")
+    return
   }
-  settingStore.loadingProjects = false
+  const r = await postData("list_results",{ project_name: projectName }, notify)
+  if (!r?.success) {
+    return false
+  }
+  resultStore.runs = r.data || {}
+  return true
 }
 
 
 /**
- * Fetches the file tree of a given project.
+ * Fetches the scenarios of a given project.
  *
- * @param {string} workFolderName - Work folder name.
+ * @param {string} projectPath - Full project path.
  *
  */
-export async function fetchWorkFolder(workFolderName) {
-  const settingStore = useSettingStore()
+export async function fetchScenarios(projectPath) {
+  const scenarioStore = useScenarioStore()
   const notify = useNotificationStore()
-  settingStore.loadingProjects = true
-
-  const response = await getData(`fetch_work_folder/${workFolderName}`, notify)
-  if (!response.success) {
-    notify.show(`${response.error}`)
-    settingStore.loadingProjects = false
-    return
+  if (!projectPath) {
+    notify.show("[FIXME] Fetching scenarios failed. Project path missing.")
+    return false
   }
-  const updatedTree = response.data
-  // Find project folder index and update that with the new tree
-  const idx = settingStore.workFolderFiles.findIndex(f => f.name === workFolderName);
-  if (idx !== -1) {
-    // preserve reactivity by using splice
-    settingStore.workFolderFiles.splice(idx, 1, updatedTree);
+  scenarioStore.loadingScenarios = true
+  const configs = { db_key: "scenario", work_folder: projectPath }
+  const response = await postData("fetch_input_db_data", configs, notify)
+  if (!response?.success) {
+    console.error(`fetching scenarios from input db failed for project ${projectPath}`)
+    scenarioStore.loadingScenarios = false
+    return false
   }
-  settingStore.loadingProjects = false
+  scenarioStore.scenarios = response.data.scenarios || []
+  scenarioStore.loadingScenarios = false
+  return true
 }
 
 

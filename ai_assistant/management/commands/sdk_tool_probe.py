@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,34 @@ def _preview(value: Any, max_chars: int = 300) -> str:
     text = str(value or "")
     text = text.replace("\n", "\\n")
     return text if len(text) <= max_chars else text[:max_chars] + "...[truncated]"
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    return repr(value)
+
+
+def _accepts_keyword_session_args(method: Any, skip_positional: int = 0) -> bool:
+    try:
+        parameters = list(inspect.signature(method).parameters.values())
+    except (TypeError, ValueError):
+        return False
+    if len(parameters) <= skip_positional:
+        return False
+    return parameters[skip_positional].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+async def _create_sdk_session(client: Any, session_config: dict[str, Any]) -> Any:
+    if _accepts_keyword_session_args(client.create_session):
+        return await client.create_session(**session_config)
+    return await client.create_session(session_config)
 
 
 class Command(BaseCommand):
@@ -78,9 +107,9 @@ class Command(BaseCommand):
                     "context_dir": context_dir,
                     "resolved_work_dir": str(resolved_work_dir),
                     "current_input_dir": str(current_input_dir),
-                    "client_options": client_options,
+                    "client_options": _json_safe(client_options),
                     "model": configured_model or "auto",
-                    "provider": resolved_provider or {"type": "copilot"},
+                    "provider": _json_safe(resolved_provider or {"type": "copilot"}),
                     "timeout": timeout,
                 },
                 ensure_ascii=False,
@@ -106,7 +135,7 @@ class Command(BaseCommand):
             ]
 
             session_config: dict[str, Any] = {
-                "system_message": {"content": "\n".join(system_lines)},
+                "system_message": {"mode": "replace", "content": "\n".join(system_lines)},
                 "on_permission_request": _approve_all_permission_requests,
                 "excluded_tools": list(_BLOCKED_AGENT_TOOLS),
             }
@@ -115,7 +144,7 @@ class Command(BaseCommand):
             if resolved_provider:
                 session_config["provider"] = resolved_provider
 
-            session = await client.create_session(session_config)
+            session = await _create_sdk_session(client, session_config)
             self.stdout.write(
                 json.dumps(
                     {
@@ -151,7 +180,7 @@ class Command(BaseCommand):
                 print(json.dumps(payload, ensure_ascii=False), flush=True)
 
             unsubscribe = session.on(_event_handler)
-            response = await session.send_and_wait({"prompt": prompt}, timeout=timeout)
+            response = await session.send_and_wait(prompt, timeout=timeout)
             content = getattr(getattr(response, "data", None), "content", None)
             self.stdout.write(
                 json.dumps(

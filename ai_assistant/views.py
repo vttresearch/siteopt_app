@@ -352,6 +352,26 @@ def _normalize_requested_ollama_base_url(value: str | None) -> str | None:
     return candidate or None
 
 
+def _coerce_payload_string(value, *, default: str = "") -> str:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("text", "message", "content", "value"):
+            nested = value.get(key)
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+        try:
+            return json.dumps(value, ensure_ascii=False).strip()
+        except TypeError:
+            return default
+    if isinstance(value, (list, tuple)):
+        parts = [str(item).strip() for item in value if str(item).strip()]
+        return "\n".join(parts).strip() if parts else default
+    return str(value).strip()
+
+
 def _history_limit() -> int:
     return int(getattr(settings, "AI_ASSISTANT_HISTORY_LIMIT", 50))
 
@@ -447,18 +467,18 @@ def chat(request):
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "error": "Invalid JSON payload."}, status=400)
 
-    user_message = (payload.get("message") or "").strip()
+    user_message = _coerce_payload_string(payload.get("message"))
     if not user_message:
         return JsonResponse({"success": False, "error": "Field 'message' is required."}, status=400)
 
-    session_id = (payload.get("session_id") or "default").strip() or "default"
-    context_dir_override = (payload.get("context_dir") or "").strip() or None
-    requested_model = (payload.get("model") or "").strip() or None
+    session_id = _coerce_payload_string(payload.get("session_id"), default="default") or "default"
+    context_dir_override = _coerce_payload_string(payload.get("context_dir")) or None
+    requested_model = _coerce_payload_string(payload.get("model")) or None
     requested_ollama_base_url = _normalize_requested_ollama_base_url(payload.get("ollama_base_url"))
     started = time.monotonic()
 
     client_id, new_client = _ensure_client_id(request)
-    token_from_request = (payload.get("github_token") or "").strip() or None
+    token_from_request = _coerce_payload_string(payload.get("github_token")) or None
     effective_token = token_from_request or (settings.COPILOT_GITHUB_TOKEN or None)
     session_state = _get_or_create_session(client_id, session_id, context_dir=context_dir_override)
     if not session_state.get("context_dir"):
@@ -574,17 +594,17 @@ def chat_stream(request):
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "error": "Invalid JSON payload."}, status=400)
 
-    user_message = (payload.get("message") or "").strip()
+    user_message = _coerce_payload_string(payload.get("message"))
     if not user_message:
         return JsonResponse({"success": False, "error": "Field 'message' is required."}, status=400)
 
-    session_id = (payload.get("session_id") or "default").strip() or "default"
-    context_dir_override = (payload.get("context_dir") or "").strip() or None
-    requested_model = (payload.get("model") or "").strip() or None
+    session_id = _coerce_payload_string(payload.get("session_id"), default="default") or "default"
+    context_dir_override = _coerce_payload_string(payload.get("context_dir")) or None
+    requested_model = _coerce_payload_string(payload.get("model")) or None
     requested_ollama_base_url = _normalize_requested_ollama_base_url(payload.get("ollama_base_url"))
 
     client_id, new_client = _ensure_client_id(request)
-    token_from_request = (payload.get("github_token") or "").strip() or None
+    token_from_request = _coerce_payload_string(payload.get("github_token")) or None
     effective_token = token_from_request or (settings.COPILOT_GITHUB_TOKEN or None)
     session_state = _get_or_create_session(client_id, session_id, context_dir=context_dir_override)
     if not session_state.get("context_dir"):
@@ -735,9 +755,9 @@ def session_new(request):
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "error": "Invalid JSON payload."}, status=400)
 
-    context_dir = (payload.get("context_dir") or "").strip() or None
-    system_prompt = (payload.get("system_prompt") or "").strip() or None
-    model = (payload.get("model") or "").strip() or str(getattr(settings, "AI_ASSISTANT_MODEL", "gpt-5-mini") or "gpt-5-mini")
+    context_dir = _coerce_payload_string(payload.get("context_dir")) or None
+    system_prompt = _coerce_payload_string(payload.get("system_prompt")) or None
+    model = _coerce_payload_string(payload.get("model")) or str(getattr(settings, "AI_ASSISTANT_MODEL", "gpt-5-mini") or "gpt-5-mini")
     ollama_base_url = _normalize_requested_ollama_base_url(payload.get("ollama_base_url"))
 
     client_id, new_client = _ensure_client_id(request)
@@ -810,7 +830,7 @@ def session_reset(request):
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "error": "Invalid JSON payload."}, status=400)
 
-    session_id = (payload.get("session_id") or "").strip()
+    session_id = _coerce_payload_string(payload.get("session_id"))
     if not session_id:
         return JsonResponse({"success": False, "error": "Field 'session_id' is required."}, status=400)
 

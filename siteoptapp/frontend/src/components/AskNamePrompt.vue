@@ -11,6 +11,7 @@ const props = defineProps({
 const emit = defineEmits(["confirm", "cancel"]);
 
 const name = ref("");
+const useExampleData = ref(false)
 const inputEl = ref(null);
 
 // Reset and autofocus when opened
@@ -28,11 +29,16 @@ watch(
 
 function confirm() {
   // Return trimmed value; empty string is allowed if user confirms with nothing
-  emit("confirm", name.value.trim());
+  emit("confirm", {
+    name: name.value.trim(),
+    exampleData: useExampleData.value,
+  });
+  useExampleData.value = false  // Reset to default
 }
 
 function cancel() {
   emit("cancel", null);
+  useExampleData.value = false  // Reset to default
 }
 </script>
 
@@ -65,6 +71,14 @@ function cancel() {
           :placeholder="props.placeholderText"
           class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none ring-2 ring-transparent transition focus:border-zinc-400 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           @keyup.enter="confirm"
+        />
+      </label>
+
+      <label class="mt-4 block text-sm text-zinc-600 dark:text-zinc-300">
+        Use example data
+        <input
+            type="checkbox"
+            v-model="useExampleData"
         />
       </label>
 

@@ -6,6 +6,7 @@ import shutil
 import uuid
 import subprocess
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import openpyxl
@@ -24,7 +25,6 @@ CONFIG_FILE = "config.json"
 INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
 EXAMPLE_INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox" / "example_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
-TEST_PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "test_spinetoolbox_project").resolve()
 SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
 WORK_ROOT = Path(Path(settings.BASE_DIR) / WORK_DIR).resolve()
 CONFIG_ROOT = Path(os.environ.get("CONFIG_ROOT", WORK_ROOT / "_config")).resolve()
@@ -51,83 +51,90 @@ def get_project_data_path() -> str:
     return str(PROJECT_DATA_DIR)
 
 
-def get_test_project_data_path() -> str:
-    return str(TEST_PROJECT_DATA_DIR)
-
-
 def get_config_file_dir(client_id) -> Path:
     return (CONFIG_ROOT / str(client_id)[0:6]).resolve()
 
 
 def get_client_work_root(client_id: str) -> str:
-    """
-    Root directory containing all work folders for this client.
-    Must be a path that BOTH backend and spine_engine containers can access.
-    """
+    """Root directory containing all work folders for this client.
+    Must be a path that BOTH backend and spine_engine containers can access."""
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
+
+
+def _parse_run_timestamp(run_name):
+    """Try to parse a run directory name as a datetime.
+
+    Expected format: ``YYYY-MM-DDTHH.MM.SS`` (dots instead of colons).
+    Returns a datetime object or *None* if parsing fails.
+    """
+    try:
+        return datetime.strptime(run_name, "%Y-%m-%dT%H.%M.%S")
+    except (ValueError, TypeError):
+        return None
+
+
+def _find_matching_group(run_name, group_keys, max_delta_seconds=120):
+    """Return the group key whose timestamp is within *max_delta_seconds* of
+    *run_name*, or *None* if no match is found."""
+    ts = _parse_run_timestamp(run_name)
+    if ts is None:
+        return None
+    for key in group_keys:
+        key_ts = _parse_run_timestamp(key)
+        if key_ts is not None and abs((ts - key_ts).total_seconds()) <= max_delta_seconds:
+            return key
+    return None
+
 
 def list_results(project_path):
     root = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output"
-
     if not root.exists():
         return {}
-
     runs = {}
-
     for scenario_dir in root.iterdir():
         if not scenario_dir.is_dir():
             continue
-
         scenario_name = scenario_dir.name
-
         for run_dir in scenario_dir.iterdir():
             if not run_dir.is_dir():
                 continue
-
             results_file = run_dir / "results.xlsx"
             if not results_file.exists():
                 continue
-
             run_name = run_dir.name
-
-            if run_name not in runs:
-                runs[run_name] = []
-
-            runs[run_name].append({
+            group_key = _find_matching_group(run_name, runs.keys())
+            if group_key is None:
+                group_key = run_name
+            if group_key not in runs:
+                runs[group_key] = []
+            runs[group_key].append({
                 "scenario": scenario_name,
                 "run": run_name,
                 "path": str(results_file)
             })
-
     for run_name in runs:
         runs[run_name].sort(key=lambda x: x["scenario"].lower())
-
     return dict(sorted(runs.items(), key=lambda x: x[0], reverse=True))
+
 
 def list_projects_with_results(client_id):
     config = get_client_config(client_id)
     projects = config.get("work_folders", {})
-
     projects_with_results = []
-
     for name, path in projects.items():
         results_root = Path(path) / ".spinetoolbox" / "items" / "extract_results" / "output"
-
         if not results_root.exists():
             continue
-
         # check if any results.xlsx exists
         has_results = any(results_root.rglob("results.xlsx"))
-
         if has_results:
             projects_with_results.append({
                 "name": name,
                 "path": path
             })
-
     projects_with_results.sort(key=lambda x: x["name"].lower())
-
     return projects_with_results
+
 
 @ensure_csrf_cookie
 def health_check(request):
@@ -143,6 +150,15 @@ def settings(request):
         client_id = uuid.uuid4()
         new_client = True
     client_config = get_client_config(client_id)
+    work_root = get_client_work_root(client_id)
+    active_work_folders = {}
+    # Edit work_folders so when in container, only the projects in the container work folder are returned
+    for key, value in client_config["work_folders"].items():
+        # key is project name, value is the path
+        if value.startswith(work_root):
+            active_work_folders[key] = value
+    client_config["work_folders"] = active_work_folders
+    print(f"client_config work_folders:{client_config['work_folders']}")
     response = JsonResponse({"success": True, "data": {"client_id": client_id, "configs": client_config}})
     if new_client:
         # httponly=False makes sure that we can access it from JavaScript
@@ -171,10 +187,8 @@ def remove_work_folder(client_id: str, work_folder_name: str):
     config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
     cfg = read_config_file(str(config_fpath))
     work_folders = cfg.get("work_folders", {})
-
     if work_folder_name not in work_folders:
         return {"success": False, "error": f"Unknown work folder: {work_folder_name}"}
-
     # Soft remove: only remove from config, keep files on disk
     work_folders.pop(work_folder_name, None)
     edit_config_file(config_fpath, {"work_folders": work_folders})
@@ -187,11 +201,9 @@ def list_existing_work_folders(client_id: str):
     root = get_client_work_root(client_id)
     if not os.path.exists(root):
         return {"success": True, "data": []}
-
     cfg = read_config_file(str(config_fpath))
     active = cfg.get("work_folders", {})
     active_paths = set(os.path.abspath(p) for p in active.values())
-
     out = []
     for entry in os.listdir(root):
         p = os.path.join(root, entry)
@@ -203,9 +215,7 @@ def list_existing_work_folders(client_id: str):
         # (optional) sanity check: looks like a Spine Toolbox project
         if not validate_project_path(p)["success"]:
             continue
-
         out.append({"name": entry, "path": p})
-
     out.sort(key=lambda x: x["name"].lower())
     return {"success": True, "data": out}
 
@@ -281,6 +291,43 @@ def remove_scenario(client_id, scenario_name, project_name):
     return JsonResponse({"success": True, "data": {}})
 
 
+def delete_project(client_id, path):
+    if not os.path.exists(path):
+        # Return True because it's probably been deleted manually
+        return JsonResponse({"success": True, "data": {}})
+    # Remove path from disk
+    try:
+        shutil.rmtree(path)
+    except OSError as e:
+        return JsonResponse({"success": False, "error": f"Deleting project failed. [OSError] {e}"})
+    # No need to edit config file because the project name and path have been removed from the config file
+    # when the tab was closed.
+    return JsonResponse({"success": True, "data": {}})
+
+
+@csrf_protect
+def upload_and_replace(request):
+    """Receives a file uploaded from the browser and replaces the current file."""
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    file_data = request.FILES.get("file")
+    file_path = request.POST.get("fpath")
+    print(f"Replacing file :{file_path}")
+    # Delete old file
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError as e:
+            return JsonResponse({"success": False, "error": f"[OSError] Removing file {file_path} failed: {e}"})
+    # Make new file
+    try:
+        with open(file_path, "wb+") as destination:
+            for chunk in file_data.chunks():
+                destination.write(chunk)
+    except OSError as e:
+        return JsonResponse({"success": False, "error": f"[OSError] when replacing file {file_path}: {e}"})
+    return JsonResponse({"success": True, "data": {}})
+
+
 @csrf_protect
 def post(request, action):
     """Handles data posted by the frontend.
@@ -292,10 +339,7 @@ def post(request, action):
     js = json.loads(request.body.decode("utf-8"))  # dict
     data = js["data"]
     if action == "make_work_folder":
-        if "test_work_folder" in data.keys():
-            print(f"[{client_id}] creating test project")
-            json_response = make_test_work_folder(client_id, data["test_work_folder"])
-        elif "work_folder_with_example_data" in data.keys():
+        if "work_folder_with_example_data" in data.keys():
             print(f"[{client_id}] creating SiteOpt project with example data")
             json_response = make_work_folder(client_id, data["work_folder_with_example_data"], use_example_data=True)
         else:
@@ -345,6 +389,10 @@ def post(request, action):
     elif action == "list_projects_with_results":
         projects = list_projects_with_results(client_id)
         return JsonResponse({"success": True, "data": projects})
+    elif action == "delete_project":
+        print(f"Deleting project {data['name']} path {data['path']}")
+        response = delete_project(client_id, data["path"])
+        return response
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})
@@ -360,7 +408,7 @@ def prepare_execution(client_id, data):
         job_id,
         {
             "path": project_path,
-            "exec_type": data["execution_type"],
+            "exec_items": data["executed_items"],
             "local": data["local_execution"],
             "scenarios": data["scenarios"]
         },
@@ -383,13 +431,7 @@ def execute(request, job_id):
             yield f"event: error\ndata: Execution failed. Job {job_id} not ready after {timeout}s.\n\n"
             return
         ppath = job["path"]
-        exec_type = job["exec_type"]
-        try:
-            items_to_execute = get_items_to_execute(exec_type)
-        except NotImplementedError:
-            yield (f"event: error\ndata: Execution failed to start. Support "
-                   f"for execution type {exec_type} not implemented.")
-            return
+        items_to_execute = job["exec_items"]
         exec_locally = job["local"]
         project_path = Path(ppath).resolve()
         scenarios = job["scenarios"]
@@ -428,7 +470,18 @@ def execute(request, job_id):
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             for line in iter(proc.stdout.readline, b""):
                 line = line.decode("utf-8", "replace").strip()
-                yield f"data: {line}\n\n"
+                if line.startswith("Executing") and line.endswith("finished"):
+                    # This intercepts the 'Executing ... finished' output line and sends an event instead
+                    parsed_line = line.removeprefix("Executing").removesuffix("finished").strip()
+                    # Strip project item type
+                    parsed_line = parsed_line.removeprefix("Data Connection ")
+                    parsed_line = parsed_line.removeprefix("Tool ")
+                    parsed_line = parsed_line.removeprefix("Importer ")
+                    parsed_line = parsed_line.removeprefix("Data Store ")
+                    parsed_line = parsed_line.removeprefix("Merger ")
+                    yield f"event: item_finished\ndata: {parsed_line}\n\n"
+                else:
+                    yield f"data: {line}\n\n"
             proc.stdout.close()
             proc_retval = proc.wait()
             cache.delete(job_id)
@@ -513,91 +566,38 @@ def make_work_folder(client_id, work_folder_name, use_example_data=False):
     return {"success": True, "data": {}}
 
 
-def make_test_work_folder(client_id, work_folder_name):
-    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
-    configs = get_client_config(client_id) or {}
-    pdp = get_test_project_data_path()
-    if not validate_project_path(pdp)["success"]:
-        return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
-    client_root = Path(get_client_work_root(client_id))
-    work_dir = (client_root / work_folder_name).resolve()
-    try:
-        make_dir(str(work_dir))
-        ignored = (".git", ".idea", ".venv", ".gitignore", ".gitkeep", "*.md", "*.png", "*.yaml", "*.yml", "*.css", ".github", "docs")
-        shutil.copytree(pdp, str(work_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns(*ignored))
-    except OSError as e:
-        return {"success": False, "error": f"[OSError] [{e}] Creating test work dir failed"}
-    work_folders = configs["work_folders"]
-    if work_folder_name not in work_folders:
-        work_folders[work_folder_name] = str(work_dir)
-    edit_config_file(config_fpath, {"work_folders": work_folders})
-    return {"success": True, "data": {}}
-
-
-def build_tree(path, exclude_dirs=None):
-    exclude_dirs = set(os.path.abspath(d) for d in (exclude_dirs or []))
-    tree = {"children": []}
-    entries = os.listdir(path)
-    # Sort: files first, then directories
-    entries.sort(key=lambda e: os.path.isdir(os.path.join(path, e)))
-    for entry in entries:
-        full_path = os.path.join(path, entry)
-        abs_path = os.path.abspath(full_path)
-        # Skip excluded directories
-        if abs_path in exclude_dirs:
-            continue
-        if os.path.isdir(full_path):
-            tree["children"].append({
-                "name": entry,
-                "children": build_tree(full_path, exclude_dirs)["children"]
-            })
-        else:
-            tree["children"].append({"name": entry})
-    return tree
-
-
-def fetch_work_folders_tree(request):
-    """Builds and returns the directory tree of available work (project) folders in current context.
-    i.e. When in container, host work folders are not shown. When running on host, container work
-    folders are not shown."""
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    print(f"Client {client_id} is fetching work folder files")
-    config_d = get_client_config(client_id)
-    # config_d = read_config_file(config.config_path)
-    work_folders_dict = config_d.get("work_folders", {})
-    trees = list()
-    for name, p in work_folders_dict.items():
-        if not p.startswith(str(WORK_ROOT)):
-            # Skip folders not in current context
-            continue
-        if not os.path.exists(p):
-            print(f"Skipping {p}. Doesn't exist.")
-            continue
-        excluded_dirs = [os.path.join(p, ".git")]
-        tree = build_tree(p, excluded_dirs)
-        base_path, dirname = os.path.split(p)
-        tree["name"] = dirname  # same as 'name'
-        tree["path"] = base_path
-        trees.append(tree)
-    return JsonResponse({"success": True, "data": trees})
-
-
-def fetch_work_folder(request, folder_name):
-    """Returns the directory tree of a single work folder."""
-    print(f"Returning directory tree of {folder_name}")
+def fetch_current_input_folder(request, folder_name):
+    """Returns the files under current_input folder of a given folder (project) name.
+    The returned list format is such that it can be used directly in a frontend Toolbar template.
+    """
+    print(f"Returning current_input of {folder_name}")
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     config_d = get_client_config(client_id)
-    # config_d = read_config_file(config.config_path)
     work_folders_dict = config_d.get("work_folders", {})
     p = work_folders_dict.get(folder_name)
     if not os.path.exists(p):
-        return JsonResponse({"success": False, "error": f"Updating project {folder_name} failed"})
-    excluded_dirs = [os.path.join(p, ".git")]
-    tree = build_tree(p, excluded_dirs)
-    base_path, dirname = os.path.split(p)
-    tree["name"] = dirname  # same as 'name'
-    tree["path"] = base_path
-    return JsonResponse({"success": True, "data": tree})
+        return JsonResponse({"success": False, "error": f"Project folder {p} does not exist"})
+    input_path = os.path.join(p, "current_input")
+    # folders = ["", "connections", "demand", "nodes", "other_units", "production", "representative_periods", "storages"]
+    folders = [f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))]
+    folders = [""] + folders  # Add root folder
+    categories = []
+    # categories: [{name: "Basic", value: "", options: [{label: scenarios.xlsx, value: scenarios.xlsx}, {}]}, ...]
+    for folder in folders:
+        entry = {}
+        p = os.path.join(input_path, folder)
+        if not folder:
+            entry["name"] = "Basic"
+            entry["value"] = ""
+        else:
+            entry["name"] = folder.replace("_", " ").capitalize()
+            entry["value"] = folder
+        entry["options"] = []
+        for filename in os.listdir(p):
+            if os.path.isfile(os.path.join(p, filename)):
+                entry["options"].append({"label": filename, "value": filename})
+        categories.append(entry)
+    return JsonResponse({"success": True, "data": categories})
 
 
 def fetch_data(fpath):
@@ -706,7 +706,6 @@ def make_config_file(p):
     """
     d = {"input_data_path": get_input_data_path(),
          "project_data_path": get_project_data_path(),
-         "test_project_data_path": get_test_project_data_path(),
          "work_folders": {}}
     with open(p, "w") as fp:
         json.dump(d, fp, indent=4)
@@ -993,63 +992,3 @@ def _extract_validations_by_column(wb, ws, columns):
                     validations[header] = options
 
     return validations
-
-
-def get_items_to_execute(exec_type):
-    if exec_type == "all":
-        return []
-    elif exec_type == "opt1":
-        # Load data into input data DS (20 items)
-        return [
-            "connections input",
-            "diverting units",
-            "storage input data",
-            "nodes",
-            "pv unit input",
-            "model specification",
-            "hp units input",
-            "Existing load",
-            "scenarios",
-            "convert connections",
-            "Load template",
-            "convert diverting units (1)",
-            "convert storages",
-            "convert nodes",
-            "convert VRE units",
-            "convert hp units",
-            "model spec importer",
-            "import object parameters wide",
-            "scenario importer",
-            "Input data",
-        ]
-    elif exec_type == "opt2":
-        # Run 'Optimize full period' (5 items)
-        return [
-            "Input data",
-            "Copy DB",
-            "input with repr periods",
-            "Optimize",
-            "output db",
-            "Output recipe",
-            "Extract results",
-        ]
-    elif exec_type == "opt3":
-        # Run 'Optimize with representative periods' (8 items)
-        return [
-            "Input data",
-            "repr periods template",
-            "repr period selection settings",
-            "Select repr periods",
-            "input with repr periods",
-            "Optimize",
-            "output db",
-            "Output recipe",
-            "Extract results",
-        ]
-    elif exec_type == "opt4":
-        # Purges output db
-        # TODO: Not implemented
-        return ["Purge output db"]
-    else:
-        print(f"Unknown execution type: {exec_type}")
-        raise NotImplementedError()

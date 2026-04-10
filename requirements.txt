@@ -10,4 +10,4 @@ spinedb_api == 0.36.3
 spine_engine == 0.26.4
 spine_items == 0.24.4
 spinetoolbox == 0.10.5
-github-copilot-sdk >= 0.1.0
+github-copilot-sdk == 0.2.1

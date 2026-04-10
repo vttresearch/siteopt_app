@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import logging
 import os
@@ -44,6 +45,49 @@ _OLLAMA_CACHE: dict[str, Any] = {
 class _PermissionApproval(dict):
     def __getattr__(self, name: str) -> Any:
         return self.get(name)
+
+
+def _load_copilot_sdk_classes() -> tuple[Any, Any]:
+    try:
+        from copilot import CopilotClient
+    except ImportError as exc:
+        raise CopilotIntegrationError(
+            "github-copilot-sdk is not installed or the 'copilot' module is unavailable in the backend runtime."
+        ) from exc
+
+    try:
+        from copilot.tools import Tool
+    except ImportError:
+        try:
+            from copilot import Tool
+        except ImportError as exc:
+            raise CopilotIntegrationError(
+                "Installed github-copilot-sdk is incompatible with this backend: missing Tool API."
+            ) from exc
+
+    return CopilotClient, Tool
+
+
+def _accepts_keyword_session_args(method: Any, skip_positional: int = 0) -> bool:
+    try:
+        parameters = list(inspect.signature(method).parameters.values())
+    except (TypeError, ValueError):
+        return False
+    if len(parameters) <= skip_positional:
+        return False
+    return parameters[skip_positional].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+async def _create_sdk_session(client: Any, session_config: dict[str, Any]) -> Any:
+    if _accepts_keyword_session_args(client.create_session):
+        return await client.create_session(**session_config)
+    return await client.create_session(session_config)
+
+
+async def _resume_sdk_session(client: Any, session_id: str, session_config: dict[str, Any]) -> Any:
+    if _accepts_keyword_session_args(client.resume_session, skip_positional=1):
+        return await client.resume_session(session_id, **session_config)
+    return await client.resume_session(session_id, session_config)
 
 
 def _split_csv_values(value: str | None) -> list[str]:
@@ -272,20 +316,30 @@ def _resolve_tool_cwd(context_dir_override: str | None) -> Path:
         return resolved
 
 
-def _build_client_options(token_override: str | None = None, context_dir_override: str | None = None) -> dict[str, Any]:
-    options: dict[str, Any] = {}
-    if settings.COPILOT_CLI_PATH:
-        options["cli_path"] = settings.COPILOT_CLI_PATH
-    if settings.COPILOT_CLI_URL:
-        options["cli_url"] = settings.COPILOT_CLI_URL
+def _client_option_value(config: Any, field_name: str, default: Any = None) -> Any:
+    if config is None:
+        return default
+    if isinstance(config, dict):
+        return config.get(field_name, default)
+    return getattr(config, field_name, default)
+
+
+def _build_client_options(token_override: str | None = None, context_dir_override: str | None = None) -> Any:
+    from copilot.client import ExternalServerConfig, SubprocessConfig
+
+    cli_url = str(getattr(settings, "COPILOT_CLI_URL", "") or "").strip()
+    if cli_url:
+        return ExternalServerConfig(cli_url)
+
     cli_args = list(getattr(settings, "AI_ASSISTANT_COPILOT_CLI_ARGS", []) or [])
-    if cli_args:
-        options["cli_args"] = cli_args
-    effective_token = token_override or settings.COPILOT_GITHUB_TOKEN
-    if effective_token:
-        options["github_token"] = effective_token
-    options["cwd"] = str(_resolve_tool_cwd(context_dir_override))
-    return options
+    effective_token = token_override or settings.COPILOT_GITHUB_TOKEN or None
+    cli_path = str(getattr(settings, "COPILOT_CLI_PATH", "") or "").strip() or None
+    return SubprocessConfig(
+        cli_path=cli_path,
+        cli_args=cli_args,
+        cwd=str(_resolve_tool_cwd(context_dir_override)),
+        github_token=effective_token,
+    )
 
 
 def _resolve_model_name(model_override: str | None = None) -> str | None:
@@ -508,8 +562,8 @@ def _log_request_context_diagnostics(
         model or "auto",
         sdk_session_id or "",
         provider.get("type", "copilot") if provider else "copilot",
-        str(client_options.get("cwd") or ""),
-        list(client_options.get("cli_args") or []),
+        str(_client_option_value(client_options, "cwd") or ""),
+        list(_client_option_value(client_options, "cli_args") or []),
         resolved_work_dir,
         current_input_dir,
         results_output_dir,
@@ -539,12 +593,7 @@ async def _run_chat_async(
     sdk_session_id: str | None = None,
     event_callback: Any | None = None,
 ) -> dict[str, Any]:
-    try:
-        from copilot import CopilotClient, Tool
-    except ImportError as exc:
-        raise CopilotIntegrationError(
-            "github-copilot-sdk is not installed. Install it with: pip install github-copilot-sdk"
-        ) from exc
+    CopilotClient, Tool = _load_copilot_sdk_classes()
 
     resolved_work_dir = _resolve_context_dir(context_dir)
     results_output_dir = (resolved_work_dir / ".spinetoolbox" / "items" / "extract_results" / "output").resolve()
@@ -675,7 +724,7 @@ async def _run_chat_async(
             timeout_seconds,
             bool(history),
             configured_model or "auto",
-            list(client_options.get("cli_args") or []),
+            list(_client_option_value(client_options, "cli_args") or []),
         )
         await client.start()
         system_lines = [
@@ -698,6 +747,7 @@ async def _run_chat_async(
         session_config = {
             "tools": tools,
             "system_message": {
+                "mode": "replace",
                 "content": "\n".join(system_lines)
             },
             "on_permission_request": _approve_all_permission_requests,
@@ -747,7 +797,7 @@ async def _run_chat_async(
             _trace("prompt.system_trim", chars=len(resolved_system_prompt))
         if effective_sdk_session_id:
             try:
-                session = await client.resume_session(effective_sdk_session_id, session_config)
+                session = await _resume_sdk_session(client, effective_sdk_session_id, session_config)
                 resumed_existing_session = True
                 _trace("session.resumed", model=configured_model or "auto", sdk_session_id=effective_sdk_session_id)
             except Exception as exc:
@@ -757,11 +807,11 @@ async def _run_chat_async(
                     exc,
                 )
                 _trace("session.resume_failed", sdk_session_id=effective_sdk_session_id, error=str(exc))
-                session = await client.create_session(session_config)
+                session = await _create_sdk_session(client, session_config)
                 effective_sdk_session_id = getattr(session, "session_id", None)
                 _trace("session.created", model=configured_model or "auto", sdk_session_id=effective_sdk_session_id)
         else:
-            session = await client.create_session(session_config)
+            session = await _create_sdk_session(client, session_config)
             effective_sdk_session_id = getattr(session, "session_id", None)
             _trace("session.created", model=configured_model or "auto", sdk_session_id=effective_sdk_session_id)
 
@@ -920,10 +970,7 @@ async def _run_chat_async(
                         remaining_budget_seconds=round(remaining_budget, 3),
                         reserved_retry_budget_seconds=reserved_retry_budget,
                     )
-                    return await session.send_and_wait(
-                        {"prompt": prompt_text},
-                        timeout=float(per_attempt_timeout),
-                    )
+                    return await session.send_and_wait(prompt_text, timeout=float(per_attempt_timeout))
                 except asyncio.TimeoutError as exc:
                     last_error = exc
                     elapsed_now = time.monotonic() - start_time

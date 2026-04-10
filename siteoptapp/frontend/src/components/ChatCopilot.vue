@@ -250,10 +250,8 @@ const runtimeClass = computed(() => {
 });
 
 const activeContextDir = computed(() => {
-  const idx = settingStore.activeProjectIndex || 0;
-  const folderNames = Object.keys(settingStore.workFolders || {});
-  const activeFolderName = folderNames[idx] || null;
-  return activeFolderName ? settingStore.workFolders[activeFolderName] || null : null;
+  const path = String(settingStore.activeProjectPath || "").trim();
+  return path || null;
 });
 
 
