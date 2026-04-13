@@ -8,9 +8,24 @@ set "REGISTRY=registry.elexia.amct.pl"
 set "APP_URL=http://localhost:5173"
 set "WAIT_SECONDS=90"
 
+if not "%~1"=="" set "APP_VERSION=%~1"
+
+if not defined APP_VERSION (
+  echo Enter the production version tag to run, for example v1.0
+  set /p "APP_VERSION=APP_VERSION: "
+)
+
+if not defined APP_VERSION (
+  echo APP_VERSION is required.
+  exit /b 1
+)
+
 echo ================================================================
 echo SiteOpt Web Interface - Windows Launcher
 echo ================================================================
+echo.
+echo APP_VERSION=%APP_VERSION%
+if defined SITEOPT_DATA_ROOT echo SITEOPT_DATA_ROOT=%SITEOPT_DATA_ROOT%
 echo.
 
 where docker >nul 2>&1
@@ -34,6 +49,14 @@ echo Logging in to %REGISTRY% ...
 docker login %REGISTRY%
 if errorlevel 1 (
   echo Registry login failed.
+  exit /b 1
+)
+
+echo.
+echo Stopping existing containers ...
+docker compose -f "%COMPOSE_FILE%" down
+if errorlevel 1 (
+  echo Failed to stop existing containers.
   exit /b 1
 )
 
@@ -91,6 +114,7 @@ start "" "%APP_URL%"
 
 echo.
 echo Stack is running.
+echo Version: %APP_VERSION%
 echo To stop it later, run:
 echo   docker compose -f "%COMPOSE_FILE%" down
 echo.

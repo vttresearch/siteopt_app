@@ -221,3 +221,74 @@ ALLOWED_HOSTS = []
 Remove Django Browser Reload from **INSTALLED_APPS** and **MIDDLEWARE**.
 
 In addition, follow the instructions here https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+
+## Docker Production Persistence
+
+The production compose file now stores backend state on the host instead of only in the container writable layer.
+
+Production storage is versioned by `APP_VERSION`, and `APP_VERSION` must be set explicitly for production deployments.
+
+- Backend image: `registry.elexia.amct.pl/site_opt/backend:${APP_VERSION}`
+- Frontend image: `registry.elexia.amct.pl/site_opt/frontend:${APP_VERSION}`
+- Backend work folders are mounted from `./docker-data/releases/${APP_VERSION}/work` to `/app/work_container`
+- SQLite is mounted from `./docker-data/releases/${APP_VERSION}/db` and the database file is stored at `/app/data/db.sqlite3`
+- Redis data is mounted from `./docker-data/releases/${APP_VERSION}/redis`
+
+This works on Windows with Docker Desktop as well as Linux. Relative bind mounts are resolved from the repository directory, so after:
+
+```commandline
+set APP_VERSION=1.2.3
+docker compose -f docker-compose.prod.yml up -d
+```
+
+your persistent files will remain under `docker-data/releases/1.2.3/` even if the backend container is recreated.
+
+If you want the data somewhere else, set `SITEOPT_DATA_ROOT` before starting Compose.
+
+Windows PowerShell:
+
+```powershell
+$env:APP_VERSION = '1.2.3'
+$env:SITEOPT_DATA_ROOT = 'D:/SiteOptData'
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Windows cmd.exe:
+
+```commandline
+set APP_VERSION=1.2.3
+set SITEOPT_DATA_ROOT=D:/SiteOptData
+docker compose -f docker-compose.prod.yml up -d
+```
+
+If you use the Windows launcher, you can pass the version directly:
+
+```commandline
+run_prod_windows.bat v1.0
+```
+
+If you do not pass an argument, `run_prod_windows.bat` will prompt for `APP_VERSION` before pulling and starting the stack.
+The launcher stops the existing production stack before pulling and starting the selected version.
+
+Linux/macOS:
+
+```commandline
+APP_VERSION=1.2.3 SITEOPT_DATA_ROOT=/srv/siteopt-data docker compose -f docker-compose.prod.yml up -d
+```
+
+If you use the Linux launcher, you can pass the version directly:
+
+```commandline
+./run_prod_linux.sh v1.0
+```
+
+If you do not pass an argument, `run_prod_linux.sh` will prompt for `APP_VERSION` before pulling and starting the stack. The script uses `xdg-open` when available to open the app URL automatically.
+The launcher stops the existing production stack before pulling and starting the selected version.
+
+With those values, the release-specific data will be stored under:
+
+- `D:/SiteOptData/releases/1.2.3/work`
+- `D:/SiteOptData/releases/1.2.3/db`
+- `D:/SiteOptData/releases/1.2.3/redis`
+
+If `APP_VERSION` is not set, Compose will stop with an `APP_VERSION is required` error instead of silently using `latest`.
