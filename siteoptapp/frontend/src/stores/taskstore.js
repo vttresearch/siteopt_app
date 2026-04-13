@@ -66,6 +66,7 @@ export const useTaskStore = defineStore('taskData', () => {
           { name: "Extract results", done: false, error: false },
       ]
     },
+    /*
     {
       name: "Complete workflow",
       elapsed: 0,
@@ -104,13 +105,7 @@ export const useTaskStore = defineStore('taskData', () => {
           { name: "Extract results", done: false, error: false },
       ]
     },
-    {
-      name: "Purge output Db",
-      elapsed: 0,
-      subtasks: [
-          { name: "Purge output db", done: false, error: false },
-      ]
-    },
+    */
     ]
   );
 

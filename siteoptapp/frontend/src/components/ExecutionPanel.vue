@@ -24,8 +24,12 @@ const outputEl = ref(null)
 const selectedScenarios = ref([])
 const showAddScenarioPrompt = ref(false)
 const confirmOpen = ref(false)
+const confirmPurgeOpen = ref(false)
+const confirmExecute = ref(false)
 const itemToRemove = ref(null)
 const confirmMessage = ref("")
+const confirmPurgeMessage = ref("")
+const confirmExecuteMessage = ref("")
 const returnFocusEl = ref(null)
 const showLog = ref(true)
 let eventSource = null
@@ -131,6 +135,25 @@ function askRemoveScenario(scenario, triggerEl) {
   confirmMessage.value = `Are you sure you want to remove scenario ${scenario}? This cannot be undone.`
   returnFocusEl.value = triggerEl  // so focus returns to the clicked trash icon
   confirmOpen.value = true
+}
+
+function askPurgeOutputDb(triggerEl) {
+  confirmPurgeMessage.value = `Are you sure you want to purge the output database of ` +
+      `project ${settingStore.activeProjectName}? This cannot be undone.`
+  returnFocusEl.value = triggerEl  // so focus returns to the clicked trash icon
+  confirmPurgeOpen.value = true
+}
+
+function askExecuteSelected(triggerEl) {
+  if (execType.value === "Optimize full period") {
+  confirmExecuteMessage.value = `Are you sure want to execute project ${settingStore.activeProjectName} ` +
+      `with task Optimize full period? This might take hours and require a massive amount of RAM and computing power.`
+  returnFocusEl.value = triggerEl
+  confirmExecute.value = true
+  }
+  else {
+    executeSelected()
+  }
 }
 
 async function confirmRemoveScenario() {
@@ -240,6 +263,21 @@ async function executeSelected() {
   };
 }
 
+async function purgeOutputDb() {
+  settingStore.executionInProgress = true
+  const configs = {
+    path: settingStore.activeProjectPath,
+  }
+  const response = await postData("purge_output_db", configs, notify)
+  if (!response.success) {
+    settingStore.executionInProgress = false
+    return
+  }
+  settingStore.executionInProgress = false
+  notify.show(`${response.data.msg}`, 5000, "info")
+
+}
+
 function setCurrentTask(taskName) {
   execType.value = taskName
   taskStore.setCurrentTask(taskName)
@@ -260,8 +298,11 @@ function stopTimer() {
 </script>
 
 <template>
-  <div class="flex items-center justify-between">
-    <div class="mb-3 text-lg font-semibold text-gray-800">Execution</div>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-4">
+      <div class="text-lg font-semibold text-gray-800">Execution</div>
+      <i v-if="settingStore.executionInProgress" class="w-5 h-5 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></i>
+    </div>
     <button
         class="flex items-center gap-1 justify-center text-white rounded-md disabled:opacity-50 px-2 py-3 cursor-pointer"
         type="button"
@@ -340,6 +381,24 @@ function stopTimer() {
           :returnFocusEl="returnFocusEl"
           @confirm="confirmRemoveScenario"
       />
+      <ConfirmPrompt
+          v-model="confirmPurgeOpen"
+          :title="'Purge Output Db?'"
+          :message="confirmPurgeMessage"
+          :confirmText="'Purge'"
+          :cancelText="'Cancel'"
+          :returnFocusEl="returnFocusEl"
+          @confirm="purgeOutputDb"
+      />
+      <ConfirmPrompt
+          v-model="confirmExecute"
+          :title="'Execute Optimize full period?'"
+          :message="confirmExecuteMessage"
+          :confirmText="`I know what I'm doing`"
+          :cancelText="'Cancel'"
+          :returnFocusEl="returnFocusEl"
+          @confirm="executeSelected"
+      />
       <AskNamePrompt
           :visible="showAddScenarioPrompt"
           title="Add New Scenario"
@@ -357,10 +416,18 @@ function stopTimer() {
           type="button"
           :disabled="!execType || settingStore.executionInProgress"
           title="Select a task to execute"
-          @click="executeSelected">
-        <i v-if="settingStore.executionInProgress" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-        <i v-else class="fa-solid fa-play"></i>
+          @click="askExecuteSelected">
+        <i class="fa-solid fa-play"></i>
         <span class="text-nowrap">Execute</span>
+      </button>
+      <button
+          class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
+          type="button"
+          :disabled="settingStore.executionInProgress"
+          title="Remove everything in output database"
+          @click="askPurgeOutputDb">
+        <i class="fa-solid fa-play"></i>
+        <span class="text-nowrap">Purge Output Db</span>
       </button>
     </div>
     <ExecutionProgressBar />

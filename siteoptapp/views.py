@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 import openpyxl
 import spinedb_api.exception
 from openpyxl.utils import range_boundaries
-from spinedb_api import DatabaseMapping
+from spinedb_api import DatabaseMapping, purge, helpers
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.conf import settings
@@ -29,6 +29,7 @@ WORK_ROOT = Path(Path(settings.BASE_DIR) / WORK_DIR).resolve()
 CONFIG_ROOT = Path(os.environ.get("CONFIG_ROOT", WORK_ROOT / "_config")).resolve()
 PYTHON_EXECUTABLE = sys.executable
 INPUT_DATA_SQLITE_FILE = Path(".spinetoolbox", "items", "input_data", "elexia_input.sqlite")
+OUTPUT_DB_SQLITE_FILE = Path(".spinetoolbox", "items", "output_db", "output db.sqlite")
 _MOD_SCRIPT_NAME = "mod_script.py"
 
 
@@ -253,6 +254,18 @@ def remove_scenario(client_id, scenario_name, project_name):
     return JsonResponse({"success": True, "data": {}})
 
 
+def purge_output_db(client_id, path):
+    sqlite_fpath = (path / OUTPUT_DB_SQLITE_FILE).resolve()
+    if not os.path.exists(sqlite_fpath):
+        return JsonResponse({"success": False, "error": f"SQLite file {sqlite_fpath} doesn't exist"})
+    db_url = "sqlite:///" + str(sqlite_fpath)
+    purge_retval = purge.purge_url(db_url, None, logger=None)
+    if not purge_retval:
+        return JsonResponse({"success": False, "error": f"purging db {db_url} failed"})
+    freed, unit = helpers.vacuum(db_url)
+    return JsonResponse({"success": True, "data": {"msg": f"{freed} {unit} freed from output database"}})
+
+
 def delete_project(client_id, path):
     if not os.path.exists(path):
         # Return True because it's probably been deleted manually
@@ -354,6 +367,10 @@ def post(request, action):
     elif action == "delete_project":
         print(f"Deleting project {data['name']} path {data['path']}")
         response = delete_project(client_id, data["path"])
+        return response
+    elif action == "purge_output_db":
+        print(f"Purging output db for project {data['path']}")
+        response = purge_output_db(client_id, data["path"])
         return response
     else:
         print(f"Unknown action: {action}")
