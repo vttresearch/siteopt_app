@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, nextTick, shallowRef } from "vue";
+import { ref, watch, computed, nextTick, onUnmounted } from "vue";
 import { AgGridVue } from "ag-grid-vue3";
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import Spinner from "@/components/Spinner.vue";
@@ -10,7 +10,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from '@/stores/sheetStore';
-import { postData, uploadFile, fetchFileContents } from "@/utils/functions.js";
+import { uploadFile, fetchFileContents } from "@/utils/functions.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
@@ -20,15 +20,7 @@ const sheetNames = ref([]);
 const fileData = ref({});
 const rowData = ref([]);
 const columnDefs = ref([]);
-const mdText = ref("");
-const jsonEditText = ref("");
 const originalText = ref("");
-const gridApi = shallowRef(null);
-const saving = ref(false);
-const mdDirty = ref(false);
-const csvDirty = ref(false);
-const jsonDirty = ref(false);
-const xlsxDirty = ref(false);
 const activeView = ref("editor"); // "editor" | "plot"
 const selectedCount = ref(0);
 const selected = ref(null);
@@ -42,32 +34,17 @@ const rowSelectionOptions = {
 const hasSelection = computed(() => selectedCount.value > 0);
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
 
-function markDirty() {
-  // .md editor does not use grid, so it's ignored here
-  const t = data_store.daata?.filetype
-  if (t === 'csv') csvDirty.value = true
-  else if (t === 'json') jsonDirty.value = true
-  else if (t === 'xlsx') markXlsxDirty();
-}
-function markXlsxDirty() {
-  sheetStore.markDirty(sheetStore.activeSheet, true)
-  sheetStore.toggleSheetDataUpdated()
-  xlsxDirty.value = true
-}
-
-function clearXlsxDirty(sheet) {
-  Object.keys(sheetStore.sheetsByName).forEach((key) => sheetStore.markDirty(key, false))
-  sheetStore.toggleSheetDataUpdated()
-  xlsxDirty.value = false
-}
-
 const isTimeSeriesData = computed(() => {
   const structure = detectTimeSeriesStructure(plotRows.value);
   return structure?.isTimeSeries ?? false;
 });
 
+onUnmounted(() => {
+  data_store.unregisterGridApi(data_store.gridApi)
+})
+
 function onGridReady(params) {
-  gridApi.value = params.api
+  data_store.registerGridApi(params.api)
 
   // Update selection count reactively
   params.api.addEventListener('selectionChanged', () => {
@@ -87,7 +64,7 @@ function onGridReady(params) {
 }
 
 function onCellValueChanged() {
-  markDirty()
+  data_store.markDirty()
 }
 
 // Returns next cell if available
@@ -140,17 +117,18 @@ function clearRefs() {
   fileData.value = {};
   rowData.value = [];
   columnDefs.value = [];
-  mdText.value = "";
-  jsonEditText.value = "";
   originalText.value = "";
-  mdDirty.value = false;
-  csvDirty.value = false;
-  jsonDirty.value = false;
-  xlsxDirty.value = false;
   // Clear these manually because data_store.clear() causes a circular watcher loop because it clears data_store.daata
   data_store.fname = ""
   data_store.fpath = ""
-  data_store.dirty = false
+  data_store.mdDirty = false;
+  data_store.csvDirty = false;
+  data_store.jsonDirty = false;
+  data_store.xlsxDirty = false;
+  data_store.globalDirty = false
+  data_store.mdText = "";
+  data_store.jsonEditText = "";
+
 }
 
 // --- Add row ---
@@ -162,7 +140,7 @@ function createBlankRow(newIndex) {
 
 // Rebuilds rowData from currently displayed rows
 function syncRowDataFromGrid() {
-  const api = gridApi.value
+  const api = data_store.gridApi
   const count = api.getDisplayedRowCount()
   const rows = []
   for (let i = 0; i < count; i++) {
@@ -173,13 +151,13 @@ function syncRowDataFromGrid() {
 
 /* Adds a new row */
 function onAddRow() {
-  const api = gridApi.value
+  const api = data_store.gridApi
   if (!api) return
   let newIndexId = api.getDisplayedRowCount()
   const newRow = createBlankRow(newIndexId)
   api.applyTransaction({ add: [newRow] })
   syncRowDataFromGrid()
-  markDirty()
+  data_store.markDirty()
 
   // One‑time listener for when AG Grid has finished updating DOM
   const listener = function () {
@@ -202,18 +180,18 @@ function onAddRow() {
 
 /* Deletes selected rows */
 function onDeleteSelected() {
-  if (!gridApi.value) return
-  const selected = gridApi.value.getSelectedRows()
+  if (!data_store.gridApi) return
+  const selected = data_store.gridApi.getSelectedRows()
   if (!selected?.length) return
   // Remove from grid using a transaction
-  gridApi.value.applyTransaction({ remove: selected })
+  data_store.gridApi.applyTransaction({ remove: selected })
   // Keep backing data in sync
   const rows = []
-  gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+  data_store.gridApi.forEachNodeAfterFilterAndSort((node) => {
     rows.push(node.data)
   })
   rowData.value = rows
-  markDirty()
+  data_store.markDirty()
 }
 
 /* Custom data type detector for Excel data.
@@ -312,7 +290,7 @@ function updateTableFromCsv() {
 }
 
 async function newSheetSelected(sheetName) {
-  const api = gridApi.value
+  const api = data_store.gridApi
   const prev = sheetStore.activeSheet
   // Save current sheet before switching
   if (prev && api) {
@@ -355,6 +333,7 @@ const plotRows = computed(() => {
 watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
   if (newVal !== oldVal) {
     clearRefs()
+    activeView.value = "editor"
   }
 })
 
@@ -394,23 +373,23 @@ watch(() => data_store.daata,
       sheetNames.value = [];
       rowData.value = [];
       columnDefs.value = [];
-      mdText.value = "";
+      data_store.mdText = "";
       try {
-        jsonEditText.value = JSON.stringify(fileData.value, null, 2);
+        data_store.jsonEditText = JSON.stringify(fileData.value, null, 2);
       }
       catch {
-        jsonEditText.value = String(fileData.value);
+        data_store.jsonEditText = String(fileData.value);
       }
-      originalText.value = jsonEditText.value
+      originalText.value = data_store.jsonEditText
       activeView.value = "editor";
     }
     else if (fileType === "md") {
       sheetNames.value = [];
       rowData.value = [];
       columnDefs.value = [];
-      jsonEditText.value = "";
-      mdText.value = fileData.value?.text ?? "";
-      originalText.value = mdText.value
+      data_store.jsonEditText = "";
+      data_store.mdText = fileData.value?.text ?? "";
+      originalText.value = data_store.mdText
       activeView.value = "editor";
     }
     else {
@@ -421,132 +400,22 @@ watch(() => data_store.daata,
   { immediate: true }
 );
 
-watch(mdText, (editedText) => {
-  if (editedText !== originalText.value) {
-    if (data_store.daata?.filetype === "md") mdDirty.value = true;
-    }
-});
-
-watch(jsonEditText, (editedText) => {
-  if (editedText !== originalText.value) {
-    if (data_store.daata?.filetype === "json") jsonDirty.value = true;
+watch(() => data_store.mdText, (editedText) => {
+  if (data_store.daata?.filetype === "md" && editedText !== originalText.value) {
+    data_store.mdDirty = true
+    data_store.globalDirty = true
   }
 });
 
-async function saveCurrentFile() {
-  if (!data_store.fpath) {
-    notify.show("No file path available to save.", 3000, "error");
-    return;
+watch(() => data_store.jsonEditText, (editedText) => {
+  if (data_store.daata?.filetype === "json" && editedText !== originalText.value) {
+    data_store.jsonDirty = true
+    data_store.globalDirty = true
   }
-  const filetype = data_store.daata?.filetype;
+});
 
-  function filterIdFromRows(rows) {
-    /* Removes __id from all rows.
-    rows is a list of objects eg.
-    rows = [{ __id: 0 , scenario: Base }, { __id: 1, scenario: Myscen }]
-    */
-    let newRows = []
-    for (let i=0; i < rows.length; i++) {
-      if ("__id" in rows[i]) {
-        const {__id, ...newRow} = rows[i]
-        newRows[i] = newRow
-      }
-      else {
-        newRows[i] = rows[i]
-      }
-    }
-    return newRows
-  }
-
-  if (filetype === "md") {
-    saving.value = true;
-    const response = await postData("save_file", {
-      path: data_store.fpath,
-      filetype: "md",
-      payloadData: { text: mdText.value },
-      meta: {}
-    }, notify)
-
-    saving.value = false;
-    if (response.success) mdDirty.value = false;
-    notify.show("Saved", 2000, "info");
-    return;
-  }
-
-  if (filetype === "csv") {
-    if (!gridApi.value) return notify.show("Grid not ready yet.", 3000, "error");
-    gridApi.value.stopEditing();
-
-    let rows = [];
-    gridApi.value.forEachNode(node => rows.push(node.data));
-    rows = filterIdFromRows(rows)
-    saving.value = true;
-    const response = await postData("save_file", {
-      path: data_store.fpath,
-      filetype: "csv",
-      payloadData: rows,
-      meta: {}
-    }, notify)
-
-    saving.value = false;
-    if (response.success) csvDirty.value = false;
-    notify.show("Saved", 2000, "info");
-    return;
-  }
-
-  if (filetype === "json") {
-    let parsed;
-    try { parsed = JSON.parse(jsonEditText.value); }
-    catch (e) {
-      return notify.show(`Invalid JSON: ${e}`, 5000, "error");
-    }
-
-    saving.value = true;
-    const response = await postData("save_file", {
-      path: data_store.fpath,
-      filetype: "json",
-      payloadData: parsed,
-      meta: {}
-    }, notify)
-
-    saving.value = false;
-    if (response.success) jsonDirty.value = false;
-    notify.show("Saved", 2000, "info");
-    return;
-  }
-
-  if (filetype === "xlsx") {
-    const api = gridApi.value;
-    if (!api) return notify.show("Grid not ready yet.", 3000, "error");
-    // Stop edit mode
-    api.stopEditing();
-    // Capture current sheet into store
-    sheetStore.captureFromGrid(sheetStore.activeSheet, api);
-    // Build workbook payload (contains data from all sheets)
-    const workbook = {};
-    for (const [sheetName, sheetObj] of Object.entries(sheetStore.sheetsByName)) {
-      let rows = filterIdFromRows(sheetObj.rows)
-      workbook[sheetName] = {
-        rows: rows,
-        columns: sheetObj.columns,
-        meta: sheetObj.meta
-      };
-    }
-    saving.value = true;
-    const response = await postData("save_file", {
-      path: data_store.fpath,
-      filetype: "xlsx",
-      payloadData: workbook,
-      meta: {}
-    }, notify)
-    saving.value = false;
-    if (!response.success) return;
-    // Clear dirty flags for all sheets
-    clearXlsxDirty()
-    notify.show("Saved all sheets", 2000, "info");
-    return;
-  }
-  notify.show(`Save not implemented for ${filetype}`, 3000, "error");
+async function onSaveClick() {
+  await data_store.saveCurrentFile({ notify })
 }
 
 function handleFileSelect(event) {
@@ -605,10 +474,10 @@ async function uploadAndReplace() {
 
     <div class="flex justify-center flex-1 text-center">
       <div class="truncate">{{ data_store.fname }}
-        <span v-if="data_store.daata?.filetype === 'md' && mdDirty">*</span>
-        <span v-else-if="data_store.daata?.filetype === 'csv' && csvDirty">*</span>
-        <span v-else-if="data_store.daata?.filetype === 'json' && jsonDirty">*</span>
-        <span v-else-if="data_store.daata?.filetype === 'xlsx' && xlsxDirty">*</span>
+        <span v-if="data_store.daata?.filetype === 'md' && data_store.mdDirty">*</span>
+        <span v-else-if="data_store.daata?.filetype === 'csv' && data_store.csvDirty">*</span>
+        <span v-else-if="data_store.daata?.filetype === 'json' && data_store.jsonDirty">*</span>
+        <span v-else-if="data_store.daata?.filetype === 'xlsx' && data_store.xlsxDirty">*</span>
       </div>
     </div>
 
@@ -617,14 +486,14 @@ async function uploadAndReplace() {
           v-if="['md','csv','json','xlsx'].includes(data_store.daata?.filetype)"
           class=" cursor-pointer px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
           :disabled="
-          (data_store.daata?.filetype === 'md' && !mdDirty) ||
-          (data_store.daata?.filetype === 'csv' && !csvDirty) ||
-          (data_store.daata?.filetype === 'json' && !jsonDirty) ||
-          (data_store.daata?.filetype === 'xlsx' && !xlsxDirty) ||
-          saving"
-          @click="saveCurrentFile"
+          (data_store.daata?.filetype === 'md' && !data_store.mdDirty) ||
+          (data_store.daata?.filetype === 'csv' && !data_store.csvDirty) ||
+          (data_store.daata?.filetype === 'json' && !data_store.jsonDirty) ||
+          (data_store.daata?.filetype === 'xlsx' && !data_store.xlsxDirty) ||
+          data_store.saving"
+          @click="onSaveClick"
       >
-        {{ saving ? "Saving..." : "Save" }}
+        {{ data_store.saving ? "Saving..." : "Save" }}
       </button>
 
       <input
@@ -651,14 +520,14 @@ async function uploadAndReplace() {
     <!-- EDITOR VIEW -->
     <div v-if="activeView === 'editor'">
       <textarea
-        v-if="data_store.daata?.filetype === 'md' && mdText"
-        v-model="mdText"
+        v-if="data_store.daata?.filetype === 'md' && data_store.mdText"
+        v-model="data_store.mdText"
         class="w-full h-100 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
       <textarea
-        v-else-if="data_store.daata?.filetype === 'json' && jsonEditText"
-        v-model="jsonEditText"
+        v-else-if="data_store.daata?.filetype === 'json' && data_store.jsonEditText"
+        v-model="data_store.jsonEditText"
         class="w-full h-100 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
