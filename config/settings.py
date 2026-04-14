@@ -132,7 +132,6 @@ USE_TZ = True
 # django.contrib.staticfiles app automatically serves files from the 'static' folder of installed Apps
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # where collectstatic gathers files for production
-STATICFILES_DIRS = [BASE_DIR / "siteoptapp/frontend/dist"]  # Path to the Vue.js build directory
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

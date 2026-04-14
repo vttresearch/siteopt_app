@@ -585,7 +585,7 @@ async function uploadAndReplace() {
 
     <div class="flex justify-start gap-2">
       <button
-          class="px-3 py-1 rounded border"
+          class="px-3 py-1 rounded border cursor-pointer"
           :class="activeView === 'editor' ? 'bg-blue-600 text-white' : 'bg-white'"
           @click="activeView = 'editor'"
       >
@@ -593,7 +593,7 @@ async function uploadAndReplace() {
       </button>
 
       <button
-          class="px-3 py-1 rounded border disabled:opacity-50"
+          class="px-3 py-1 rounded border disabled:opacity-50 cursor-pointer"
           :class="activeView === 'plot' ? 'bg-blue-600 text-white' : 'bg-white'"
           @click="activeView = 'plot'"
           :disabled="!isTimeSeriesData"

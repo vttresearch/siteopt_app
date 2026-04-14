@@ -1,0 +1,7 @@
+# Dockerfile.frontend-dev
+FROM node:22.15
+
+# Update npm globally
+RUN npm install -g npm@latest
+
+WORKDIR /app

@@ -24,7 +24,7 @@ services:
       - siteopt_work:/app/work_container
       # Mask frontend from backend
       - type: tmpfs
-        target: /app/siteoptatpp/frontend
+        target: /app/siteoptapp/frontend
     ports:
       - "8000:8000"
     networks:
@@ -38,7 +38,9 @@ services:
     profiles: ["dev"]
 
   frontend-dev:
-    image: node:22.15
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend-dev
     container_name: frontend-dev
     working_dir: /app
     volumes:
