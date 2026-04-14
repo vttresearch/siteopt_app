@@ -633,6 +633,9 @@ def read_excel_as_json(wb):
     out = {"filetype": "xlsx", "data": {}}
 
     for sheet in wb.worksheets:
+        if sheet.sheet_state == "hidden":
+            # Skip hidden sheets
+            continue
         max_col = sheet.max_column
         max_row = sheet.max_row
 
