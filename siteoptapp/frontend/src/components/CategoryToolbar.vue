@@ -4,7 +4,7 @@ import { useSettingStore } from "@/stores/settingstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { fetchInputFiles, fetchFileContents } from "@/utils/functions.js";
-import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
+import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 
 const settingStore = useSettingStore()
 const dataStore = useTableDataStore()
@@ -12,10 +12,7 @@ const notify = useNotificationStore()
 const selected = ref(null);
 const openCategory = ref(null);
 const activeFilePath = ref("")
-const confirmSave = ref(false)
-const confirmSaveMessage = ref("")
-const returnFocusEl = ref(null)
-let confirmResolver = null
+const { confirm } = useConfirmPrompt()
 
 const currentInputFilePath = computed(() => {
   if (!activeFilePath.value) {
@@ -30,6 +27,8 @@ const currentInputFilePath = computed(() => {
 watch(() => settingStore.activeProjectIndex, async (newIndex, oldIndex) => {
   if (newIndex !== oldIndex) {
     activeFilePath.value = ""
+    openCategory.value = null
+    selected.value = null
     await fetchInputFiles(settingStore.activeProjectName)
   }
 })
@@ -40,45 +39,6 @@ function toggle(categoryName) {
     openCategory.value === categoryName ? null : categoryName;
 }
 
-/* Downloads the selected file and updates data store. */
-async function select(value) {
-  selected.value = value;
-  if (!settingStore.activeProjectPath) {
-    notify.show("Project path is not initialized. Please refresh the page.", 5000, "error")
-    return
-  }
-  let fpath = settingStore.activeProjectPath + "/" + "current_input" + "/"
-  if (openCategory.value === "") {
-    fpath = fpath + selected.value
-  }
-  else {
-    fpath = fpath + openCategory.value + "/" + selected.value
-  }
-  openCategory.value = null;
-  activeFilePath.value = fpath
-  await fetchFileContents(selected.value, fpath)
-}
-
-async function onConfirmSave() {
-  confirmSave.value = false
-  confirmResolver?.("save")
-}
-
-function onConfirmDiscard() {
-  confirmSave.value = false
-  confirmResolver?.("discard")
-}
-
-function askSaveConfirmation(triggerEl) {
-  confirmSaveMessage.value = `File ${dataStore.fname} has unsaved changes. ` +
-      `Would you like to save or discard the changes?`
-  returnFocusEl.value = triggerEl
-  confirmSave.value = true
-  return new Promise(resolve => {
-    confirmResolver = resolve
-  })
-}
-
 /* Asks confirmation to save current file it there are changes, downloads a new file and updates data store. */
 async function confirmAndLoadFile(value, elTrigger) {
   selected.value = value
@@ -87,22 +47,7 @@ async function confirmAndLoadFile(value, elTrigger) {
     notify.show("Project path is not initialized. Please refresh the page.", 5000, "error")
     return
   }
-  if (dataStore.globalDirty) {
-    const choice = await askSaveConfirmation(elTrigger)
-    if (choice === "discard") {
-      await downloadFile(category)
-      return
-    }
-    if (choice === "save") {
-      await saveAndDownloadFile(category)
-      return
-    }
-  }
-  await downloadFile(category)
-}
-
-async function saveAndDownloadFile(category) {
-  await dataStore.saveCurrentFile({ notify })
+  await dataStore.askSaveChanges(notify)
   await downloadFile(category)
 }
 
@@ -160,16 +105,4 @@ async function downloadFile(category) {
       </div>
     </div>
   </div>
-
-  <ConfirmPrompt
-    v-model="confirmSave"
-    :title="'Save changes?'"
-    :message="confirmSaveMessage"
-    :confirmText="`Save`"
-    :cancelText="'Discard'"
-    :returnFocusEl="returnFocusEl"
-    @confirm="onConfirmSave"
-    @cancel="onConfirmDiscard"
-  />
-
 </template>

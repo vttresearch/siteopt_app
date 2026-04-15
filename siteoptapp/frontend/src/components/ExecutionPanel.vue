@@ -9,9 +9,10 @@ import { postData, fetchResults, fetchScenarios } from "@/utils/functions.js";
 import { API_BASE } from "@/config.js";
 import BaseButton from "@/components/ui/BaseButton.vue";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
-import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 import ExecutionProgressBar from "@/components/ExecutionProgressBar.vue";
+import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 
+const { confirm } = useConfirmPrompt()
 const notify = useNotificationStore()
 const settingStore = useSettingStore()
 const taskStore = useTaskStore()
@@ -23,14 +24,7 @@ const converter = new AnsiToHtml();
 const outputEl = ref(null)
 const selectedScenarios = ref([])
 const showAddScenarioPrompt = ref(false)
-const confirmOpen = ref(false)
-const confirmPurgeOpen = ref(false)
-const confirmExecute = ref(false)
 const itemToRemove = ref(null)
-const confirmMessage = ref("")
-const confirmPurgeMessage = ref("")
-const confirmExecuteMessage = ref("")
-const returnFocusEl = ref(null)
 const showLog = ref(true)
 let eventSource = null
 let shouldAutoScroll = true
@@ -83,7 +77,6 @@ watch(coloredOutput, async () => {
 watch(executionFinished, async (newExecutionFinished) => {
   if (newExecutionFinished) {
     console.log("Execution finished")
-    // TODO: Fix case if user changes the project while execution is in progress
     await fetchResults(settingStore.activeProjectName)
     await fetchScenarios(settingStore.activeProjectPath)
   }
@@ -107,7 +100,7 @@ function newScenarioNameIsValid(name) {
 
 async function confirmAddScenario(n) {
   showAddScenarioPrompt.value = false
-  let name = n.trim()
+  let name = n.name.trim()
   if (name === "") {
     return  // Clicked Ok with no name given
   }
@@ -130,37 +123,22 @@ function cancelAddScenario() {
   showAddScenarioPrompt.value = false
 }
 
-function askRemoveScenario(scenario, triggerEl) {
-  itemToRemove.value = scenario
-  confirmMessage.value = `Are you sure you want to remove scenario ${scenario}? This cannot be undone.`
-  returnFocusEl.value = triggerEl  // so focus returns to the clicked trash icon
-  confirmOpen.value = true
-}
-
-function askPurgeOutputDb(triggerEl) {
-  confirmPurgeMessage.value = `Are you sure you want to purge the output database of ` +
-      `project ${settingStore.activeProjectName}? This cannot be undone.`
-  returnFocusEl.value = triggerEl  // so focus returns to the clicked trash icon
-  confirmPurgeOpen.value = true
-}
-
-function askExecuteSelected(triggerEl) {
-  if (execType.value === "Optimize full period") {
-  confirmExecuteMessage.value = `Are you sure want to execute project ${settingStore.activeProjectName} ` +
-      `with task Optimize full period? This might take hours and require a massive amount of RAM and computing power.`
-  returnFocusEl.value = triggerEl
-  confirmExecute.value = true
-  }
-  else {
-    executeSelected()
+async function confirmRemoveScenario(scenario, triggerEl) {
+  const ok = await confirm({
+    title: "Remove scenario?",
+    message: `Are you sure you want to remove scenario ${scenario}?`,
+    confirmText: "Remove",
+    cancelText: "Cancel",
+    returnFocusEl: triggerEl,
+    variant: "info",
+  })
+  if (ok) {
+    itemToRemove.value = scenario
+    await removeScenario()
   }
 }
 
-async function confirmRemoveScenario() {
-  if (!itemToRemove.value) {
-    // user clicked cancel
-    return
-  }
+async function removeScenario() {
   selectedScenarios.value = selectedScenarios.value.filter(s => s !== itemToRemove.value)
   scenarioStore.loadingScenarios = true
   const configs = {scenario_name: itemToRemove.value, work_folder: settingStore.activeProjectPath}
@@ -175,20 +153,54 @@ async function confirmRemoveScenario() {
   itemToRemove.value = null
 }
 
-function clearExecutionInProgress() {
-  settingStore.executionInProgress = false
-  executionFinished.value = true
-  stopTimer()
+async function confirmPurgeOutputDb(triggerEl) {
+  const ok = await confirm({
+    title: "Purge Output Db?",
+    message: `Are you sure you want to purge the output database of ` +
+      `project ${settingStore.activeProjectName}? This cannot be undone.`,
+    confirmText: "Purge",
+    cancelText: "Cancel",
+    returnFocusEl: triggerEl,
+    variant: "warning",
+  })
+  if (ok) {
+    await purgeOutputDb()
+  }
 }
 
-function clearProgressBar() {
-  taskStore.clearSubtasks()
+async function purgeOutputDb() {
+  settingStore.executionInProgress = true
+  const configs = {
+    path: settingStore.activeProjectPath,
+  }
+  const response = await postData("purge_output_db", configs, notify)
+  if (!response.success) {
+    settingStore.executionInProgress = false
+    return
+  }
+  settingStore.executionInProgress = false
+  notify.show(`${response.data.msg}`, 5000, "info")
 }
-/* Returns true if selected execution task should have at least one scenario selected, false otherwise. */
-function execTypeNeedsScenario() {
-  return execType.value === "Optimize full period" ||
-      execType.value === "Optimize with representative periods" ||
-      execType.value === "Complete workflow"
+
+async function confirmExecuteSelected(triggerEl) {
+  if (execType.value === "Optimize full period") {
+    const ok = await confirm({
+      title: "Execute Optimize full period?",
+      message: `Are you sure want to execute project ${settingStore.activeProjectName} with ` +
+          `task Optimize full period? This might take hours and require a massive amount of ` +
+          `RAM and computing power.`,
+      confirmText: "I know what I'm doing",
+      cancelText: "Cancel",
+      returnFocusEl: triggerEl,
+      variant: "danger",
+    })
+    if (ok) {
+      await executeSelected()
+    } else return
+  }
+  else {
+    await executeSelected()
+  }
 }
 
 async function executeSelected() {
@@ -263,19 +275,21 @@ async function executeSelected() {
   };
 }
 
-async function purgeOutputDb() {
-  settingStore.executionInProgress = true
-  const configs = {
-    path: settingStore.activeProjectPath,
-  }
-  const response = await postData("purge_output_db", configs, notify)
-  if (!response.success) {
-    settingStore.executionInProgress = false
-    return
-  }
+function clearExecutionInProgress() {
   settingStore.executionInProgress = false
-  notify.show(`${response.data.msg}`, 5000, "info")
+  executionFinished.value = true
+  stopTimer()
+}
 
+function clearProgressBar() {
+  taskStore.clearSubtasks()
+}
+
+/* Returns true if selected execution task should have at least one scenario selected, false otherwise. */
+function execTypeNeedsScenario() {
+  return execType.value === "Optimize full period" ||
+      execType.value === "Optimize with representative periods" ||
+      execType.value === "Complete workflow"
 }
 
 function setCurrentTask(taskName) {
@@ -365,40 +379,13 @@ function stopTimer() {
                   type="button"
                   class="text-gray-400 hover:text-gray-700"
                   :disabled="settingStore.executionInProgress"
-                  @click="askRemoveScenario(scenario, $event.currentTarget)">
+                  @click="confirmRemoveScenario(scenario, $event.currentTarget)">
                 <i class="fa-regular fa-trash-can"></i>
               </button>
             </div>
         </template>
       </div>
 
-      <ConfirmPrompt
-          v-model="confirmOpen"
-          :title="'Remove scenario?'"
-          :message="confirmMessage"
-          :confirmText="'Remove'"
-          :cancelText="'Cancel'"
-          :returnFocusEl="returnFocusEl"
-          @confirm="confirmRemoveScenario"
-      />
-      <ConfirmPrompt
-          v-model="confirmPurgeOpen"
-          :title="'Purge Output Db?'"
-          :message="confirmPurgeMessage"
-          :confirmText="'Purge'"
-          :cancelText="'Cancel'"
-          :returnFocusEl="returnFocusEl"
-          @confirm="purgeOutputDb"
-      />
-      <ConfirmPrompt
-          v-model="confirmExecute"
-          :title="'Execute Optimize full period?'"
-          :message="confirmExecuteMessage"
-          :confirmText="`I know what I'm doing`"
-          :cancelText="'Cancel'"
-          :returnFocusEl="returnFocusEl"
-          @confirm="executeSelected"
-      />
       <AskNamePrompt
           :visible="showAddScenarioPrompt"
           title="Add New Scenario"
@@ -416,7 +403,7 @@ function stopTimer() {
           type="button"
           :disabled="!execType || settingStore.executionInProgress"
           title="Select a task to execute"
-          @click="askExecuteSelected">
+          @click="confirmExecuteSelected">
         <i class="fa-solid fa-play"></i>
         <span class="text-nowrap">Execute</span>
       </button>
@@ -425,7 +412,7 @@ function stopTimer() {
           type="button"
           :disabled="settingStore.executionInProgress"
           title="Remove everything in output database"
-          @click="askPurgeOutputDb">
+          @click="confirmPurgeOutputDb">
         <i class="fa-solid fa-play"></i>
         <span class="text-nowrap">Purge Output Db</span>
       </button>

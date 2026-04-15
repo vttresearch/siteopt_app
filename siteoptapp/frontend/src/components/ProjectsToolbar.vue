@@ -8,7 +8,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useTaskStore } from "@/stores/taskstore.js";
 import { fetchSettings, postData, fetchInputFiles, fetchScenarios } from "@/utils/functions.js";
 import AskNamePrompt from "@/components/AskNamePrompt.vue";
-import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
+import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 
 const settingStore = useSettingStore()
 const notify = useNotificationStore()
@@ -18,9 +18,7 @@ const restoreOpen = ref(false)
 const restoring = ref(false)
 const restoreCandidates = ref(null)
 const showMakeProjectPrompt = ref(false)
-const confirmOpen = ref(false)
-const deletePromptTitle = ref("")
-const deletePromptMessage = ref("")
+const { confirm } = useConfirmPrompt()
 const projectToDelete = ref({})
 
 /* Returns a boolean value whether the project tabs are disabled or not. */
@@ -79,11 +77,12 @@ async function workFolderNameTaken(name) {
   return retval
 }
 
-function cancelMakeProject() {
-  showMakeProjectPrompt.value = false
+async function confirmMakeProject() {
+  await dataStore.askSaveChanges(notify)
+  showMakeProjectPrompt.value=true
 }
 
-async function confirmMakeProject(n) {
+async function makeProject(n) {
   showMakeProjectPrompt.value = false
   restoreOpen.value = false
   let name = n.name.trim()
@@ -98,6 +97,10 @@ async function confirmMakeProject(n) {
   // Activate the last tab
   taskStore.clearAll()
   settingStore.setActiveProject(settingStore.workFolders.length -1)
+}
+
+function cancelMakeProject() {
+  showMakeProjectPrompt.value = false
 }
 
 async function validateWorkFolderName(name) {
@@ -121,6 +124,7 @@ async function removeProjectFromTabs(name) {
   if (settingStore.executionInProgress && name === settingStore.activeProjectName) return
   restoreOpen.value = false  // Close recent projects list if open
   let changeActiveProject = settingStore.activeProjectName === name
+  if (changeActiveProject) await dataStore.askSaveChanges(notify)
   const response = await postData("remove_work_folder", {"folder_name": name}, notify)
   if (response.success) {
     await fetchSettings()
@@ -141,12 +145,15 @@ async function removeProjectFromTabs(name) {
 }
 
 /* When project is switched by clicking a Tab. */
-function switchProject(i) {
+async function switchProject(i) {
+  await dataStore.askSaveChanges(notify)
   taskStore.clearAll()
   settingStore.setActiveProject(i)
 }
 
+/* Opens a project from the recent projects list. */
 async function restoreProject(c) {
+  await dataStore.askSaveChanges(notify)
   const response = await postData("add_existing_work_folder", {"name": c.name, "path": c.path}, notify)
   if (response.success) {
     taskStore.clearAll()
@@ -160,16 +167,19 @@ async function restoreProject(c) {
   }
 }
 
-function askDeleteProject(c) {
-  deletePromptTitle.value = `Delete Project ${c.name}?`
-  deletePromptMessage.value = `Are you sure you want to delete all files related to project ${c.name}?` +
-      " This operation cannot be undone."
-  projectToDelete.value = c
-  confirmOpen.value = true
-}
-
-function cancelDeleteProject() {
-  projectToDelete.value = {}
+async function confirmDeleteProject(c) {
+  const ok = await confirm({
+    title: `Delete Project ${c.name}?`,
+    message: `Are you sure you want to delete all files related to project ${c.name}?` +
+        " This operation cannot be undone.",
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    variant: "danger",
+  })
+  if (ok) {
+    projectToDelete.value = c
+    await deleteProject()
+  }
 }
 
 async function deleteProject() {
@@ -252,7 +262,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
           class="flex items-center gap-1 justify-center text-nowrap text-white bg-blue-500 hover:bg-blue-700 rounded-md disabled:opacity-50 px-2 py-2 cursor-pointer"
           type="button"
           :disabled="settingStore.creatingProjectFolder || settingStore.executionInProgress"
-          @click="showMakeProjectPrompt=true">
+          @click="confirmMakeProject">
         <i v-if="settingStore.creatingProjectFolder" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
         <i v-else class="fa-solid fa-square-plus"></i>
         <span>New project</span>
@@ -298,7 +308,7 @@ async function postMakeWorkFolder(pathKey, projectName) {
               <button
                   class="px-1 py-1 text-white rounded border border-b-0 border-gray-400 bg-red-500 hover:bg-red-700"
                   :title="`Delete ${c.name}`"
-                  @click="askDeleteProject(c)">
+                  @click="confirmDeleteProject(c)">
                 <i class="fa-regular fa-trash-can"></i>
               </button>
             </div>
@@ -312,22 +322,12 @@ async function postMakeWorkFolder(pathKey, projectName) {
     <Spinner message="Loading..." class="col-span-1 md:col-span-3" />
   </div>
 
-  <ConfirmPrompt
-    v-model="confirmOpen"
-    :title="deletePromptTitle"
-    :message="deletePromptMessage"
-    :confirmText="'Delete'"
-    :cancelText="'Cancel'"
-    @confirm="deleteProject"
-    @cancel="cancelDeleteProject"
-  />
-
   <AskNamePrompt
       :visible="showMakeProjectPrompt"
       title="Create SiteOpt Project"
       message="Project name"
       placeholderText="Enter project name…"
-      @confirm="confirmMakeProject"
+      @confirm="makeProject"
       @cancel="cancelMakeProject"
   />
 </template>

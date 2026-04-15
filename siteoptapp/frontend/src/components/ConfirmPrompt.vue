@@ -1,29 +1,61 @@
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch, computed } from "vue"
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true }, // v-model for open/closed
-  title: { type: String, default: 'Remove item?' },
-  message: { type: String, default: 'This action cannot be undone.' },
-  confirmText: { type: String, default: 'Remove' },
-  cancelText: { type: String, default: 'Cancel' },
+  title: { type: String, default: "Do action?" },
+  message: { type: String, default: "This action cannot be undone." },
+  confirmText: { type: String, default: "Yes" },
+  cancelText: { type: String, default: "Cancel" },
   closeOnBackdrop: { type: Boolean, default: true },
-  // optional: pass an element to return focus to after closing
   returnFocusEl: { type: Object, default: null },
+  variant: {
+    type: String,
+    default: "danger",
+  }
 })
 
-const emit = defineEmits(['update:modelValue', 'confirm', 'cancel'])
+const emit = defineEmits(["update:modelValue", "confirm", "cancel"])
 
 const panelRef = ref(null)
+const variantMap = {
+  danger: {
+    icon: "fa-circle-exclamation",
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    confirmBtn: "bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+  },
+  warning: {
+    icon: "fa-triangle-exclamation",
+    iconBg: "bg-yellow-100",
+    iconColor: "text-yellow-600",
+    confirmBtn: "bg-yellow-500 hover:bg-yellow-600 focus-visible:ring-yellow-400"
+  },
+  info: {
+    icon: "fa-circle-info",
+    iconBg: "bg-blue-100",
+    iconColor: "text-blue-600",
+    confirmBtn: "bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-500"
+  },
+  neutral: {
+    icon: "fa-circle-question",
+    iconBg: "bg-gray-100",
+    iconColor: "text-gray-600",
+    confirmBtn: "bg-gray-700 hover:bg-gray-800 focus-visible:ring-gray-500"
+  }
+}
 
-const close = () => emit('update:modelValue', false)
+const styles = computed(() => variantMap[props.variant] ?? variantMap.danger)
+
+
+const close = () => emit("update:modelValue", false)
 const onCancel = () => {
-  emit('cancel')
+  emit("cancel")
   close()
   restoreFocus()
 }
 const onConfirm = () => {
-  emit('confirm')
+  emit("confirm")
   close()
   restoreFocus()
 }
@@ -35,7 +67,7 @@ const saveFocus = () => {
 }
 const restoreFocus = () => {
   const el = props.returnFocusEl || lastActive
-  if (el && typeof el.focus === 'function') {
+  if (el && typeof el.focus === "function") {
     el.focus()
   }
 }
@@ -48,12 +80,12 @@ watch(
       saveFocus()
       // next tick-ish focus
       setTimeout(() => {
-        const firstBtn = panelRef.value?.querySelector('button')
+        const firstBtn = panelRef.value?.querySelector("button")
         firstBtn?.focus?.()
       }, 0)
-      document.body.style.overflow = 'hidden'
+      document.body.style.overflow = "hidden"
     } else {
-      document.body.style.overflow = ''
+      document.body.style.overflow = ""
     }
   }
 )
@@ -63,7 +95,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  document.body.style.overflow = ''
+  document.body.style.overflow = ""
 })
 </script>
 
@@ -86,9 +118,12 @@ onUnmounted(() => {
 
         <!-- Header -->
         <div class="flex items-start gap-3 p-5">
-          <!-- Warning icon -->
-          <div class="mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
-            <i class="fa-solid fa-circle-exclamation text-xl"></i>
+          <!-- icon -->
+          <div
+              class="mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"
+              :class="[styles.iconBg, styles.iconColor]"
+          >
+            <i class="fa-solid text-xl" :class="styles.icon"></i>
           </div>
           <div class="flex-1">
             <h3 class="text-base font-semibold text-gray-900">
@@ -117,7 +152,9 @@ onUnmounted(() => {
           </button>
           <button
               type="button"
-              class="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              class="inline-flex items-center justify-center rounded-md px-4 py-2
+                text-sm font-semibold text-white focus:outline-none focus-visible:ring-2"
+              :class="styles.confirmBtn"
               @click="onConfirm">
             {{ confirmText }}
           </button>

@@ -1,12 +1,16 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import { useSettingStore } from "@/stores/settingstore.js";
 import Notification from "@/components/Notification.vue";
 import ProjectsToolbar from "@/components/ProjectsToolbar.vue";
 import DataEditorPanel from "@/components/DataEditorPanel.vue";
 import ExecutionPanel from "@/components/ExecutionPanel.vue";
 import ResultsPanel from "@/components/ResultsPanel.vue";
 import BackendConnectionStatusPanel from "@/components/BackendConnectionStatusPanel.vue";
+import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
+import { useSettingStore } from "@/stores/settingstore.js";
+import { useTableDataStore } from "@/stores/filedatastore.js";
+import { useNotificationStore } from "@/stores/notificationstore.js";
+import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 import {
   checkBackendReady,
   fetchSettings,
@@ -15,9 +19,16 @@ import {
   fetchScenarios,
 } from "@/utils/functions.js";
 
-
 const settingStore = useSettingStore()
+const dataStore = useTableDataStore()
+const notify = useNotificationStore()
 const activeTab = ref("projects")
+const {
+    isOpen,
+    options,
+    onConfirm,
+    onCancel,
+} = useConfirmPrompt()
 
 onMounted(async () => {
   const ready = await checkBackendReady()
@@ -34,6 +45,11 @@ onMounted(async () => {
     }
   }
 })
+
+async function setResultsTabActive() {
+  await dataStore.askSaveChanges(notify)
+  activeTab.value = 'results'
+}
 </script>
 
 <template>
@@ -59,7 +75,7 @@ onMounted(async () => {
               type="button"
               class="px-4 py-2 rounded-t font-medium transition-colors"
               :class="activeTab === 'results' ? 'bg-white text-blue-600 border border-b-0 border-gray-300 -mb-px' : 'text-gray-600 hover:bg-white/70 cursor-pointer'"
-              @click="activeTab = 'results'"
+              @click="setResultsTabActive"
             >
               Results
             </button>
@@ -99,4 +115,16 @@ onMounted(async () => {
     </template>
 
   </section>
+
+  <ConfirmPrompt
+    v-model="isOpen"
+    :title="options.title"
+    :message="options.message"
+    :confirmText="options.confirmText"
+    :cancelText="options.cancelText"
+    :returnFocusEl="options.returnFocusEl"
+    :variant="options.variant"
+    @confirm="onConfirm"
+    @cancel="onCancel"
+  />
 </template>

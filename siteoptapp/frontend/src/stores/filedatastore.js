@@ -1,10 +1,10 @@
 import { ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia'
 import { useSheetStore } from "@/stores/sheetStore.js";
+import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 import { postData } from "@/utils/functions.js";
 
 export const useTableDataStore = defineStore('tableData', () => {
-
   const daata = ref({});
   const fname = ref("");
   const fpath = ref("");
@@ -19,6 +19,7 @@ export const useTableDataStore = defineStore('tableData', () => {
   const jsonEditText = ref("");
   // editor capability (NOT persisted data)
   const gridApi = shallowRef(null);
+  const { confirm } = useConfirmPrompt()
 
   function addData(name, path, data) {
     fname.value = name;
@@ -166,6 +167,23 @@ export const useTableDataStore = defineStore('tableData', () => {
     }
   }
 
+  /* Opens a 'Save changes' prompt if the current file has unsaved changes. */
+  async function askSaveChanges(notify) {
+    if (globalDirty.value) {
+      const ok = await confirm({
+        title: "Save changes?",
+        message: `File ${fname.value} has unsaved changes. ` +
+            `Would you like to save or discard the changes?`,
+        confirmText: "Save",
+        cancelText: "Discard",
+        variant: "info",
+      })
+      if (ok) {
+        await saveCurrentFile({ notify })
+      }
+    }
+  }
+
   return {
     daata,
     fname,
@@ -189,5 +207,6 @@ export const useTableDataStore = defineStore('tableData', () => {
     saveCurrentFile,
     registerGridApi,
     unregisterGridApi,
+    askSaveChanges,
   }
 })
