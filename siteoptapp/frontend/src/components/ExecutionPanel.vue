@@ -98,16 +98,12 @@ function newScenarioNameIsValid(name) {
   return true
 }
 
-async function confirmAddScenario(n) {
+async function confirmAddScenario(data) {
   showAddScenarioPrompt.value = false
-  let name = n.name.trim()
-  if (name === "") {
-    return  // Clicked Ok with no name given
-  }
+  let name = data.name.trim()
   if (!newScenarioNameIsValid(name)) {
     return false
   }
-  console.log(`Adding scenario '${name}'`)
   scenarioStore.loadingScenarios = true
   const configs = {scenario_name: name, work_folder: settingStore.activeProjectPath}
   const response = await postData("add_scenario", configs, notify)

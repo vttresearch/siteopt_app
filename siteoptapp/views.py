@@ -21,7 +21,8 @@ from django.core.cache import cache
 IN_CONTAINER = os.environ.get("RUNNING_IN_CONTAINER", False)
 WORK_DIR = "work_container" if IN_CONTAINER else "work"
 CONFIG_FILE = "config.json"
-INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data").resolve()
+DOKKEN_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data" / "dokken").resolve()
+DOKKEN_LIGHT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_data" / "dokken_light").resolve()
 EXAMPLE_INPUT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox" / "example_data").resolve()
 PROJECT_DATA_DIR = (Path(settings.BASE_DIR) / "siteopt_toolbox").resolve()
 SERVER_CONFIG_PATH = Path(os.environ.get("SPINE_SERVER_CONFIG", Path(settings.BASE_DIR) / "server_config.txt")).resolve()
@@ -33,8 +34,12 @@ OUTPUT_DB_SQLITE_FILE = Path(".spinetoolbox", "items", "output_db", "output db.s
 _MOD_SCRIPT_NAME = "mod_script.py"
 
 
-def get_input_data_path() -> str:
-    return str(INPUT_DATA_DIR)
+def get_dokken_data_path() -> str:
+    return str(DOKKEN_DATA_DIR)
+
+
+def get_dokken_light_data_path() -> str:
+    return str(DOKKEN_LIGHT_DATA_DIR)
 
 
 def get_example_input_data_path() -> str:
@@ -308,12 +313,18 @@ def post(request, action):
     js = json.loads(request.body.decode("utf-8"))  # dict
     data = js["data"]
     if action == "make_work_folder":
-        if "work_folder_with_example_data" in data.keys():
-            print(f"[{client_id}] creating SiteOpt project with example data")
-            json_response = make_work_folder(client_id, data["work_folder_with_example_data"], use_example_data=True)
+        if "dokken" in data.keys():
+            print(f"[{client_id}] creating Dokken project")
+            json_response = make_work_folder(client_id, "dokken", data["dokken"])
+        elif "dokken_light" in data.keys():
+            print(f"[{client_id}] creating Dokken Light project")
+            json_response = make_work_folder(client_id, "dokken_light", data["dokken_light"])
+        elif "example" in data.keys():
+            print(f"[{client_id}] creating example model project")
+            json_response = make_work_folder(client_id, "example", data["example"])
         else:
-            print(f"[{client_id}] creating SiteOpt project")
-            json_response = make_work_folder(client_id, data["work_folder"])
+            print(f"[{client_id}] Creating project failed. Unknown project type. keys: {data.keys()}")
+            json_response = {"success": False, "error": "Creating project failed"}
         return JsonResponse(json_response)
     elif action == "fetch_data":
         print(f"[{client_id}] fetching {data['full_path']}")
@@ -520,20 +531,24 @@ def validate_project_path(p):
     return {"success": False, "error": "Path does not contain a Spine Toolbox project."}
 
 
-def make_work_folder(client_id, work_folder_name, use_example_data=False):
+def make_work_folder(client_id, project_type, project_name):
     configs = get_client_config(client_id) or {}
     config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
-    if use_example_data:
+    if project_type == "dokken":
+        idp = get_dokken_data_path()
+    elif project_type == "dokken_light":
+        idp = get_dokken_light_data_path()
+    elif project_type == "example":
         idp = get_example_input_data_path()
     else:
-        idp = get_input_data_path()
+        return {"success": False, "error": "project type failure"}
     pdp = get_project_data_path()
     if not validate_input_data_path(idp)["success"]:
         return {"success": False, "error": f"Bundled input data is invalid: '{idp}'"}
     if not validate_project_path(pdp)["success"]:
         return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
     client_root = Path(get_client_work_root(client_id))
-    work_dir = (client_root / work_folder_name).resolve()
+    work_dir = (client_root / project_name).resolve()
     print(f"Creating project to {work_dir}")
     try:
         make_dir(str(work_dir))
@@ -543,8 +558,8 @@ def make_work_folder(client_id, work_folder_name, use_example_data=False):
     except OSError as e:
         return {"success": False, "error": f"[OSError] [{e}] Creating work dir failed"}
     work_folders = configs["work_folders"]
-    if work_folder_name not in work_folders:
-        work_folders[work_folder_name] = str(work_dir)
+    if project_name not in work_folders:
+        work_folders[project_name] = str(work_dir)
     edit_config_file(config_fpath, {"work_folders": work_folders})
     return {"success": True, "data": {}}
 
@@ -690,7 +705,7 @@ def make_config_file(p):
     Args:
         p (str): Full path to config file
     """
-    d = {"input_data_path": get_input_data_path(),
+    d = {"input_data_path": get_dokken_data_path(),
          "project_data_path": get_project_data_path(),
          "work_folders": {}}
     with open(p, "w") as fp:
