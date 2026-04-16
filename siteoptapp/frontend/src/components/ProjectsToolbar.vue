@@ -7,7 +7,7 @@ import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useTaskStore } from "@/stores/taskstore.js";
 import { fetchSettings, postData, fetchInputFiles, fetchScenarios } from "@/utils/functions.js";
-import AskNamePrompt from "@/components/AskNamePrompt.vue";
+import AskProjectNamePrompt from "@/components/AskProjectNamePrompt.vue";
 import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 
 const settingStore = useSettingStore()
@@ -82,17 +82,24 @@ async function confirmMakeProject() {
   showMakeProjectPrompt.value=true
 }
 
-async function makeProject(n) {
+async function makeProject(data) {
   showMakeProjectPrompt.value = false
   restoreOpen.value = false
-  let name = n.name.trim()
+  let name = data.name.trim()
   if (!await validateWorkFolderName(name)) return
   settingStore.creatingProjectFolder = true
-  if (n.exampleData) {
-    await postMakeWorkFolder("work_folder_with_example_data", name)
+  if (data.projectType === "dokken") {
+    await postMakeWorkFolder("dokken", name)
+  }
+  else if (data.projectType === "dokken_light") {
+    await postMakeWorkFolder("dokken_light", name)
+  }
+  else if (data.projectType === "example") {
+    await postMakeWorkFolder("example", name)
   }
   else {
-    await postMakeWorkFolder("work_folder", name)
+    notify.show(`Unknown project type ${data.projectType}`, 5000, "info")
+    return
   }
   // Activate the last tab
   taskStore.clearAll()
@@ -211,8 +218,8 @@ async function openRestoreMenu() {
   }
 }
 
-async function postMakeWorkFolder(pathKey, projectName) {
-  const response = await postData("make_work_folder", {[pathKey]: projectName}, notify)
+async function postMakeWorkFolder(projectType, projectName) {
+  const response = await postData("make_work_folder", {[projectType]: projectName}, notify)
   if (!response.success) {
     settingStore.creatingProjectFolder = false
     return
@@ -322,9 +329,9 @@ async function postMakeWorkFolder(pathKey, projectName) {
     <Spinner message="Loading..." class="col-span-1 md:col-span-3" />
   </div>
 
-  <AskNamePrompt
+  <AskProjectNamePrompt
       :visible="showMakeProjectPrompt"
-      title="Create SiteOpt Project"
+      title="Create Project"
       message="Project name"
       placeholderText="Enter project name…"
       @confirm="makeProject"

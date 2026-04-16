@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, nextTick } from "vue";
+import BaseButton from "@/components/ui/BaseButton.vue";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -11,7 +12,9 @@ const props = defineProps({
 const emit = defineEmits(["confirm", "cancel"]);
 
 const name = ref("");
+// const useExampleData = ref(false)
 const inputEl = ref(null);
+const projectType = ref("")
 
 // Reset and autofocus when opened
 watch(
@@ -30,11 +33,14 @@ function confirm() {
   // Return trimmed value; empty string is allowed if user confirms with nothing
   emit("confirm", {
     name: name.value.trim(),
+    projectType: projectType.value,
   });
+  projectType.value = ""  // Reset to default
 }
 
 function cancel() {
   emit("cancel", null);
+  projectType.value = ""  // Reset to default
 }
 </script>
 
@@ -70,11 +76,38 @@ function cancel() {
         />
       </label>
 
+      <label class="mt-4 block text-sm text-zinc-600 dark:text-zinc-300">
+        Project type
+      </label>
+
+      <div class="flex flex-wrap justify-start items-center gap-4 pt-2">
+        <BaseButton
+            variant="secondary"
+            @click="projectType='dokken'"
+            :class="projectType === 'dokken' && 'ring-2 ring-blue-500'"
+        >
+          Dokken
+        </BaseButton>
+        <BaseButton
+            variant="secondary"
+            @click="projectType='dokken_light'"
+            :class="projectType === 'dokken_light' && 'ring-2 ring-blue-500'"
+        >
+          Dokken Light
+        </BaseButton>
+        <BaseButton
+            variant="secondary"
+            @click="projectType='example'"
+            :class="projectType === 'example' && 'ring-2 ring-blue-500'"
+        >
+          Example Model
+        </BaseButton>
+      </div>
       <div class="mt-5 flex items-center justify-end gap-2">
         <button
           type="button"
           class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-30"
-          :disabled="name.trim() === ''"
+          :disabled="name.trim() === '' || projectType === ''"
           @click="confirm"
         >
           Ok
