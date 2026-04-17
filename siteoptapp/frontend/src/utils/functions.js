@@ -3,6 +3,7 @@ import { useSettingStore } from "@/stores/settingstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useResultStore } from "@/stores/resultstore.js";
 import { useScenarioStore } from "@/stores/scenariostore.js";
+import { useMetadataStore } from "@/stores/metadatastore.js";
 import { API_BASE } from "@/config.js";
 
 
@@ -215,6 +216,64 @@ export async function fetchScenarios(projectPath) {
   scenarioStore.scenarios = response.data.scenarios || []
   scenarioStore.loadingScenarios = false
   return true
+}
+
+
+/**
+ * Fetches metadata from the given project path.
+ *
+ * @param {string} projectPath - Full project path.
+ * @param cacheOnly
+ *
+ */
+export async function fetchMetadata(projectPath, { cacheOnly = false } = {}) {
+  const metadataStore = useMetadataStore()
+  const notify = useNotificationStore()
+  metadataStore.loadingMetadata = true
+  const response = await postData(
+    'fetch_metadata',
+    { path: projectPath },
+    notify
+  )
+  metadataStore.loadingMetadata = false
+  if (!response.success) {
+    console.error(`fetching metadata for project ${projectPath} failed`)
+    return false
+  }
+  // normalize empty object → null
+  const metadata = response.data && Object.keys(response.data).length ? response.data : null
+  // only cache real metadata
+  if (metadata) {
+    metadataStore.cacheMetadata(metadata)
+  }
+  if (!cacheOnly) {
+    metadataStore.setMetadata(metadata)
+  }
+  return true
+}
+
+
+/**
+ * Fetches metadata for all projects in tabs.
+ *
+ * @param {Array} paths - Project paths.
+ *
+ */
+export async function fetchMetadataBulk(paths) {
+  const metadataStore = useMetadataStore()
+  const notify = useNotificationStore()
+  metadataStore.loadingMetadata = true
+  try {
+    const res = await postData("fetch_metadata_bulk", { paths }, notify)
+    if (!res.success) return
+    for (const metadata of Object.values(res.data)) {
+      if (metadata) {
+        metadataStore.cacheMetadata(metadata)
+      }
+    }
+  } finally {
+    metadataStore.loadingMetadata = false
+  }
 }
 
 

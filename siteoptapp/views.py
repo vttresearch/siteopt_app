@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 import json
@@ -6,6 +7,7 @@ import shutil
 import uuid
 import subprocess
 import time
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import openpyxl
@@ -32,6 +34,7 @@ PYTHON_EXECUTABLE = sys.executable
 INPUT_DATA_SQLITE_FILE = Path(".spinetoolbox", "items", "input_data", "elexia_input.sqlite")
 OUTPUT_DB_SQLITE_FILE = Path(".spinetoolbox", "items", "output_db", "output db.sqlite")
 _MOD_SCRIPT_NAME = "mod_script.py"
+METADATA_FILENAME = "meta.txt"
 
 
 def get_dokken_data_path() -> str:
@@ -279,6 +282,36 @@ def delete_project(client_id, path):
     return JsonResponse({"success": True, "data": {}})
 
 
+def read_metadata(path):
+    mp = os.path.join(path, METADATA_FILENAME)
+    if not os.path.isfile(mp):
+        return {}
+    try:
+        with open(mp, "r") as f:
+            try:
+                d = json.load(f)
+            except json.JSONDecodeError as jde:
+                print(f"[JSONDecodeError] reading file: {mp}: {jde}")
+                return {}
+    except OSError as e:
+        print(f"[OSError] reading file: {mp}: {e}")
+        return {}
+    return d
+
+
+def fetch_metadata(client_id, path):
+    d = read_metadata(path)
+    return JsonResponse({"success": True, "data": d})
+
+
+def fetch_metadata_bulk(client_id, paths):
+    d = dict()
+    for path in paths:
+        d[path] = read_metadata(path)
+    print(f"d:{d}")
+    return JsonResponse({"success": True, "data": d})
+
+
 @csrf_protect
 def upload_and_replace(request):
     """Receives a file uploaded from the browser and replaces the current file."""
@@ -313,19 +346,8 @@ def post(request, action):
     js = json.loads(request.body.decode("utf-8"))  # dict
     data = js["data"]
     if action == "make_work_folder":
-        if "dokken" in data.keys():
-            print(f"[{client_id}] creating Dokken project")
-            json_response = make_work_folder(client_id, "dokken", data["dokken"])
-        elif "dokken_light" in data.keys():
-            print(f"[{client_id}] creating Dokken Light project")
-            json_response = make_work_folder(client_id, "dokken_light", data["dokken_light"])
-        elif "example" in data.keys():
-            print(f"[{client_id}] creating example model project")
-            json_response = make_work_folder(client_id, "example", data["example"])
-        else:
-            print(f"[{client_id}] Creating project failed. Unknown project type. keys: {data.keys()}")
-            json_response = {"success": False, "error": "Creating project failed"}
-        return JsonResponse(json_response)
+        response = make_work_folder(client_id, data)
+        return JsonResponse(response)
     elif action == "fetch_data":
         print(f"[{client_id}] fetching {data['full_path']}")
         response = fetch_data(data["full_path"])
@@ -376,6 +398,14 @@ def post(request, action):
     elif action == "purge_output_db":
         print(f"Purging output db for project {data['path']}")
         response = purge_output_db(client_id, data["path"])
+        return response
+    elif action == "fetch_metadata":
+        print(f"Fetching metadata for project {data['path']}")
+        response = fetch_metadata(client_id, data["path"])
+        return response
+    elif action == "fetch_metadata_bulk":
+        print(f"Fetching all metadata: {data['paths']}")
+        response = fetch_metadata_bulk(client_id, data["paths"])
         return response
     else:
         print(f"Unknown action: {action}")
@@ -531,17 +561,28 @@ def validate_project_path(p):
     return {"success": False, "error": "Path does not contain a Spine Toolbox project."}
 
 
-def make_work_folder(client_id, project_type, project_name):
+def make_work_folder(client_id, project_data):
     configs = get_client_config(client_id) or {}
     config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
-    if project_type == "dokken":
+    # Get input data path based on project type
+    if "dokken" in project_data.keys():
+        project_type = "dokken"
+        print(f"[{client_id}] creating Dokken project")
         idp = get_dokken_data_path()
-    elif project_type == "dokken_light":
+        project_name = project_data["dokken"]
+    elif "dokken_light" in project_data.keys():
+        project_type = "dokken_light"
+        print(f"[{client_id}] creating Dokken Light project")
         idp = get_dokken_light_data_path()
-    elif project_type == "example":
+        project_name = project_data["dokken_light"]
+    elif "example" in project_data.keys():
+        project_type = "example"
+        print(f"[{client_id}] creating Example model project")
         idp = get_example_input_data_path()
+        project_name = project_data["example"]
     else:
-        return {"success": False, "error": "project type failure"}
+        print(f"[{client_id}] Creating project failed. Unknown project type. keys: {project_data.keys()}")
+        return {"success": False, "error": "Creating project failed"}
     pdp = get_project_data_path()
     if not validate_input_data_path(idp)["success"]:
         return {"success": False, "error": f"Bundled input data is invalid: '{idp}'"}
@@ -549,7 +590,9 @@ def make_work_folder(client_id, project_type, project_name):
         return {"success": False, "error": f"Bundled project data is invalid: '{pdp}'"}
     client_root = Path(get_client_work_root(client_id))
     work_dir = (client_root / project_name).resolve()
-    print(f"Creating project to {work_dir}")
+    meta = make_metadata(project_name, project_type, str(work_dir))
+
+    print(f"Creating project {work_dir}")
     try:
         make_dir(str(work_dir))
         ignored = (".git", ".idea", ".venv", ".gitignore", ".gitkeep", "*.md", "*.png", "*.yaml", "*.yml", "*.css", ".github", "docs")
@@ -560,15 +603,45 @@ def make_work_folder(client_id, project_type, project_name):
     work_folders = configs["work_folders"]
     if project_name not in work_folders:
         work_folders[project_name] = str(work_dir)
+    # Write metadata file to project dir
+    meta_path = os.path.join(str(work_dir), METADATA_FILENAME)
+    try:
+        with open(meta_path, "w") as f:
+            json.dump(meta, f)
+    except OSError as e:
+        print(f"[OSError] writing file {meta_path}: {e}")
     edit_config_file(config_fpath, {"work_folders": work_folders})
     return {"success": True, "data": {}}
+
+
+def make_metadata(project_name, project_type, project_path):
+    """Returns some metadata for new projects."""
+    meta = dict()
+    meta["name"] = project_name
+    meta["model"] = project_type
+    meta["path"] = project_path
+    # Get current submodule commit SHA's
+    # git rev-parse HEAD:./siteopt_data
+    siteopt_toolbox_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD:./siteopt_toolbox"],
+        capture_output=True,
+        text=True).stdout
+    siteopt_data_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD:./siteopt_data"],
+        capture_output=True,
+        text=True).stdout
+    meta["siteopt_toolbox"] = siteopt_toolbox_commit.strip()
+    meta["siteopt_data"] = siteopt_data_commit.strip()
+    d = datetime.datetime.now()
+    date_str = f"{d.day}.{d.month}.{d.year}:{d.hour}.{d.minute}"
+    meta["created"] = date_str
+    return meta
 
 
 def fetch_current_input_folder(request, folder_name):
     """Returns the files under current_input folder of a given folder (project) name.
     The returned list format is such that it can be used directly in a frontend Toolbar template.
     """
-    print(f"Returning current_input of {folder_name}")
     client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     config_d = get_client_config(client_id)
     work_folders_dict = config_d.get("work_folders", {})

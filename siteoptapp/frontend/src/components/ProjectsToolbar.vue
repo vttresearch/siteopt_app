@@ -1,12 +1,13 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import BaseButton from "@/components/ui/BaseButton.vue";
 import Spinner from "@/components/Spinner.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useTaskStore } from "@/stores/taskstore.js";
-import { fetchSettings, postData, fetchInputFiles, fetchScenarios } from "@/utils/functions.js";
+import { useMetadataStore } from "@/stores/metadatastore.js";
+import { fetchSettings, postData, fetchInputFiles, fetchScenarios, fetchMetadataBulk } from "@/utils/functions.js";
 import AskProjectNamePrompt from "@/components/AskProjectNamePrompt.vue";
 import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 
@@ -14,6 +15,7 @@ const settingStore = useSettingStore()
 const notify = useNotificationStore()
 const dataStore = useTableDataStore()
 const taskStore = useTaskStore()
+const metadataStore = useMetadataStore()
 const restoreOpen = ref(false)
 const restoring = ref(false)
 const restoreCandidates = ref(null)
@@ -32,7 +34,11 @@ function projectTabTitle(itemName) {
     return "Disabled until execution has finished"
   }
   if (itemName === settingStore.activeProjectName) {
-    return ""
+    const md = metadataStore.metadataByName[itemName]
+    if (md) {
+      // console.log(metadataStore.metadataByName[itemName])
+      return "model: " + md.model + "\nsiteopt_toolbox: " + md.siteopt_toolbox + "\nsiteopt_data: " + md.siteopt_data
+    }
   }
   return `Switch to project ${itemName}`
 }
@@ -104,6 +110,7 @@ async function makeProject(data) {
   // Activate the last tab
   taskStore.clearAll()
   settingStore.setActiveProject(settingStore.workFolders.length -1)
+  await fetchMetadataBulk(settingStore.workFolders.map(project => project.path))
 }
 
 function cancelMakeProject() {
@@ -132,6 +139,7 @@ async function removeProjectFromTabs(name) {
   restoreOpen.value = false  // Close recent projects list if open
   let changeActiveProject = settingStore.activeProjectName === name
   if (changeActiveProject) await dataStore.askSaveChanges(notify)
+  await fetchMetadataBulk(settingStore.workFolders.map(project => project.path))
   const response = await postData("remove_work_folder", {"folder_name": name}, notify)
   if (response.success) {
     await fetchSettings()
@@ -233,6 +241,41 @@ async function postMakeWorkFolder(projectType, projectName) {
   await fetchScenarios(settingStore.activeProjectPath)
   notify.show(`New project ${projectName} created`, 2000, "info")
 }
+
+/* Shows icons only for the project this metadata belongs to */
+const projectTypeIcon = (projectName) => {
+  const metadata = metadataStore.metadataByName[projectName]
+  if (!metadata?.model) return null
+  switch (metadata.model) {
+    case 'dokken':
+      return 'fa-brands fa-square-deskpro'
+    case 'dokken_light':
+      return 'fa-solid fa-dharmachakra'
+    case 'example':
+      return 'fa-solid fa-dumpster-fire'
+    default:
+      return null
+  }
+}
+function copyMetadataToClipboard(itemName) {
+  if (itemName === settingStore.activeProjectName) {
+    const md = metadataStore.metadataByName[itemName]
+    if (md) {
+      const result = Object.entries(md).map(([key, value]) => `${key}: ${value}`).join('\n')
+      console.log(result)
+      copyToClipboard(result)
+      notify.show(`${itemName} metadata copied to clipboard`, 5000, "info")
+    }
+  }
+}
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+
+  } catch (err) {
+    console.error('Failed to copy', err)
+  }
+}
 </script>
 
 <template>
@@ -247,7 +290,11 @@ async function postMakeWorkFolder(projectType, projectName) {
             class="px-4 py-2 rounded-t-md font-medium transition-colors"
             :class="item.name === settingStore.activeProjectName ? 'bg-white text-blue-600 border border-b-0 border-gray-300 -mb-px' : checkIfDisabled(item.name) ? 'bg-gray-200 text-gray-400': 'text-gray-600 hover:bg-white/70 cursor-pointer'"
             :title="projectTabTitle(item.name)"
-            @click="switchProject(i)">
+            @click="switchProject(i)"
+            @contextmenu.prevent="copyMetadataToClipboard(item.name)">
+          <span v-if="projectTypeIcon(item.name)" class="pr-2">
+            <i :class="projectTypeIcon(item.name)"></i>
+          </span>
           {{ item.name }}
           <span
               class="cursor-pointer rounded-md ml-3 p-1"
