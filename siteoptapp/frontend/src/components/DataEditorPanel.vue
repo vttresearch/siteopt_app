@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, nextTick, onUnmounted } from "vue";
+import { ref, watch, computed, nextTick, onMounted, onUnmounted, reactive } from "vue";
 import { AgGridVue } from "ag-grid-vue3";
 import SelectSheetButtons from "@/components/SelectSheetButtons.vue";
 import Spinner from "@/components/Spinner.vue";
@@ -11,6 +11,18 @@ import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from '@/stores/sheetStore';
 import { uploadFile, fetchFileContents } from "@/utils/functions.js";
+import {
+  createHistoryState,
+  clearHistory,
+  normalizeRows,
+  pushHistory,
+  undoHistory,
+  redoHistory,
+  buildAddRowEdit,
+  buildDeleteSelectedRowsEdit,
+  buildClearSelectedRowsEdit,
+  buildClearFocusedCellEdit,
+} from "@/utils/dataeditorutils.js";
 
 const data_store = useTableDataStore();
 const notify = useNotificationStore();
@@ -23,6 +35,7 @@ const activeView = ref("editor"); // "editor" | "plot"
 const selectedCount = ref(0);
 const selected = ref(null);
 const selectedFileForUpload = ref(null);
+const historyState = reactive(createHistoryState());
 
 const rowSelectionOptions = {
   mode: "multiRow",
@@ -34,19 +47,12 @@ const defaultColDef = {
   editable: true,
   resizable: true,
   suppressKeyboardEvent: (params) => {
-    const key = params.event?.key
+    const key = params.event?.key?.toLowerCase?.();
 
-    // Let our custom cellKeyDown handler own Delete
-    if (key === "Delete") {
-      return true
-    }
+    if (key === "delete") return true;
+    if (key === "enter" && params.event?.ctrlKey) return true;
 
-    // Let our custom shortcut own Ctrl+Enter
-    if (key === "Enter" && params.event?.ctrlKey) {
-      return true
-    }
-
-    return false
+    return false;
   }
 }
 
@@ -54,22 +60,26 @@ const hasSelection = computed(() => selectedCount.value > 0);
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
 
 function markDirty() {
-  // .md editor does not use grid, so it's ignored here
-  const t = data_store.daata?.filetype
-  if (t === 'csv') csvDirty.value = true
-  else if (t === 'json') jsonDirty.value = true
-  else if (t === 'xlsx') markXlsxDirty();
+  const t = data_store.daata?.filetype;
+
+  if (t === "csv") data_store.csvDirty = true;
+  else if (t === "json") data_store.jsonDirty = true;
+  else if (t === "xlsx") markXlsxDirty();
+
+  data_store.globalDirty = true;
 }
+
 function markXlsxDirty() {
-  sheetStore.markDirty(sheetStore.activeSheet, true)
-  sheetStore.toggleSheetDataUpdated()
-  xlsxDirty.value = true
+  sheetStore.markDirty(sheetStore.activeSheet, true);
+  sheetStore.toggleSheetDataUpdated();
+  data_store.xlsxDirty = true;
+  data_store.globalDirty = true;
 }
 
 function clearXlsxDirty() {
-  Object.keys(sheetStore.sheetsByName).forEach((key) => sheetStore.markDirty(key, false))
-  sheetStore.toggleSheetDataUpdated()
-  xlsxDirty.value = false
+  Object.keys(sheetStore.sheetsByName).forEach((key) => sheetStore.markDirty(key, false));
+  sheetStore.toggleSheetDataUpdated();
+  data_store.xlsxDirty = false;
 }
 
 const isTimeSeriesData = computed(() => {
@@ -77,45 +87,59 @@ const isTimeSeriesData = computed(() => {
   return structure?.isTimeSeries ?? false;
 });
 
-onUnmounted(() => {
-  data_store.unregisterGridApi(data_store.gridApi)
-})
-
 function onGridReady(params) {
   data_store.registerGridApi(params.api)
 
-  // Update selection count reactively
   params.api.addEventListener('selectionChanged', () => {
     selectedCount.value = params.api.getSelectedRows().length
   })
-  // keyboard shortcuts for adding & removing rows
-  params.api.addEventListener('cellKeyDown', (e) => {
-    // Ctrl+Enter → add row
-    if (e.event?.ctrlKey && e.event?.key === 'Enter') {
-      onAddRow()
-    }
-    // Delete key → clear selected/focused cells
-    if (e.event?.key === 'Delete') {
-      if (e.api.getEditingCells?.().length) return
 
-      const cleared = clearSelectionOrFocusedCell(e.api)
+  params.api.addEventListener('cellKeyDown', (e) => {
+    const key = e.event?.key?.toLowerCase?.();
+    const ctrlOrCmd = e.event?.ctrlKey || e.event?.metaKey;
+
+    if (e.event?.ctrlKey && e.event?.key === 'Enter') {
+      onAddRow();
+      return;
+    }
+
+    if (e.event?.key === 'Delete') {
+      if (e.api.getEditingCells?.().length) return;
+
+      const cleared = clearSelectionOrFocusedCell(e.api);
       if (cleared) {
-        e.event.preventDefault()
-        e.event.stopPropagation()
+        e.event.preventDefault();
+        e.event.stopPropagation();
       }
     }
   })
 }
 
-function onCellValueChanged() {
-  markDirty()
+function onCellValueChanged(params) {
+  if (historyState.isApplying) return;
+
+  const rowId = params.data?.__id;
+  const field = params.colDef?.field;
+
+  if (!rowId || !field || field === "__id") return;
+  if (params.oldValue === params.newValue) return;
+
+  pushHistory(historyState, {
+    type: "cell-edit",
+    rowId,
+    field,
+    oldValue: params.oldValue ?? "",
+    newValue: params.newValue ?? "",
+  });
+
+  markDirty();
 }
 
 function clearRefs() {
   rowData.value = [];
   columnDefs.value = [];
   originalText.value = "";
-  // Clear these manually because data_store.clear() causes a circular watcher loop because it clears data_store.daata
+  clearHistory(historyState);
   data_store.fname = ""
   data_store.fpath = ""
   data_store.mdDirty = false;
@@ -128,63 +152,50 @@ function clearRefs() {
 
 }
 
-// --- Add row ---
-function createBlankRow(newIndex) {
-  // Build a blank object that contains all data fields from columnDefs
-  const row = {__id: String(newIndex)}
-  return row
-}
-
-// Rebuilds rowData from currently displayed rows
-function syncRowDataFromGrid() {
-  const api = data_store.gridApi
-  const count = api.getDisplayedRowCount()
-  const rows = []
-  for (let i = 0; i < count; i++) {
-    rows.push(api.getDisplayedRowAtIndex(i).data)
-  }
-  rowData.value = rows
-}
-
 /* Adds a new row */
 function onAddRow() {
   const api = data_store.gridApi
   if (!api) return
 
-  const newRow = createBlankRow(api.getDisplayedRowCount())
-  api.applyTransaction({ add: [newRow] })
-  syncRowDataFromGrid()
-  data_store.markDirty()
+  const result = buildAddRowEdit({
+    currentRows: rowData.value,
+    historyState,
+  });
+
+  rowData.value = result.rows;
+  pushHistory(historyState, result.historyEntry);
+  markDirty();
 
   nextTick(() => {
-    const lastIndex = api.getDisplayedRowCount() - 1
-    if (lastIndex < 0) return
+    const lastIndex = rowData.value.length - 1;
+    if (lastIndex < 0) return;
 
     const firstEditableField = columnDefs.value.find(
       c => c.field && c.field !== "__id" && c.editable !== false
-    )?.field
+    )?.field;
 
-    if (!firstEditableField) return
+    if (!firstEditableField) return;
 
-    api.ensureIndexVisible(lastIndex, "bottom")
-    api.setFocusedCell(lastIndex, firstEditableField)
-  })
+    api.ensureIndexVisible(lastIndex, "bottom");
+    api.setFocusedCell(lastIndex, firstEditableField);
+  });
 }
 
 /* Deletes selected rows */
 function onDeleteSelected() {
-  if (!data_store.gridApi) return
-  const selected = data_store.gridApi.getSelectedRows()
-  if (!selected?.length) return
-  // Remove from grid using a transaction
-  data_store.gridApi.applyTransaction({ remove: selected })
-  // Keep backing data in sync
-  const rows = []
-  data_store.gridApi.forEachNodeAfterFilterAndSort((node) => {
-    rows.push(node.data)
-  })
-  rowData.value = rows
-  data_store.markDirty()
+  const api = data_store.gridApi;
+  if (!api) return;
+
+  const result = buildDeleteSelectedRowsEdit({
+    api,
+    currentRows: rowData.value,
+  });
+
+  if (!result.changed) return;
+
+  rowData.value = result.rows;
+  pushHistory(historyState, result.historyEntry);
+  markDirty();
 }
 
 /* Custom data type detector for Excel data.
@@ -213,7 +224,7 @@ function updateTableWithActiveSheet() {
   const validationsByColumn = sheetObj.columns?.validationsByColumn || {}
   let rows = sheetObj.rows || []
   // Add row numbers
-  rows = rows.map((r, i) => ({ __id: String(i), ...r }))
+  rows = normalizeRows(rows, historyState);
   // Build AG Grid columns
   columnDefs.value = [
     {
@@ -257,10 +268,26 @@ function updateTableWithActiveSheet() {
   rowData.value = rows
 }
 
+function undo() {
+  undoHistory({
+    historyState,
+    rowDataRef: rowData,
+    markDirty,
+  });
+}
+
+function redo() {
+  redoHistory({
+    historyState,
+    rowDataRef: rowData,
+    markDirty,
+  });
+}
+
 function updateTableFromCsv(fileData) {
   const cols = fileData?.columns ?? [];
   let rows = fileData?.rows ?? [];
-  rows = rows.map((r, i) => ({ __id: String(i), ...r }));
+  rows = normalizeRows(rows, historyState);
   columnDefs.value = [
     {
       headerName: "#",
@@ -285,14 +312,13 @@ function updateTableFromCsv(fileData) {
 async function newSheetSelected(sheetName) {
   const api = data_store.gridApi
   const prev = sheetStore.activeSheet
-  // Save current sheet before switching
   if (prev && api) {
     sheetStore.captureFromGrid(prev, api)
   }
-  // Switch sheet
   sheetStore.setActiveSheet(sheetName)
-  // Apply sheet data from store
   updateTableWithActiveSheet()
+  clearHistory(historyState);
+
   await nextTick()
   sheetStore.toggleSheetDataUpdated()
 }
@@ -322,61 +348,39 @@ const plotRows = computed(() => {
   });
 });
 
-function getEditableFieldIds() {
-  return columnDefs.value
-    .filter(col => col.field && col.field !== "__id" && col.editable !== false)
-    .map(col => col.field)
-}
-
-function clearCellValue(rowNode, field) {
-  if (!rowNode || !field || field === "__id") return false
-
-  // Use "" for blank spreadsheet-like values in CSV/JSON editing.
-  // If you prefer AG Grid's default delete semantics, change this to null.
-  rowNode.setDataValue(field, "")
-  return true
-}
-
 function clearSelectedRows(api) {
-  const editableFields = getEditableFieldIds()
-  const selectedNodes = []
+  const result = buildClearSelectedRowsEdit({
+    api,
+    columnDefs: columnDefs.value,
+    currentRows: rowData.value,
+  });
 
-  api.forEachNodeAfterFilterAndSort((node) => {
-    if (node.isSelected?.()) selectedNodes.push(node)
-  })
+  if (!result.changed) return false;
 
-  if (!selectedNodes.length) return false
-
-  let changed = false
-
-  for (const node of selectedNodes) {
-    for (const field of editableFields) {
-      changed = clearCellValue(node, field) || changed
-    }
-  }
-
-  if (changed) markDirty()
-  return changed
+  rowData.value = result.rows;
+  pushHistory(historyState, result.historyEntry);
+  markDirty();
+  return true;
 }
 
 
 function clearFocusedCell(api) {
-  const focused = api.getFocusedCell()
-  if (!focused) return false
+  const result = buildClearFocusedCellEdit({
+    api,
+    currentRows: rowData.value,
+  });
 
-  const field = focused.column?.getColId?.()
-  if (!field || field === "__id") return false
+  if (!result.changed) return false;
 
-  const rowNode = api.getDisplayedRowAtIndex(focused.rowIndex)
-  const changed = clearCellValue(rowNode, field)
-
-  if (changed) markDirty()
-  return changed
+  rowData.value = result.rows;
+  pushHistory(historyState, result.historyEntry);
+  markDirty();
+  return true;
 }
 
 function clearSelectionOrFocusedCell(api) {
-  if (clearSelectedRows(api)) return true
-  return clearFocusedCell(api)
+  if (clearSelectedRows(api)) return true;
+  return clearFocusedCell(api);
 }
 
 /* Clears everything when selected project changes */
@@ -467,6 +471,30 @@ function handleFileSelect(event) {
   selectedFileForUpload.value = event.target.files[0];
 }
 
+function handleGlobalKeydown(e) {
+  const key = e.key?.toLowerCase?.();
+  const ctrlOrCmd = e.ctrlKey || e.metaKey;
+
+  const tag = e.target?.tagName?.toLowerCase?.();
+  const isTextInput =
+    tag === "textarea" ||
+    tag === "input" ||
+    e.target?.isContentEditable;
+
+  if (isTextInput) return;
+
+  if (ctrlOrCmd && key === "z" && !e.shiftKey) {
+    e.preventDefault();
+    undo();
+    return;
+  }
+
+  if (ctrlOrCmd && (key === "y" || (key === "z" && e.shiftKey))) {
+    e.preventDefault();
+    redo();
+  }
+}
+
 async function uploadAndReplace() {
   if (!selectedFileForUpload.value) return;
   if (!data_store.fpath) return;
@@ -487,6 +515,16 @@ async function uploadAndReplace() {
   // Reload file (same as categoryToolbar.fetchFileContents()
   await fetchFileContents(fname, fpath)
 }
+
+onMounted(() => {
+  window.addEventListener("keydown", handleGlobalKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleGlobalKeydown);
+  data_store.unregisterGridApi(data_store.gridApi);
+});
+
 </script>
 
 <template>
@@ -617,8 +655,6 @@ async function uploadAndReplace() {
               :suppressClickEdit="true"
               :enterNavigatesVertically="true"
               :enterNavigatesVerticallyAfterEdit="true"
-              :undoRedoCellEditing="true"
-              :undoRedoCellEditingLimit="100"
           />
         </div>
         <!-- Sheets -->
