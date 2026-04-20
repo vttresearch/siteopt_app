@@ -96,7 +96,6 @@ function onGridReady(params) {
 
   params.api.addEventListener('cellKeyDown', (e) => {
     const key = e.event?.key?.toLowerCase?.();
-    const ctrlOrCmd = e.event?.ctrlKey || e.event?.metaKey;
 
     if (e.event?.ctrlKey && e.event?.key === 'Enter') {
       onAddRow();
@@ -493,6 +492,17 @@ function handleGlobalKeydown(e) {
     e.preventDefault();
     redo();
   }
+
+  if (ctrlOrCmd && key === "c") {
+    e.preventDefault();
+    copyFocusedCell();
+    return;
+  }
+
+  if (ctrlOrCmd && key === "v") {
+    e.preventDefault();
+    pasteIntoFocusedCell();
+  }
 }
 
 async function uploadAndReplace() {
@@ -514,6 +524,82 @@ async function uploadAndReplace() {
   notify.show(`File ${fname} has been replaced`, 8000, "info")
   // Reload file (same as categoryToolbar.fetchFileContents()
   await fetchFileContents(fname, fpath)
+}
+
+function getFocusedEditableCell(api = data_store.gridApi) {
+  if (!api) return null;
+
+  const focused = api.getFocusedCell();
+  if (!focused) return null;
+
+  const field = focused.column?.getColId?.();
+  if (!field || field === "__id") return null;
+
+  const rowNode = api.getDisplayedRowAtIndex(focused.rowIndex);
+  const rowId = rowNode?.data?.__id;
+  if (!rowId) return null;
+
+  const rowIndex = rowData.value.findIndex((r) => r.__id === rowId);
+  if (rowIndex === -1) return null;
+
+  const colDef = columnDefs.value.find((c) => c.field === field);
+  if (colDef?.editable === false) return null;
+
+  return {
+    rowId,
+    rowIndex,
+    field,
+    value: rowData.value[rowIndex][field] ?? "",
+  };
+}
+
+async function copyFocusedCell() {
+  const cell = getFocusedEditableCell();
+  if (!cell) return false;
+
+  try {
+    await navigator.clipboard.writeText(String(cell.value ?? ""));
+    return true;
+  } catch (err) {
+    console.error("Copy failed:", err);
+    notify.show("Copy failed", 3000, "error");
+    return false;
+  }
+}
+
+async function pasteIntoFocusedCell() {
+  const cell = getFocusedEditableCell();
+  if (!cell) return false;
+
+  try {
+    const text = await navigator.clipboard.readText();
+    const oldValue = cell.value ?? "";
+    const newValue = text ?? "";
+
+    if (oldValue === newValue) return false;
+
+    const rows = [...rowData.value];
+    rows[cell.rowIndex] = {
+      ...rows[cell.rowIndex],
+      [cell.field]: newValue,
+    };
+    rowData.value = rows;
+
+    pushHistory(historyState, {
+      type: "cell-edit",
+      rowId: cell.rowId,
+      field: cell.field,
+      oldValue,
+      newValue,
+    });
+
+    markDirty();
+    return true;
+  } catch (err) {
+    console.error("Paste failed:", err);
+    notify.show("Paste failed", 3000, "error");
+    return false;
+  }
 }
 
 onMounted(() => {
