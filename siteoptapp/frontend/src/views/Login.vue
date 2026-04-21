@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from "vue"
 import { useRouter } from "vue-router"
-import { useAuthStore } from "@/stores/auth"
+import { useAuthStore } from "@/stores/authstore.js"
 import { API_BASE } from "@/config.js"
 
 const router = useRouter()

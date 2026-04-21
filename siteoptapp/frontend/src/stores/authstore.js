@@ -1,6 +1,7 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import { API_BASE } from "@/config.js";
+import { resetUserStores } from "@/stores/resetstores.js";
 
 export const useAuthStore = defineStore("auth", () => {
 
@@ -41,13 +42,15 @@ export const useAuthStore = defineStore("auth", () => {
       user.value = null
       throw new Error("Login failed")
     }
-    // CRITICAL: refresh auth state
+    resetUserStores()
+    // Refresh auth state
     await fetchUser()
   }
 
   async function logout() {
     const url = `${API_BASE}api/logout/`;
     await fetch(url, { credentials: "include" })
+    resetUserStores()
     user.value = null
     loaded.value = true
   }

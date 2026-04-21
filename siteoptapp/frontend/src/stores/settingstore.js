@@ -16,6 +16,22 @@ export const useSettingStore = defineStore('settingsData', () => {
   const backendRetryAttempts = ref(0);
   const executionInProgress = ref(false)
 
+  function reset() {
+    inputDataPath.value = null
+    projectPath.value = null
+    workFolders.value = []
+    activeProjectIndex.value = null
+    activeProjectName.value = ""
+    activeProjectPath.value = ""
+    projectIndexUpdated.value = null
+    creatingProjectFolder.value = false
+    loadingProjects.value = false
+    currentInputFiles.value = {}
+    backendAvailable.value = false
+    backendRetryAttempts.value = 0
+    executionInProgress.value = false
+  }
+
   function setSettings(settings) {
     inputDataPath.value = settings["input_data_path"];
     projectPath.value = settings["project_data_path"];
@@ -74,6 +90,7 @@ export const useSettingStore = defineStore('settingsData', () => {
     backendAvailable,
     backendRetryAttempts,
     executionInProgress,
+    reset,
     setSettings,
     setInputDataPath,
     setProjectPath,

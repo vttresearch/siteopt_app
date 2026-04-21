@@ -7,6 +7,12 @@ export const useMetadataStore = defineStore('metadataData', () => {
   const metadataByName = ref({})  // ✅ cache for all projects
   const loadingMetadata = ref(false)
 
+  function reset() {
+    metadata.value = null
+    metadataByName.value = {}
+    loadingMetadata.value = false
+  }
+
   function setMetadata(data) {
     metadata.value = data
     console.log("Metadata is now:", metadata.value)
@@ -17,5 +23,5 @@ export const useMetadataStore = defineStore('metadataData', () => {
     metadataByName.value[data.name] = data
   }
 
-  return { metadata, metadataByName, loadingMetadata, setMetadata, cacheMetadata }
+  return { metadata, metadataByName, loadingMetadata, reset, setMetadata, cacheMetadata }
 })
