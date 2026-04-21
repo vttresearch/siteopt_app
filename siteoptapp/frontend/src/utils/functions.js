@@ -345,3 +345,25 @@ function getCookie(name) {
   }
   return cookieValue;
 }
+
+
+async function getMe() {
+  const url = `${API_BASE}api/me/`;
+  const res = await fetch(url, {
+    credentials: "include",
+  })
+  if (res.ok) {
+    const data = await res.json()
+    console.log("Logged in as", data.username)
+  } else {
+    console.log("Not logged in")
+  }
+}
+
+
+async function logout() {
+  const url = `${API_BASE}api/logout/`;
+  await fetch("http://localhost:8000/api/logout/", {
+    credentials: "include",
+  })
+}

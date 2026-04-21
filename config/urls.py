@@ -22,6 +22,11 @@ from siteoptapp import views
 urlpatterns = [
     path('admin/doc/', include('django.contrib.admindocs.urls')),
     path("admin/", admin.site.urls),
+    path("api/login/", views.login_view, name="login_view"),
+    path("api/logout/", views.logout_view, name="logout_view"),
+    path("api/me/", views.me_view, name="me_view"),
+    path("api/users/", views.users, name="users"),
+    path("api/register/", views.register_user, name="register_user"),
     path("api/fetch_current_input_folder/<str:folder_name>/", views.fetch_current_input_folder, name="fetch_current_input_folder"),
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/upload/", views.upload_and_replace, name="upload_and_replace"),

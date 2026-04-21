@@ -15,9 +15,12 @@ import spinedb_api.exception
 from openpyxl.utils import range_boundaries
 from spinedb_api import DatabaseMapping, purge, helpers
 from django.http import JsonResponse, StreamingHttpResponse
-from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie, csrf_exempt
 from django.conf import settings
 from django.core.cache import cache
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 
 
 IN_CONTAINER = os.environ.get("RUNNING_IN_CONTAINER", False)
@@ -61,6 +64,54 @@ def get_client_work_root(client_id: str) -> str:
     """Root directory containing all work folders for this client.
     Must be a path that BOTH backend and spine_engine containers can access."""
     return str((WORK_ROOT / str(client_id)[0:6]).resolve())
+
+
+@csrf_exempt
+def login_view(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+    data = json.loads(request.body)
+    user = authenticate(
+        request,
+        username=data.get("username"),
+        password=data.get("password"),
+    )
+    if user is None:
+        return JsonResponse({"error": "Invalid credentials"}, status=401)
+    login(request, user)
+    return JsonResponse({"ok": True})
+
+
+def logout_view(request):
+    logout(request)
+    return JsonResponse({"ok": True})
+
+
+def me_view(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"authenticated": False}, status=401)
+    return JsonResponse({
+        "authenticated": True,
+        "username": request.user.username,
+    })
+
+
+def users(request):
+    userss = list(User.objects.values_list("username", flat=True))
+    return JsonResponse({"users": userss})
+
+
+@csrf_exempt
+def register_user(request):
+    data = json.loads(request.body)
+    username = data.get("username")
+    password = data.get("password")
+    if not username or not password:
+        return JsonResponse({"error": "Missing fields"}, status=400)
+    if User.objects.filter(username=username).exists():
+        return JsonResponse({"error": "Username already exists"}, status=400)
+    User.objects.create_user(username=username, password=password)
+    return JsonResponse({"ok": True})
 
 
 def list_results(project_path):
@@ -107,13 +158,11 @@ def health_check(request):
     return JsonResponse({"status": "ok"})
 
 
+@login_required
 def settings(request):
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    client_id = request.user.username
+    # client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     print(f"Client {client_id} retrieving settings")
-    new_client = False
-    if not client_id:
-        client_id = uuid.uuid4()
-        new_client = True
     client_config = get_client_config(client_id)
     work_root = get_client_work_root(client_id)
     active_work_folders = {}
@@ -125,9 +174,6 @@ def settings(request):
     client_config["work_folders"] = active_work_folders
     print(f"client_config work_folders:{client_config['work_folders']}")
     response = JsonResponse({"success": True, "data": {"client_id": client_id, "configs": client_config}})
-    if new_client:
-        # httponly=False makes sure that we can access it from JavaScript
-        response.set_cookie("client_id", client_id, httponly=False, samesite="Lax", max_age=31536000)  # 1 year
     return response
 
 
@@ -312,10 +358,11 @@ def fetch_metadata_bulk(client_id, paths):
     return JsonResponse({"success": True, "data": d})
 
 
+@login_required
 @csrf_protect
 def upload_and_replace(request):
     """Receives a file uploaded from the browser and replaces the current file."""
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    client_id = request.user.username
     file_data = request.FILES.get("file")
     file_path = request.POST.get("fpath")
     print(f"Replacing file :{file_path}")
@@ -335,6 +382,7 @@ def upload_and_replace(request):
     return JsonResponse({"success": True, "data": {}})
 
 
+@login_required
 @csrf_protect
 def post(request, action):
     """Handles data posted by the frontend.
@@ -342,7 +390,7 @@ def post(request, action):
     'credentials: 'include'.
     Note: @csrf_protect decorator is needed for views that modify data (POST, PUT, DELETE)
     """
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    client_id = request.user.username
     js = json.loads(request.body.decode("utf-8"))  # dict
     data = js["data"]
     if action == "make_work_folder":
@@ -638,11 +686,13 @@ def make_metadata(project_name, project_type, project_path):
     return meta
 
 
+@login_required
 def fetch_current_input_folder(request, folder_name):
     """Returns the files under current_input folder of a given folder (project) name.
     The returned list format is such that it can be used directly in a frontend Toolbar template.
     """
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    client_id = request.user.username
+    # client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     config_d = get_client_config(client_id)
     work_folders_dict = config_d.get("work_folders", {})
     p = work_folders_dict.get(folder_name)
