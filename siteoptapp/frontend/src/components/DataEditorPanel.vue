@@ -13,7 +13,6 @@ import { useSheetStore } from '@/stores/sheetStore';
 import { uploadFile, fetchFileContents } from "@/utils/functions.js";
 import {
   COLUMN_TYPES,
-  resolveColumnSchema,
 } from "@/utils/dataEditorSchema.js";
 import {
   createHistoryState,
@@ -26,6 +25,13 @@ import {
   buildDeleteSelectedRowsEdit,
   buildClearSelectedRowsEdit,
   buildClearFocusedCellEdit,
+  normalizeNumericInput,
+  isReferenceValue,
+  validateAndNormalizeCellValue,
+  resolveColumnConfig,
+  buildEditorColumnDef,
+  shouldBlockEditorKey,
+  isSelectColumnDef,
 } from "@/utils/dataeditorutils.js";
 
 const data_store = useTableDataStore();
@@ -57,14 +63,12 @@ const defaultColDef = {
 
     if (key === "delete") return true;
     if (key === "enter" && ctrlOrCmd) return true;
-    if (
-      (validationType === COLUMN_TYPES.NUMBER || validationType === COLUMN_TYPES.INTEGER) &&
-      !ctrlOrCmd &&
-      !params.event?.altKey &&
-      typeof params.event?.key === "string" &&
-      params.event.key.length === 1 &&
-      !isAllowedNumericCharacter(params.event.key, validationType)
-    ) {
+    if (shouldBlockEditorKey({
+      key: params.event?.key,
+      ctrlOrCmd,
+      altKey: params.event?.altKey,
+      validationType,
+    })) {
       notify.show(
         `${params.colDef?.headerName ?? params.colDef?.field ?? "This field"} accepts only ${validationType === COLUMN_TYPES.INTEGER ? "integer" : "numeric"} characters`,
         2500,
@@ -180,11 +184,7 @@ function onCellClicked(params) {
   const colDef = params.colDef;
   if (!colDef?.editable) return;
 
-  const isSelectColumn =
-    colDef.cellEditor === "agSelectCellEditor" ||
-    colDef.validationType === COLUMN_TYPES.SELECT;
-
-  if (!isSelectColumn) return;
+  if (!isSelectColumnDef(colDef)) return;
   if (typeof params.rowIndex !== "number") return;
 
   window.setTimeout(() => {
@@ -288,124 +288,6 @@ function onDeleteSelected() {
   markDirty();
 }
 
-/* Custom data type detector for Excel data.
-* If any row contains a string -> all cells in the column are strings.
-* Only actual numeric cells should make the column numeric; numeric-looking
-* text values such as "1" are treated as text identifiers.
-* */
-function detectColumnDataType(rows, col) {
-  let allNumeric = true
-  let sawValue = false
-  for (const row of rows) {
-    const value = row[col]
-    // Skip null or empty cells
-    if (value == null || value === "") continue
-    sawValue = true
-    // Check if numeric
-    if (typeof value === "number") continue
-    // If we reach here → value is string-like
-    allNumeric = false
-    break
-  }
-  if (!sawValue) return "text"
-  return allNumeric ? "number" : "text"
-}
-
-function isEmptyCellValue(value) {
-  return value == null || (typeof value === "string" && value.trim() === "");
-}
-
-function normalizeNumericInput(value) {
-  return String(value).trim().replace(",", ".");
-}
-
-function isReferenceValue(value) {
-  return typeof value === "string" && value.trim().toLowerCase().startsWith("ts:");
-}
-
-function isAllowedNumericCharacter(char, type) {
-  if (/^[0-9]$/.test(char)) return true;
-  if (type === COLUMN_TYPES.NUMBER && (char === "." || char === ",")) return true;
-  return false;
-}
-
-function validateAndNormalizeCellValue({ value, columnName, type, options = [] }) {
-  if (isEmptyCellValue(value)) {
-    return { valid: true, normalizedValue: "" };
-  }
-
-  if (type === COLUMN_TYPES.SELECT) {
-    const normalizedValue = String(value);
-    if (options.includes(normalizedValue)) {
-      return { valid: true, normalizedValue };
-    }
-
-    return {
-      valid: false,
-      message: `${columnName} must be one of: ${options.join(", ")}`,
-    };
-  }
-
-  if (type === COLUMN_TYPES.INTEGER) {
-    const numericValue =
-      typeof value === "number" ? value : Number(normalizeNumericInput(value));
-
-    if (Number.isInteger(numericValue)) {
-      return { valid: true, normalizedValue: numericValue };
-    }
-
-    return {
-      valid: false,
-      message: `${columnName} must be an integer`,
-    };
-  }
-
-  if (type === COLUMN_TYPES.NUMBER || type === "number") {
-    const numericValue =
-      typeof value === "number" ? value : Number(normalizeNumericInput(value));
-
-    if (Number.isFinite(numericValue)) {
-      return { valid: true, normalizedValue: numericValue };
-    }
-
-    return {
-      valid: false,
-      message: `${columnName} must be a number`,
-    };
-  }
-
-  if (type === COLUMN_TYPES.NUMBER_OR_REFERENCE) {
-    if (isReferenceValue(value)) {
-      return { valid: true, normalizedValue: String(value).trim() };
-    }
-
-    const numericValue =
-      typeof value === "number" ? value : Number(normalizeNumericInput(value));
-
-    if (Number.isFinite(numericValue)) {
-      return { valid: true, normalizedValue: numericValue };
-    }
-
-    return {
-      valid: false,
-      message: `${columnName} must be a number or ts: reference`,
-    };
-  }
-
-  if (type === COLUMN_TYPES.REFERENCE) {
-    if (isReferenceValue(value)) {
-      return { valid: true, normalizedValue: String(value).trim() };
-    }
-
-    return {
-      valid: false,
-      message: `${columnName} must start with ts:`,
-    };
-  }
-
-  return { valid: true, normalizedValue: value };
-}
-
 function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
   if (!columnDef?.field || columnDef.field === "__id") return columnDef;
 
@@ -445,87 +327,6 @@ function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
   };
 }
 
-function resolveColumnConfig({
-  columnName,
-  rows,
-  validationOptions = [],
-  fileName = data_store.fname,
-  sheetName = sheetStore.activeSheet,
-}) {
-  const schema = resolveColumnSchema({
-    fileName,
-    sheetName,
-    columnName,
-  });
-
-  const normalizedValidationOptions = Array.isArray(validationOptions)
-    ? validationOptions
-    : [];
-
-  if (schema) {
-    const resolvedOptions =
-      normalizedValidationOptions.length > 0
-        ? normalizedValidationOptions
-        : schema.options ?? [];
-
-    const resolvedType =
-      resolvedOptions.length > 0 && schema.type === COLUMN_TYPES.TEXT
-        ? COLUMN_TYPES.SELECT
-        : schema.type;
-
-    return {
-      type: resolvedType,
-      options: resolvedOptions,
-      source: "schema",
-    };
-  }
-
-  if (normalizedValidationOptions.length > 0) {
-    return {
-      type: COLUMN_TYPES.SELECT,
-      options: normalizedValidationOptions,
-      source: "excel-validation",
-    };
-  }
-
-  return {
-    type: detectColumnDataType(rows, columnName),
-    options: [],
-    source: "inferred",
-  };
-}
-
-function buildEditorColumnDef({ columnName, config }) {
-  const isSelect = config.type === COLUMN_TYPES.SELECT;
-  const isNumericLike =
-    config.type === COLUMN_TYPES.NUMBER ||
-    config.type === COLUMN_TYPES.INTEGER ||
-    config.type === COLUMN_TYPES.NUMBER_OR_REFERENCE;
-
-  const columnDef = {
-    headerName: columnName,
-    field: columnName,
-    minWidth: isSelect ? 120 : 100,
-    editable: true,
-    cellEditor: isSelect
-      ? "agSelectCellEditor"
-      : isNumericLike
-        ? "agTextCellEditor"
-        : undefined,
-    cellEditorPopup: isSelect || undefined,
-    cellEditorParams: isSelect ? { values: config.options } : undefined,
-    cellDataType: "text",
-    cellClass: isSelect ? "bg-blue-50 ag-cell-dropdown" : undefined,
-    headerClass: isSelect ? "ag-header-dropdown" : undefined,
-    headerTooltip: isSelect ? "Select from predefined values" : undefined,
-  };
-
-  return withValidatedValueSetter(columnDef, {
-    type: config.type,
-    options: config.options,
-  });
-}
-
 function updateTableWithActiveSheet() {
   const sheetObj = sheetStore.sheetsByName[sheetStore.activeSheet] || {}
   const cols = sheetObj.columns ?? []  // Columns
@@ -550,11 +351,16 @@ function updateTableWithActiveSheet() {
         columnName: col,
         rows,
         validationOptions: validationsByColumn[col],
+        fileName: data_store.fname,
+        sheetName: sheetStore.activeSheet,
       });
 
-      return buildEditorColumnDef({
+      return withValidatedValueSetter(buildEditorColumnDef({
         columnName: col,
         config,
+      }), {
+        type: config.type,
+        options: config.options,
       });
     })
   ]

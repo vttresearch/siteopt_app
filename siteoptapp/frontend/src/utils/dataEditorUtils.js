@@ -1,4 +1,8 @@
 import { nextTick } from "vue";
+import {
+  COLUMN_TYPES,
+  resolveColumnSchema,
+} from "./dataEditorSchema.js";
 
 export const MAX_HISTORY = 100;
 
@@ -341,4 +345,221 @@ export function buildAddRowEdit({ currentRows, historyState, insertIndex }) {
         index: safeIndex,
       },
     };
+}
+
+export function detectColumnDataType(rows, col) {
+  let allNumeric = true;
+  let sawValue = false;
+
+  for (const row of rows) {
+    const value = row[col];
+    if (value == null || value === "") continue;
+
+    sawValue = true;
+    if (typeof value === "number") continue;
+
+    allNumeric = false;
+    break;
+  }
+
+  if (!sawValue) return "text";
+  return allNumeric ? "number" : "text";
+}
+
+export function isEmptyCellValue(value) {
+  return value == null || (typeof value === "string" && value.trim() === "");
+}
+
+export function normalizeNumericInput(value) {
+  return String(value).trim().replace(",", ".");
+}
+
+export function isReferenceValue(value) {
+  return typeof value === "string" && value.trim().toLowerCase().startsWith("ts:");
+}
+
+export function isAllowedNumericCharacter(char, type) {
+  if (/^[0-9]$/.test(char)) return true;
+  if (type === COLUMN_TYPES.NUMBER && (char === "." || char === ",")) return true;
+  return false;
+}
+
+export function shouldBlockEditorKey({
+  key,
+  ctrlOrCmd = false,
+  altKey = false,
+  validationType,
+}) {
+  if (
+    validationType !== COLUMN_TYPES.NUMBER &&
+    validationType !== COLUMN_TYPES.INTEGER
+  ) {
+    return false;
+  }
+
+  if (ctrlOrCmd || altKey || typeof key !== "string" || key.length !== 1) {
+    return false;
+  }
+
+  return !isAllowedNumericCharacter(key, validationType);
+}
+
+export function validateAndNormalizeCellValue({ value, columnName, type, options = [] }) {
+  if (isEmptyCellValue(value)) {
+    return { valid: true, normalizedValue: "" };
+  }
+
+  if (type === COLUMN_TYPES.SELECT) {
+    const normalizedValue = String(value);
+    if (options.includes(normalizedValue)) {
+      return { valid: true, normalizedValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be one of: ${options.join(", ")}`,
+    };
+  }
+
+  if (type === COLUMN_TYPES.INTEGER) {
+    const numericValue =
+      typeof value === "number" ? value : Number(normalizeNumericInput(value));
+
+    if (Number.isInteger(numericValue)) {
+      return { valid: true, normalizedValue: numericValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be an integer`,
+    };
+  }
+
+  if (type === COLUMN_TYPES.NUMBER || type === "number") {
+    const numericValue =
+      typeof value === "number" ? value : Number(normalizeNumericInput(value));
+
+    if (Number.isFinite(numericValue)) {
+      return { valid: true, normalizedValue: numericValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be a number`,
+    };
+  }
+
+  if (type === COLUMN_TYPES.NUMBER_OR_REFERENCE) {
+    if (isReferenceValue(value)) {
+      return { valid: true, normalizedValue: String(value).trim() };
+    }
+
+    const numericValue =
+      typeof value === "number" ? value : Number(normalizeNumericInput(value));
+
+    if (Number.isFinite(numericValue)) {
+      return { valid: true, normalizedValue: numericValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be a number or ts: reference`,
+    };
+  }
+
+  if (type === COLUMN_TYPES.REFERENCE) {
+    if (isReferenceValue(value)) {
+      return { valid: true, normalizedValue: String(value).trim() };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must start with ts:`,
+    };
+  }
+
+  return { valid: true, normalizedValue: value };
+}
+
+export function resolveColumnConfig({
+  columnName,
+  rows,
+  validationOptions = [],
+  fileName,
+  sheetName,
+}) {
+  const schema = resolveColumnSchema({
+    fileName,
+    sheetName,
+    columnName,
+  });
+
+  const normalizedValidationOptions = Array.isArray(validationOptions)
+    ? validationOptions
+    : [];
+
+  if (schema) {
+    const resolvedOptions =
+      normalizedValidationOptions.length > 0
+        ? normalizedValidationOptions
+        : schema.options ?? [];
+
+    const resolvedType =
+      resolvedOptions.length > 0 && schema.type === COLUMN_TYPES.TEXT
+        ? COLUMN_TYPES.SELECT
+        : schema.type;
+
+    return {
+      type: resolvedType,
+      options: resolvedOptions,
+      source: "schema",
+    };
+  }
+
+  if (normalizedValidationOptions.length > 0) {
+    return {
+      type: COLUMN_TYPES.SELECT,
+      options: normalizedValidationOptions,
+      source: "excel-validation",
+    };
+  }
+
+  return {
+    type: detectColumnDataType(rows, columnName),
+    options: [],
+    source: "inferred",
+  };
+}
+
+export function buildEditorColumnDef({ columnName, config }) {
+  const isSelect = config.type === COLUMN_TYPES.SELECT;
+  const isNumericLike =
+    config.type === COLUMN_TYPES.NUMBER ||
+    config.type === COLUMN_TYPES.INTEGER ||
+    config.type === COLUMN_TYPES.NUMBER_OR_REFERENCE;
+
+  return {
+    headerName: columnName,
+    field: columnName,
+    minWidth: isSelect ? 120 : 100,
+    editable: true,
+    cellEditor: isSelect
+      ? "agSelectCellEditor"
+      : isNumericLike
+        ? "agTextCellEditor"
+        : undefined,
+    cellEditorPopup: isSelect || undefined,
+    cellEditorParams: isSelect ? { values: config.options } : undefined,
+    cellDataType: "text",
+    cellClass: isSelect ? "bg-blue-50 ag-cell-dropdown" : undefined,
+    headerClass: isSelect ? "ag-header-dropdown" : undefined,
+    headerTooltip: isSelect ? "Select from predefined values" : undefined,
+  };
+}
+
+export function isSelectColumnDef(colDef) {
+  return (
+    colDef?.cellEditor === "agSelectCellEditor" ||
+    colDef?.validationType === COLUMN_TYPES.SELECT
+  );
 }
