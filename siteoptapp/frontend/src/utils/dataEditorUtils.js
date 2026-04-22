@@ -320,18 +320,25 @@ export function buildDeleteSelectedRowsEdit({ api, currentRows }) {
   };
 }
 
-export function buildAddRowEdit({ currentRows, historyState }) {
-  const newRow = createBlankRow(historyState);
-  const index = currentRows.length;
-  const rows = [...currentRows, newRow];
-
-  return {
-    rows,
-    row: newRow,
-    historyEntry: {
-      type: "add-row",
-      row: { ...newRow },
-      index,
-    },
-  };
+export function buildAddRowEdit({ currentRows, historyState, insertIndex }) {
+    const newRow = createBlankRow(historyState);
+  
+    const numericInsertIndex = Number(insertIndex);
+  
+    const safeIndex = Number.isFinite(numericInsertIndex)
+      ? Math.max(0, Math.min(numericInsertIndex, currentRows.length))
+      : currentRows.length;
+  
+    const rows = [...currentRows];
+    rows.splice(safeIndex, 0, newRow);
+  
+    return {
+      rows,
+      row: newRow,
+      historyEntry: {
+        type: "add-row",
+        row: { ...newRow },
+        index: safeIndex,
+      },
+    };
 }

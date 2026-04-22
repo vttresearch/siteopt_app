@@ -48,9 +48,10 @@ const defaultColDef = {
   resizable: true,
   suppressKeyboardEvent: (params) => {
     const key = params.event?.key?.toLowerCase?.();
+    const ctrlOrCmd = params.event?.ctrlKey || params.event?.metaKey;
 
     if (key === "delete") return true;
-    if (key === "enter" && params.event?.ctrlKey) return true;
+    if (key === "enter" && ctrlOrCmd) return true;
 
     return false;
   }
@@ -97,8 +98,28 @@ function onGridReady(params) {
   params.api.addEventListener('cellKeyDown', (e) => {
     const key = e.event?.key?.toLowerCase?.();
 
-    if (e.event?.ctrlKey && e.event?.key === 'Enter') {
-      onAddRow();
+    if ((e.event?.ctrlKey || e.event?.metaKey) && e.event?.key === 'Enter') {
+      e.event.preventDefault();
+      e.event.stopPropagation();
+
+      if (e.event?.shiftKey) {
+        onAddRow({ mode: "bottom" });
+      } else {
+        const rowIndexFromEvent =
+          typeof e.rowIndex === "number"
+            ? e.rowIndex
+            : typeof e.node?.rowIndex === "number"
+              ? e.node.rowIndex
+              : null;
+
+        onAddRow({
+          mode: "below-selection",
+          insertIndex:
+            typeof rowIndexFromEvent === "number"
+              ? rowIndexFromEvent + 1
+              : null,
+        });
+      }
       return;
     }
 
@@ -152,13 +173,25 @@ function clearRefs() {
 }
 
 /* Adds a new row */
-function onAddRow() {
-  const api = data_store.gridApi
-  if (!api) return
+function onAddRow({ mode = "bottom", insertIndex = null } = {}) {
+  const api = data_store.gridApi;
+  if (!api) return;
+
+  const hasExplicitInsertIndex =
+    insertIndex !== null && insertIndex !== undefined && insertIndex !== "";
+  const numericInsertIndex = hasExplicitInsertIndex ? Number(insertIndex) : NaN;
+
+  const resolvedInsertIndex =
+    Number.isFinite(numericInsertIndex)
+      ? numericInsertIndex
+      : mode === "below-selection"
+        ? getInsertIndexBelowSelection(api)
+        : rowData.value.length;
 
   const result = buildAddRowEdit({
     currentRows: rowData.value,
     historyState,
+    insertIndex: resolvedInsertIndex,
   });
 
   rowData.value = result.rows;
@@ -166,17 +199,19 @@ function onAddRow() {
   markDirty();
 
   nextTick(() => {
-    const lastIndex = rowData.value.length - 1;
-    if (lastIndex < 0) return;
-
     const firstEditableField = columnDefs.value.find(
       c => c.field && c.field !== "__id" && c.editable !== false
     )?.field;
 
     if (!firstEditableField) return;
 
-    api.ensureIndexVisible(lastIndex, "bottom");
-    api.setFocusedCell(lastIndex, firstEditableField);
+    const displayedCount = api.getDisplayedRowCount();
+    const focusIndex = Math.min(resolvedInsertIndex, Math.max(displayedCount - 1, 0));
+
+    if (focusIndex < 0) return;
+
+    api.ensureIndexVisible(focusIndex, "middle");
+    api.setFocusedCell(focusIndex, firstEditableField);
   });
 }
 
@@ -602,6 +637,26 @@ async function pasteIntoFocusedCell() {
   }
 }
 
+function getInsertIndexBelowSelection(api = data_store.gridApi) {
+  if (!api) return rowData.value.length;
+
+  const selectedNodes = [];
+  api.forEachNodeAfterFilterAndSort((node) => {
+    if (node.isSelected?.()) selectedNodes.push(node);
+  });
+
+  if (selectedNodes.length > 0) {
+    const lastSelectedRowIndex = Math.max(...selectedNodes.map(node => node.rowIndex));
+    return lastSelectedRowIndex + 1;
+  }
+
+  return rowData.value.length;
+}
+
+function getRowId(params) {
+  return params.data.__id;
+}
+
 onMounted(() => {
   window.addEventListener("keydown", handleGlobalKeydown);
 });
@@ -705,7 +760,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-2 mt-2 shrink-0">
           <button
               class="px-3 py-1 rounded border border-b-0 border-gray-400 bg-white hover:bg-gray-100"
-              @click="onAddRow"
+              @click="onAddRow({ mode: 'below-selection' })"
               title="Add a new row at the end">
             + Add row
           </button>
@@ -741,6 +796,7 @@ onUnmounted(() => {
               :suppressClickEdit="true"
               :enterNavigatesVertically="true"
               :enterNavigatesVerticallyAfterEdit="true"
+              :getRowId="getRowId"
           />
         </div>
         <!-- Sheets -->
