@@ -234,7 +234,8 @@ function onDeleteSelected() {
 
 /* Custom data type detector for Excel data.
 * If any row contains a string -> all cells in the column are strings.
-* If row has only numbers -> all cells in the column are numbers.
+* Only actual numeric cells should make the column numeric; numeric-looking
+* text values such as "1" are treated as text identifiers.
 * */
 function detectColumnDataType(rows, col) {
   let allNumeric = true
@@ -244,7 +245,6 @@ function detectColumnDataType(rows, col) {
     if (value == null || value === "") continue
     // Check if numeric
     if (typeof value === "number") continue
-    if (typeof value === "string" && value.trim() !== "" && !isNaN(Number(value))) continue
     // If we reach here → value is string-like
     allNumeric = false
     break
