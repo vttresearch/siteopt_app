@@ -7,7 +7,7 @@ import Login from "@/views/Login.vue";
 const router = createRouter({
     history: createWebHashHistory(),
     routes: [
-        { path: "/login", name: "login", component: Login },
+        { path: "/login/", name: "login", component: Login },
         { path: '/', name: 'home', component: HomeView , meta: { requiresAuth: true } },
         { path: '/about/', name: 'about',  component: About, meta: { requiresAuth: true } },
         ]

@@ -62,52 +62,35 @@ onMounted(loadUsers)
 </script>
 
 <template>
-  <form
-    class="max-w-md mx-auto mt-10 space-y-4"
-    @submit.prevent="login"
-  >
+  <form class="max-w-md mx-auto mt-10 space-y-4" @submit.prevent="login">
     <h2 class="text-xl font-bold">Login</h2>
 
-    <input
-      v-model="username"
-      placeholder="username"
-      class="w-full border p-2"
-    />
-
-    <input
-      v-model="password"
-      type="password"
-      placeholder="password"
-      class="w-full border p-2"
-    />
+    <input v-model="username" placeholder="username" class="w-full border p-2" />
+    <input v-model="password" type="password" placeholder="password" class="w-full border p-2" />
 
     <div class="flex gap-2">
-      <button class="bg-blue-600 text-white px-4 py-2">
+      <button class="cursor-pointer bg-blue-600 text-white px-4 py-2 hover:bg-blue-700">
         Login
       </button>
 
       <button
-        type="button"
-        class="bg-green-600 text-white px-4 py-2"
-        @click="register"
-      >
+          type="button"
+          class="cursor-pointer bg-green-600 text-white px-4 py-2 hover:bg-green-700"
+          @click="register">
         Create user
       </button>
     </div>
 
-    <p v-if="error" class="text-red-600">
-      {{ error }}
-    </p>
+    <p v-if="error" class="text-red-600"> {{ error }} </p>
 
     <div class="mt-6">
       <h3 class="font-semibold">Available users</h3>
       <ul class="text-sm text-blue-700">
         <li
-          v-for="u in users"
-          :key="u"
-          class="cursor-pointer hover:underline"
-          @click="username = u"
-        >
+            v-for="u in users"
+            :key="u"
+            class="cursor-pointer hover:underline"
+            @click="username = u">
           {{ u }}
         </li>
       </ul>
