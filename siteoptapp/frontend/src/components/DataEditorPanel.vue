@@ -12,6 +12,11 @@ import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from '@/stores/sheetStore';
 import { uploadFile, fetchFileContents } from "@/utils/functions.js";
 import {
+  COLUMN_TYPES,
+  resolveColumnSchema,
+  buildColumnDefFromSchema,
+} from "@/utils/dataEditorSchema.js";
+import {
   createHistoryState,
   clearHistory,
   normalizeRows,
@@ -49,9 +54,26 @@ const defaultColDef = {
   suppressKeyboardEvent: (params) => {
     const key = params.event?.key?.toLowerCase?.();
     const ctrlOrCmd = params.event?.ctrlKey || params.event?.metaKey;
+    const validationType = params.colDef?.validationType;
 
     if (key === "delete") return true;
     if (key === "enter" && ctrlOrCmd) return true;
+    if (
+      (validationType === COLUMN_TYPES.NUMBER || validationType === COLUMN_TYPES.INTEGER) &&
+      !ctrlOrCmd &&
+      !params.event?.altKey &&
+      typeof params.event?.key === "string" &&
+      params.event.key.length === 1 &&
+      !isAllowedNumericCharacter(params.event.key, validationType)
+    ) {
+      notify.show(
+        `${params.colDef?.headerName ?? params.colDef?.field ?? "This field"} accepts only ${validationType === COLUMN_TYPES.INTEGER ? "integer" : "numeric"} characters`,
+        2500,
+        "error"
+      );
+      params.event.preventDefault?.();
+      return true;
+    }
 
     return false;
   }
@@ -206,9 +228,9 @@ function onAddRow({ mode = "bottom", insertIndex = null } = {}) {
     if (!firstEditableField) return;
 
     const displayedCount = api.getDisplayedRowCount();
-    const focusIndex = Math.min(resolvedInsertIndex, Math.max(displayedCount - 1, 0));
+    if (displayedCount <= 0) return;
 
-    if (focusIndex < 0) return;
+    const focusIndex = Math.min(resolvedInsertIndex, displayedCount - 1);
 
     api.ensureIndexVisible(focusIndex, "middle");
     api.setFocusedCell(focusIndex, firstEditableField);
@@ -239,17 +261,115 @@ function onDeleteSelected() {
 * */
 function detectColumnDataType(rows, col) {
   let allNumeric = true
+  let sawValue = false
   for (const row of rows) {
     const value = row[col]
     // Skip null or empty cells
     if (value == null || value === "") continue
+    sawValue = true
     // Check if numeric
     if (typeof value === "number") continue
     // If we reach here → value is string-like
     allNumeric = false
     break
   }
+  if (!sawValue) return "text"
   return allNumeric ? "number" : "text"
+}
+
+function isEmptyCellValue(value) {
+  return value == null || (typeof value === "string" && value.trim() === "");
+}
+
+function normalizeNumericInput(value) {
+  return String(value).trim().replace(",", ".");
+}
+
+function isAllowedNumericCharacter(char, type) {
+  if (/^[0-9]$/.test(char)) return true;
+  if (type === COLUMN_TYPES.NUMBER && (char === "." || char === ",")) return true;
+  return false;
+}
+
+function validateAndNormalizeCellValue({ value, columnName, type, options = [] }) {
+  if (isEmptyCellValue(value)) {
+    return { valid: true, normalizedValue: "" };
+  }
+
+  if (type === COLUMN_TYPES.SELECT) {
+    const normalizedValue = String(value);
+    if (options.includes(normalizedValue)) {
+      return { valid: true, normalizedValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be one of: ${options.join(", ")}`,
+    };
+  }
+
+  if (type === COLUMN_TYPES.INTEGER) {
+    const numericValue =
+      typeof value === "number" ? value : Number(normalizeNumericInput(value));
+
+    if (Number.isInteger(numericValue)) {
+      return { valid: true, normalizedValue: numericValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be an integer`,
+    };
+  }
+
+  if (type === COLUMN_TYPES.NUMBER || type === "number") {
+    const numericValue =
+      typeof value === "number" ? value : Number(normalizeNumericInput(value));
+
+    if (Number.isFinite(numericValue)) {
+      return { valid: true, normalizedValue: numericValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be a number`,
+    };
+  }
+
+  return { valid: true, normalizedValue: value };
+}
+
+function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
+  if (!columnDef?.field || columnDef.field === "__id") return columnDef;
+
+  return {
+    ...columnDef,
+    validationType: type,
+    validationOptions: options,
+    valueParser: (params) => {
+      if (type === COLUMN_TYPES.INTEGER || type === COLUMN_TYPES.NUMBER || type === "number") {
+        return normalizeNumericInput(params.newValue ?? "");
+      }
+
+      return params.newValue;
+    },
+    valueSetter: (params) => {
+      const result = validateAndNormalizeCellValue({
+        value: params.newValue,
+        columnName: params.colDef?.headerName ?? params.colDef?.field ?? "Value",
+        type,
+        options,
+      });
+
+      if (!result.valid) {
+        notify.show(result.message, 4000, "error");
+        return false;
+      }
+
+      params.data[params.colDef.field] = result.normalizedValue;
+      return true;
+    },
+  };
 }
 
 function updateTableWithActiveSheet() {
@@ -273,10 +393,26 @@ function updateTableWithActiveSheet() {
     },
     ...cols.map(col => {
       const validationOptions = validationsByColumn[col]
+      const schema = resolveColumnSchema({
+        fileName: data_store.fname,
+        sheetName: sheetStore.activeSheet,
+        columnName: col,
+      })
+      const schemaColumnDef = buildColumnDefFromSchema({
+        columnName: col,
+        schema,
+        fallbackOptions: validationOptions ?? [],
+      })
+      if (schemaColumnDef) {
+        return withValidatedValueSetter(schemaColumnDef, {
+          type: schema.type,
+          options: schema.options ?? validationOptions ?? [],
+        })
+      }
       // Detect data type from all rows
       const dataType = detectColumnDataType(rows, col)
       if (Array.isArray(validationOptions) && validationOptions.length > 0) {
-        return {
+        return withValidatedValueSetter({
           headerName: col,
           field: col,
           minWidth: 120,
@@ -287,15 +423,21 @@ function updateTableWithActiveSheet() {
           cellClass: "bg-blue-50 ag-cell-dropdown",
           headerClass: "ag-header-dropdown",
           headerTooltip: "Select from predefined values",
-        }
+        }, {
+          type: COLUMN_TYPES.SELECT,
+          options: validationOptions,
+        })
       }
-      return {
+      return withValidatedValueSetter({
         headerName: col,
         field: col,
         minWidth: 100,
         editable: true,
-        cellDataType: dataType,
-      }
+        cellEditor: dataType === "number" ? "agTextCellEditor" : undefined,
+        cellDataType: dataType === "number" ? "text" : dataType,
+      }, {
+        type: dataType,
+      })
     })
   ]
   // Update grid's reactive data source
@@ -591,6 +733,8 @@ function getFocusedEditableCell(api = data_store.gridApi) {
     rowIndex,
     field,
     value: rowData.value[rowIndex][field] ?? "",
+    validationType: colDef?.validationType,
+    validationOptions: colDef?.validationOptions ?? [],
   };
 }
 
@@ -615,7 +759,19 @@ async function pasteIntoFocusedCell() {
   try {
     const text = await navigator.clipboard.readText();
     const oldValue = cell.value ?? "";
-    const newValue = text ?? "";
+    const validationResult = validateAndNormalizeCellValue({
+      value: text ?? "",
+      columnName: cell.field,
+      type: cell.validationType,
+      options: cell.validationOptions,
+    });
+
+    if (!validationResult.valid) {
+      notify.show(validationResult.message, 4000, "error");
+      return false;
+    }
+
+    const newValue = validationResult.normalizedValue;
 
     if (oldValue === newValue) return false;
 
