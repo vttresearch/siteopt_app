@@ -509,6 +509,12 @@ function handleGlobalKeydown(e) {
   const key = e.key?.toLowerCase?.();
   const ctrlOrCmd = e.ctrlKey || e.metaKey;
 
+  if (ctrlOrCmd && key === "s") {
+    e.preventDefault();
+    onSaveClick();
+    return;
+  }
+
   const tag = e.target?.tagName?.toLowerCase?.();
   const isTextInput =
     tag === "textarea" ||
