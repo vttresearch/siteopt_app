@@ -285,6 +285,10 @@ function normalizeNumericInput(value) {
   return String(value).trim().replace(",", ".");
 }
 
+function isReferenceValue(value) {
+  return typeof value === "string" && value.trim().toLowerCase().startsWith("ts:");
+}
+
 function isAllowedNumericCharacter(char, type) {
   if (/^[0-9]$/.test(char)) return true;
   if (type === COLUMN_TYPES.NUMBER && (char === "." || char === ",")) return true;
@@ -336,6 +340,35 @@ function validateAndNormalizeCellValue({ value, columnName, type, options = [] }
     };
   }
 
+  if (type === COLUMN_TYPES.NUMBER_OR_REFERENCE) {
+    if (isReferenceValue(value)) {
+      return { valid: true, normalizedValue: String(value).trim() };
+    }
+
+    const numericValue =
+      typeof value === "number" ? value : Number(normalizeNumericInput(value));
+
+    if (Number.isFinite(numericValue)) {
+      return { valid: true, normalizedValue: numericValue };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must be a number or ts: reference`,
+    };
+  }
+
+  if (type === COLUMN_TYPES.REFERENCE) {
+    if (isReferenceValue(value)) {
+      return { valid: true, normalizedValue: String(value).trim() };
+    }
+
+    return {
+      valid: false,
+      message: `${columnName} must start with ts:`,
+    };
+  }
+
   return { valid: true, normalizedValue: value };
 }
 
@@ -349,6 +382,12 @@ function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
     valueParser: (params) => {
       if (type === COLUMN_TYPES.INTEGER || type === COLUMN_TYPES.NUMBER || type === "number") {
         return normalizeNumericInput(params.newValue ?? "");
+      }
+
+      if (type === COLUMN_TYPES.NUMBER_OR_REFERENCE) {
+        return isReferenceValue(params.newValue ?? "")
+          ? String(params.newValue).trim()
+          : normalizeNumericInput(params.newValue ?? "");
       }
 
       return params.newValue;
