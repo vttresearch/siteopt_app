@@ -112,7 +112,7 @@ const FILE_SCHEMAS = {
           type: {
             type: COLUMN_TYPES.SELECT,
             required: true,
-            options: ["heat", "elec"],
+            options: ["", "elec", "heat"],
           },
           alternative_name: { type: COLUMN_TYPES.TEXT, required: true },
           node_state_cap: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
@@ -275,6 +275,7 @@ export function buildColumnDefFromSchema({
       ...baseDef,
       minWidth: 120,
       cellEditor: "agSelectCellEditor",
+      cellEditorPopup: true,
       cellEditorParams: { values: schema.options ?? fallbackOptions },
       cellDataType: "text",
       cellClass: "bg-blue-50 ag-cell-dropdown",

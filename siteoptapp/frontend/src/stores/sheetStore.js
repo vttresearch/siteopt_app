@@ -31,7 +31,8 @@ export const useSheetStore = defineStore('sheetStore', () => {
     let columns = []  // Extract column names in visual order
     const defs = gridApi.getColumnDefs()
     columns = defs.filter(c => c.field && c.field !== "__id").map(c => c.field)  // Skip row number
-    upsertSheet(sheetName, rows, columns, true)
+    const prev = sheetsByName.value[sheetName]
+    upsertSheet(sheetName, rows, columns, prev?.meta || {}, true)
   }
 
   function markDirty(sheetName, v = true) {

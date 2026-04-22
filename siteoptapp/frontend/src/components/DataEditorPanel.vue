@@ -177,6 +177,41 @@ function onCellValueChanged(params) {
   markDirty();
 }
 
+function onCellClicked(params) {
+  const colDef = params.colDef;
+  if (!colDef?.editable) return;
+
+  const isSelectColumn =
+    colDef.cellEditor === "agSelectCellEditor" ||
+    colDef.validationType === COLUMN_TYPES.SELECT;
+
+  if (!isSelectColumn) return;
+  if (typeof params.rowIndex !== "number") return;
+
+  window.setTimeout(() => {
+    params.api.startEditingCell({
+      rowIndex: params.rowIndex,
+      colKey: colDef.field,
+    });
+    window.setTimeout(() => {
+      const popupEditors = document.querySelectorAll(".ag-popup-editor");
+      const latestPopup = popupEditors[popupEditors.length - 1];
+      const columnWidth = params.column?.getActualWidth?.();
+
+      if (!latestPopup || !columnWidth) return;
+
+      latestPopup.style.minWidth = `${columnWidth}px`;
+      latestPopup.style.width = `${columnWidth}px`;
+
+      const selectEl = latestPopup.querySelector("select");
+      if (selectEl) {
+        selectEl.style.minWidth = "100%";
+        selectEl.style.width = "100%";
+      }
+    }, 0);
+  }, 0);
+}
+
 function clearRefs() {
   rowData.value = [];
   columnDefs.value = [];
@@ -414,7 +449,7 @@ function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
 function updateTableWithActiveSheet() {
   const sheetObj = sheetStore.sheetsByName[sheetStore.activeSheet] || {}
   const cols = sheetObj.columns ?? []  // Columns
-  const validationsByColumn = sheetObj.columns?.validationsByColumn || {}
+  const validationsByColumn = sheetObj.meta?.validationsByColumn || {}
   let rows = sheetObj.rows || []
   // Add row numbers
   rows = normalizeRows(rows, historyState);
@@ -457,6 +492,7 @@ function updateTableWithActiveSheet() {
           minWidth: 120,
           editable: true,
           cellEditor: "agSelectCellEditor",
+          cellEditorPopup: true,
           cellEditorParams: { values: validationOptions },
           cellDataType: 'text',
           cellClass: "bg-blue-50 ag-cell-dropdown",
@@ -623,7 +659,12 @@ watch(() => data_store.daata,
         const raw = fileData[s]
         const rows = Array.isArray(raw) ? raw : (raw?.rows || [])
         const columns = Array.isArray(raw) ? raw : (raw?.columns || [])
-        const meta = Array.isArray(raw) ? {} : (raw?.meta || {})
+        const meta = Array.isArray(raw)
+          ? {}
+          : {
+              ...(raw?.meta || {}),
+              validationsByColumn: raw?.validationsByColumn || {},
+            }
         sheetStore.upsertSheet(s, rows, columns, meta, false)
       }
       updateTableWithActiveSheet()
@@ -985,6 +1026,7 @@ onUnmounted(() => {
               :defaultColDef="defaultColDef"
               :rowData="rowData"
               @grid-ready="onGridReady"
+              @cell-clicked="onCellClicked"
               @cell-value-changed="onCellValueChanged"
               :rowBuffer="10"
               :rowHeight="35"

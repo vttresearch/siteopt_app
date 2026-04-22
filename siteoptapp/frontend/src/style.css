@@ -96,13 +96,30 @@
     padding: 0 1.75rem 0 0.5rem !important;
   }
 
-    .ag-cell-inline-editing .ag-cell-editor select:focus {
+  .ag-cell-inline-editing .ag-cell-editor select:focus {
     outline: none !important;
   }
 
   .ag-cell-inline-editing.ag-cell-dropdown::after {
   content: "" !important;
 }
+
+  .ag-popup-editor .ag-cell-editor {
+    width: 100% !important;
+    min-width: 100% !important;
+    display: flex !important;
+    align-items: stretch !important;
+  }
+
+  .ag-popup-editor .ag-cell-editor select,
+  .ag-popup-editor select.ag-cell-editor {
+    display: block !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+    font: inherit !important;
+    padding: 0.25rem 1.75rem 0.25rem 0.5rem !important;
+  }
 
 
 }
