@@ -14,7 +14,6 @@ import { uploadFile, fetchFileContents } from "@/utils/functions.js";
 import {
   COLUMN_TYPES,
   resolveColumnSchema,
-  buildColumnDefFromSchema,
 } from "@/utils/dataEditorSchema.js";
 import {
   createHistoryState,
@@ -446,6 +445,87 @@ function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
   };
 }
 
+function resolveColumnConfig({
+  columnName,
+  rows,
+  validationOptions = [],
+  fileName = data_store.fname,
+  sheetName = sheetStore.activeSheet,
+}) {
+  const schema = resolveColumnSchema({
+    fileName,
+    sheetName,
+    columnName,
+  });
+
+  const normalizedValidationOptions = Array.isArray(validationOptions)
+    ? validationOptions
+    : [];
+
+  if (schema) {
+    const resolvedOptions =
+      normalizedValidationOptions.length > 0
+        ? normalizedValidationOptions
+        : schema.options ?? [];
+
+    const resolvedType =
+      resolvedOptions.length > 0 && schema.type === COLUMN_TYPES.TEXT
+        ? COLUMN_TYPES.SELECT
+        : schema.type;
+
+    return {
+      type: resolvedType,
+      options: resolvedOptions,
+      source: "schema",
+    };
+  }
+
+  if (normalizedValidationOptions.length > 0) {
+    return {
+      type: COLUMN_TYPES.SELECT,
+      options: normalizedValidationOptions,
+      source: "excel-validation",
+    };
+  }
+
+  return {
+    type: detectColumnDataType(rows, columnName),
+    options: [],
+    source: "inferred",
+  };
+}
+
+function buildEditorColumnDef({ columnName, config }) {
+  const isSelect = config.type === COLUMN_TYPES.SELECT;
+  const isNumericLike =
+    config.type === COLUMN_TYPES.NUMBER ||
+    config.type === COLUMN_TYPES.INTEGER ||
+    config.type === COLUMN_TYPES.NUMBER_OR_REFERENCE;
+
+  const columnDef = {
+    headerName: columnName,
+    field: columnName,
+    minWidth: isSelect ? 120 : 100,
+    editable: true,
+    cellEditor: isSelect
+      ? "agSelectCellEditor"
+      : isNumericLike
+        ? "agTextCellEditor"
+        : undefined,
+    cellEditorPopup: isSelect || undefined,
+    cellEditorParams: isSelect ? { values: config.options } : undefined,
+    cellDataType: "text",
+    cellClass: isSelect ? "bg-blue-50 ag-cell-dropdown" : undefined,
+    headerClass: isSelect ? "ag-header-dropdown" : undefined,
+    headerTooltip: isSelect ? "Select from predefined values" : undefined,
+  };
+
+  return withValidatedValueSetter(columnDef, {
+    type: config.type,
+    options: config.options,
+  });
+}
+
 function updateTableWithActiveSheet() {
   const sheetObj = sheetStore.sheetsByName[sheetStore.activeSheet] || {}
   const cols = sheetObj.columns ?? []  // Columns
@@ -466,53 +546,16 @@ function updateTableWithActiveSheet() {
       cellClass: "bg-blue-50 font-light text-xs text-left",
     },
     ...cols.map(col => {
-      const validationOptions = validationsByColumn[col]
-      const schema = resolveColumnSchema({
-        fileName: data_store.fname,
-        sheetName: sheetStore.activeSheet,
+      const config = resolveColumnConfig({
         columnName: col,
-      })
-      const schemaColumnDef = buildColumnDefFromSchema({
+        rows,
+        validationOptions: validationsByColumn[col],
+      });
+
+      return buildEditorColumnDef({
         columnName: col,
-        schema,
-        fallbackOptions: validationOptions ?? [],
-      })
-      if (schemaColumnDef) {
-        return withValidatedValueSetter(schemaColumnDef, {
-          type: schema.type,
-          options: schema.options ?? validationOptions ?? [],
-        })
-      }
-      // Detect data type from all rows
-      const dataType = detectColumnDataType(rows, col)
-      if (Array.isArray(validationOptions) && validationOptions.length > 0) {
-        return withValidatedValueSetter({
-          headerName: col,
-          field: col,
-          minWidth: 120,
-          editable: true,
-          cellEditor: "agSelectCellEditor",
-          cellEditorPopup: true,
-          cellEditorParams: { values: validationOptions },
-          cellDataType: 'text',
-          cellClass: "bg-blue-50 ag-cell-dropdown",
-          headerClass: "ag-header-dropdown",
-          headerTooltip: "Select from predefined values",
-        }, {
-          type: COLUMN_TYPES.SELECT,
-          options: validationOptions,
-        })
-      }
-      return withValidatedValueSetter({
-        headerName: col,
-        field: col,
-        minWidth: 100,
-        editable: true,
-        cellEditor: dataType === "number" ? "agTextCellEditor" : undefined,
-        cellDataType: dataType === "number" ? "text" : dataType,
-      }, {
-        type: dataType,
-      })
+        config,
+      });
     })
   ]
   // Update grid's reactive data source
