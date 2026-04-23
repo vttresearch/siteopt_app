@@ -29,29 +29,6 @@ export function useDataEditorDocument({
   const activeView = ref("editor");
   const selectedFileForUpload = ref(null);
 
-  function markXlsxDirty() {
-    sheetStore.markDirty(sheetStore.activeSheet, true);
-    sheetStore.toggleSheetDataUpdated();
-    dataStore.xlsxDirty = true;
-    dataStore.globalDirty = true;
-  }
-
-  function markDirty() {
-    const t = dataStore.daata?.filetype;
-
-    if (t === "csv") dataStore.csvDirty = true;
-    else if (t === "json") dataStore.jsonDirty = true;
-    else if (t === "xlsx") markXlsxDirty();
-
-    dataStore.globalDirty = true;
-  }
-
-  function clearXlsxDirty() {
-    Object.keys(sheetStore.sheetsByName).forEach((key) => sheetStore.markDirty(key, false));
-    sheetStore.toggleSheetDataUpdated();
-    dataStore.xlsxDirty = false;
-  }
-
   function clearRefs() {
     rowData.value = [];
     columnDefs.value = [];
@@ -59,11 +36,7 @@ export function useDataEditorDocument({
     clearHistory(historyState);
     dataStore.fname = "";
     dataStore.fpath = "";
-    dataStore.mdDirty = false;
-    dataStore.csvDirty = false;
-    dataStore.jsonDirty = false;
-    dataStore.xlsxDirty = false;
-    dataStore.globalDirty = false;
+    dataStore.clearDirty();
     dataStore.mdText = "";
     dataStore.jsonEditText = "";
   }
@@ -211,9 +184,7 @@ export function useDataEditorDocument({
     originalText,
     activeView,
     selectedFileForUpload,
-    markDirty,
-    markXlsxDirty,
-    clearXlsxDirty,
+    markDirty: (...args) => dataStore.markDirty(...args),
     clearRefs,
     updateTableFromCsv,
     newSheetSelected,

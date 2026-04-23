@@ -27,6 +27,24 @@ function createDocumentHarness() {
     gridApi: {
       id: "grid-api",
     },
+    markDirty() {
+      const t = this.daata?.filetype;
+      if (t === "csv") this.csvDirty = true;
+      else if (t === "json") this.jsonDirty = true;
+      else if (t === "xlsx") {
+        sheetStore.markDirty(sheetStore.activeSheet, true);
+        sheetStore.toggleSheetDataUpdated();
+        this.xlsxDirty = true;
+      }
+      this.globalDirty = true;
+    },
+    clearDirty() {
+      this.mdDirty = false;
+      this.csvDirty = false;
+      this.jsonDirty = false;
+      this.xlsxDirty = false;
+      this.globalDirty = false;
+    },
     saveCurrentFile: async () => true,
   });
 

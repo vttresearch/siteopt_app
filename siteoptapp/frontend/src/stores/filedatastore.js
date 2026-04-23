@@ -49,7 +49,7 @@ export function createTableDataStore({
     fpath.value = "";
     daata.value = {};
     loading.value = false;
-    globalDirty.value = false;
+    clearDirty();
   }
 
   function markDirty() {
@@ -211,7 +211,9 @@ export function createTableDataStore({
     toggleLoading,
     clear,
     markDirty,
+    markXlsxDirty,
     clearDirty,
+    clearXlsxDirty,
     saveCurrentFile,
     registerGridApi,
     unregisterGridApi,
