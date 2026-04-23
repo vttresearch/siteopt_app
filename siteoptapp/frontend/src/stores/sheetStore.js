@@ -1,8 +1,40 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
+export function createSheetRecord({
+  rows = [],
+  columns = [],
+  meta = {},
+  validationsByColumn = {},
+  dirty = false,
+} = {}) {
+  return {
+    rows: Array.isArray(rows) ? rows : [],
+    columns: Array.isArray(columns) ? columns : [],
+    meta: meta && typeof meta === "object" ? meta : {},
+    validationsByColumn:
+      validationsByColumn && typeof validationsByColumn === "object"
+        ? validationsByColumn
+        : {},
+    dirty: Boolean(dirty),
+  }
+}
+
+export function normalizeSheetPayload(payload = {}) {
+  if (Array.isArray(payload)) {
+    return createSheetRecord({ rows: payload })
+  }
+
+  return createSheetRecord({
+    rows: payload?.rows,
+    columns: payload?.columns,
+    meta: payload?.meta,
+    validationsByColumn: payload?.validationsByColumn,
+  })
+}
+
 export const useSheetStore = defineStore('sheetStore', () => {
-  const sheetsByName = ref({})  // { sheetName: { rows: [], meta: {}, dirty: false } }
+  const sheetsByName = ref({})  // { sheetName: { rows, columns, meta, validationsByColumn, dirty } }
   const activeSheet = ref(null)  // string or null
   const sheetDataUpdated = ref(false)
 
@@ -20,13 +52,45 @@ export const useSheetStore = defineStore('sheetStore', () => {
     activeSheet.value = name
   }
 
-  function upsertSheet(name, rows, columns, meta = {}, markDirty = false) {
-    const prev = sheetsByName.value[name]
-    sheetsByName.value[name] = {
-      rows: rows || [],
-      columns: columns || [],
+  function getSheet(name) {
+    return sheetsByName.value[name] ?? null
+  }
+
+  function getActiveSheetRecord() {
+    return getSheet(activeSheet.value) ?? createSheetRecord()
+  }
+
+  function upsertSheet(name, rows, columns, meta = {}, markDirty = false, validationsByColumn = undefined) {
+    const prev = getSheet(name)
+    const nextRecord = createSheetRecord({
+      rows,
+      columns,
       meta: meta || prev?.meta || {},
-      dirty: markDirty ? true : (prev?.dirty || false)
+      validationsByColumn:
+        validationsByColumn ?? prev?.validationsByColumn ?? {},
+      dirty: markDirty ? true : (prev?.dirty || false),
+    })
+    sheetsByName.value[name] = nextRecord
+  }
+
+  function upsertSheetRecord(name, record, markDirty = false) {
+    const prev = getSheet(name)
+    const normalized = normalizeSheetPayload(record)
+    sheetsByName.value[name] = createSheetRecord({
+      rows: normalized.rows,
+      columns: normalized.columns,
+      meta: normalized.meta || prev?.meta || {},
+      validationsByColumn:
+        normalized.validationsByColumn ?? prev?.validationsByColumn ?? {},
+      dirty: markDirty ? true : (prev?.dirty || false),
+    })
+  }
+
+  function setWorkbookData(workbookData = {}) {
+    clearAllSheets()
+
+    for (const [sheetName, payload] of Object.entries(workbookData)) {
+      upsertSheetRecord(sheetName, payload, false)
     }
   }
 
@@ -37,7 +101,15 @@ export const useSheetStore = defineStore('sheetStore', () => {
     let columns = []  // Extract column names in visual order
     const defs = gridApi.getColumnDefs()
     columns = defs.filter(c => c.field && c.field !== "__id").map(c => c.field)  // Skip row number
-    upsertSheet(sheetName, rows, columns, true)
+    const prev = getSheet(sheetName)
+    upsertSheet(
+      sheetName,
+      rows,
+      columns,
+      prev?.meta || {},
+      true,
+      prev?.validationsByColumn || {},
+    )
   }
 
   function markDirty(sheetName, v = true) {
@@ -68,7 +140,11 @@ export const useSheetStore = defineStore('sheetStore', () => {
     reset,
     toggleSheetDataUpdated,
     setActiveSheet,
+    getSheet,
+    getActiveSheetRecord,
     upsertSheet,
+    upsertSheetRecord,
+    setWorkbookData,
     captureFromGrid,
     markDirty,
     clearAllSheets,

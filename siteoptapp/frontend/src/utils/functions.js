@@ -83,6 +83,34 @@ export async function uploadFile(data, notify) {
   }
 }
 
+export async function uploadInputCsv(data, notify) {
+  const csrfToken = getCookie("csrftoken");
+  const url = `${API_BASE}api/upload_input_csv/`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'include',
+      body: data,
+    });
+    if (!response.ok) {
+      console.error("Invalid post:", await response.text());
+      return false
+    }
+    const r = await response.json();
+    if (!r.success) {
+      notify.show(`${r.error}`, 5000, "error");
+      return false
+    }
+    return r
+  } catch (err) {
+    console.error(`Error uploading input CSV:`, err);
+    return false
+  }
+}
+
 
 /**
  * Fetches data using GET from the specified API endpoint.
