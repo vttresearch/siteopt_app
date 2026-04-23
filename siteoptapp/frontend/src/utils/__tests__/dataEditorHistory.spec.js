@@ -4,7 +4,7 @@ import {
   createHistoryState,
   buildAddRowEdit,
   applyHistoryEntry,
-} from "../dataeditorutils.js";
+} from "../dataEditorUtils.js";
 
 export const dataEditorHistoryTests = [
   {

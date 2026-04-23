@@ -7,9 +7,10 @@ import {
   validateAndNormalizeCellValue,
   resolveColumnConfig,
   buildEditorColumnDef,
+  getColumnValidationMeta,
   shouldBlockEditorKey,
   isSelectColumnDef,
-} from "../dataeditorutils.js";
+} from "../dataEditorUtils.js";
 
 export const dataEditorLogicTests = [
   {
@@ -109,6 +110,11 @@ export const dataEditorLogicTests = [
       assert.equal(colDef.cellEditor, "agSelectCellEditor");
       assert.equal(colDef.cellEditorPopup, true);
       assert.deepEqual(colDef.cellEditorParams, { values: ["elec", "heat"] });
+      assert.deepEqual(getColumnValidationMeta(colDef), {
+        type: COLUMN_TYPES.SELECT,
+        options: ["elec", "heat"],
+        source: undefined,
+      });
     },
   },
   {

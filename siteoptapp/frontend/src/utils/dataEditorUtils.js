@@ -541,6 +541,13 @@ export function buildEditorColumnDef({ columnName, config }) {
   return {
     headerName: columnName,
     field: columnName,
+    context: {
+      validation: {
+        type: config.type,
+        options: config.options ?? [],
+        source: config.source,
+      },
+    },
     minWidth: isSelect ? 120 : 100,
     editable: true,
     cellEditor: isSelect
@@ -557,9 +564,18 @@ export function buildEditorColumnDef({ columnName, config }) {
   };
 }
 
+export function getColumnValidationMeta(colDef) {
+  return colDef?.context?.validation ?? {
+    type: colDef?.validationType,
+    options: colDef?.validationOptions ?? [],
+  };
+}
+
 export function isSelectColumnDef(colDef) {
+  const validationMeta = getColumnValidationMeta(colDef);
+
   return (
     colDef?.cellEditor === "agSelectCellEditor" ||
-    colDef?.validationType === COLUMN_TYPES.SELECT
+    validationMeta.type === COLUMN_TYPES.SELECT
   );
 }

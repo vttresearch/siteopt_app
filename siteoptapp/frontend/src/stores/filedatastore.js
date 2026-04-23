@@ -1,10 +1,18 @@
 import { ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia'
-import { useSheetStore } from "@/stores/sheetStore.js";
-import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
-import { postData } from "@/utils/functions.js";
+import { useSheetStore } from "./sheetStore.js";
+import { useConfirmPrompt } from "../composables/useConfirmPrompt.js";
 
-export const useTableDataStore = defineStore('tableData', () => {
+async function defaultSavePostData(...args) {
+  const { postData } = await import("../utils/functions.js");
+  return postData(...args);
+}
+
+export function createTableDataStore({
+  createConfirmPrompt = useConfirmPrompt,
+  savePostData = defaultSavePostData,
+} = {}) {
+  return defineStore('tableData', () => {
   const daata = ref({});
   const fname = ref("");
   const fpath = ref("");
@@ -19,7 +27,7 @@ export const useTableDataStore = defineStore('tableData', () => {
   const jsonEditText = ref("");
   // editor capability (NOT persisted data)
   const gridApi = shallowRef(null);
-  const { confirm } = useConfirmPrompt()
+  const { confirm } = createConfirmPrompt()
 
   function addData(name, path, data) {
     fname.value = name;
@@ -143,7 +151,7 @@ export const useTableDataStore = defineStore('tableData', () => {
       return
     }
     saving.value = true
-    const response = await postData("save_file", configs, notify)
+    const response = await savePostData("save_file", configs, notify)
     saving.value = false
     if (!response.success) {
       console.error("save_file failed. configs:", configs)
@@ -210,3 +218,6 @@ export const useTableDataStore = defineStore('tableData', () => {
     askSaveChanges,
   }
 })
+}
+
+export const useTableDataStore = createTableDataStore();
