@@ -313,6 +313,8 @@ export function useDataEditorGrid({
     });
 
     params.api.addEventListener("cellKeyDown", (e) => {
+      if (handleUndoRedoShortcut(e.event)) return;
+
       if ((e.event?.ctrlKey || e.event?.metaKey) && e.event?.key === "Enter") {
         e.event.preventDefault();
         e.event.stopPropagation();
@@ -364,6 +366,29 @@ export function useDataEditorGrid({
       rowDataRef: rowData,
       markDirty,
     });
+  }
+
+  function handleUndoRedoShortcut(event) {
+    const key = event?.key?.toLowerCase?.();
+    const ctrlOrCmd = event?.ctrlKey || event?.metaKey;
+
+    if (!ctrlOrCmd) return false;
+
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      undo();
+      return true;
+    }
+
+    if (key === "y" || (key === "z" && event.shiftKey)) {
+      event.preventDefault();
+      event.stopPropagation();
+      redo();
+      return true;
+    }
+
+    return false;
   }
 
   function getFocusedEditableCell(api = dataStore.gridApi) {
@@ -476,16 +501,7 @@ export function useDataEditorGrid({
 
     if (isTextInput) return;
 
-    if (ctrlOrCmd && key === "z" && !e.shiftKey) {
-      e.preventDefault();
-      undo();
-      return;
-    }
-
-    if (ctrlOrCmd && (key === "y" || (key === "z" && e.shiftKey))) {
-      e.preventDefault();
-      redo();
-    }
+    if (handleUndoRedoShortcut(e)) return;
 
     if (ctrlOrCmd && key === "c") {
       e.preventDefault();
