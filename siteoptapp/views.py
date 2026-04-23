@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import csv
+import io
 import shutil
 import uuid
 import subprocess
@@ -300,6 +301,87 @@ def upload_and_replace(request):
     except OSError as e:
         return JsonResponse({"success": False, "error": f"[OSError] when replacing file {file_path}: {e}"})
     return JsonResponse({"success": True, "data": {}})
+
+
+def _validate_time_value_csv_bytes(content):
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return {"success": False, "error": "CSV must be UTF-8 encoded."}
+
+    reader = csv.reader(io.StringIO(text))
+    rows = [row for row in reader if any(str(cell).strip() for cell in row)]
+
+    if len(rows) < 2:
+        return {"success": False, "error": "CSV must contain a header and at least one data row."}
+
+    header = [cell.strip().lower() for cell in rows[0]]
+    if header != ["time", "value"]:
+        return {"success": False, "error": "CSV header must be exactly: time,value"}
+
+    for row_number, row in enumerate(rows[1:], start=2):
+        if len(row) != 2:
+            return {"success": False, "error": f"CSV row {row_number} must contain exactly time and value."}
+        if not row[0].strip():
+            return {"success": False, "error": f"CSV row {row_number} has empty time."}
+        try:
+            float(row[1])
+        except ValueError:
+            return {"success": False, "error": f"CSV row {row_number} value must be numeric."}
+
+    return {"success": True}
+
+
+@csrf_protect
+def upload_input_csv(request):
+    """Adds a time,value CSV file to a project's current_input folder."""
+    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    file_data = request.FILES.get("file")
+    project_name = request.POST.get("project_name")
+    category = request.POST.get("category", "")
+
+    if not file_data:
+        return JsonResponse({"success": False, "error": "Missing CSV file."})
+    if not project_name:
+        return JsonResponse({"success": False, "error": "Missing project name."})
+
+    filename = os.path.basename(file_data.name)
+    if filename != file_data.name or not filename.lower().endswith(".csv"):
+        return JsonResponse({"success": False, "error": "Only plain .csv file names are allowed."})
+
+    config_d = get_client_config(client_id)
+    project_path = config_d.get("work_folders", {}).get(project_name)
+    if not project_path:
+        return JsonResponse({"success": False, "error": f"Unknown project: {project_name}"})
+
+    current_input_dir = (Path(project_path) / "current_input").resolve()
+    destination_dir = (current_input_dir / category).resolve()
+
+    try:
+        if os.path.commonpath([str(destination_dir), str(current_input_dir)]) != str(current_input_dir):
+            return JsonResponse({"success": False, "error": "Invalid input data folder."})
+    except ValueError:
+        return JsonResponse({"success": False, "error": "Invalid input data folder."})
+
+    if not destination_dir.exists() or not destination_dir.is_dir():
+        return JsonResponse({"success": False, "error": f"Input data folder does not exist: {category or 'Basic'}"})
+
+    destination = destination_dir / filename
+    if destination.exists():
+        return JsonResponse({"success": False, "error": f"File already exists: {filename}"})
+
+    content = file_data.read()
+    validation = _validate_time_value_csv_bytes(content)
+    if not validation["success"]:
+        return JsonResponse(validation)
+
+    try:
+        with open(destination, "wb") as fp:
+            fp.write(content)
+    except OSError as e:
+        return JsonResponse({"success": False, "error": f"[OSError] when uploading CSV {filename}: {e}"})
+
+    return JsonResponse({"success": True, "data": {"filename": filename, "folder": category}})
 
 
 @csrf_protect

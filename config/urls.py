@@ -25,6 +25,7 @@ urlpatterns = [
     path("api/fetch_current_input_folder/<str:folder_name>/", views.fetch_current_input_folder, name="fetch_current_input_folder"),
     path("api/post/<str:action>/", views.post, name="post"),
     path("api/upload/", views.upload_and_replace, name="upload_and_replace"),
+    path("api/upload_input_csv/", views.upload_input_csv, name="upload_input_csv"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/settings/", views.settings, name="settings"),
     path("api/stream/execute/<str:job_id>", views.execute, name="execute"),

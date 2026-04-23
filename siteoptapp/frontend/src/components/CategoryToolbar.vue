@@ -3,7 +3,8 @@ import { ref, watch, computed } from "vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
-import { fetchInputFiles, fetchFileContents } from "@/utils/functions.js";
+import { fetchInputFiles, fetchFileContents, uploadInputCsv } from "@/utils/functions.js";
+import { validateTimeValueCsvText } from "@/utils/inputCsvUploadUtils.js";
 import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 
 const settingStore = useSettingStore()
@@ -12,6 +13,9 @@ const notify = useNotificationStore()
 const selected = ref(null);
 const openCategory = ref(null);
 const activeFilePath = ref("")
+const uploadInputCategory = ref("")
+const uploadInputFile = ref(null)
+const uploadingInputCsv = ref(false)
 const { confirm } = useConfirmPrompt()
 
 const currentInputFilePath = computed(() => {
@@ -64,6 +68,48 @@ async function downloadFile(category) {
   await fetchFileContents(selected.value, fpath)
 }
 
+function handleInputCsvSelect(event) {
+  uploadInputFile.value = event.target.files?.[0] ?? null;
+}
+
+async function uploadCsvToInputFolder() {
+  if (!settingStore.activeProjectName) {
+    notify.show("Select a project before uploading input CSV files.", 4000, "error");
+    return;
+  }
+
+  if (!uploadInputFile.value) {
+    notify.show("Choose a CSV file to upload.", 3000, "error");
+    return;
+  }
+
+  if (!uploadInputFile.value.name.toLowerCase().endsWith(".csv")) {
+    notify.show("Only .csv files can be uploaded to input data.", 4000, "error");
+    return;
+  }
+
+  const validation = validateTimeValueCsvText(await uploadInputFile.value.text());
+  if (!validation.valid) {
+    notify.show(validation.message, 5000, "error");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", uploadInputFile.value);
+  formData.append("project_name", settingStore.activeProjectName);
+  formData.append("category", uploadInputCategory.value);
+
+  uploadingInputCsv.value = true;
+  const response = await uploadInputCsv(formData, notify);
+  uploadingInputCsv.value = false;
+
+  if (!response?.success) return;
+
+  notify.show(`${uploadInputFile.value.name} uploaded to input data`, 4000, "info");
+  uploadInputFile.value = null;
+  await fetchInputFiles(settingStore.activeProjectName);
+}
+
 </script>
 
 <template>
@@ -104,5 +150,36 @@ async function downloadFile(category) {
         </button>
       </div>
     </div>
+  </div>
+
+  <div class="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-gray-100 p-3 text-sm">
+    <span class="font-medium text-gray-700">Upload time series CSV</span>
+    <select
+      v-model="uploadInputCategory"
+      class="rounded border border-gray-300 bg-white px-2 py-1"
+      title="Destination folder under current_input"
+    >
+      <option
+        v-for="category in settingStore.currentInputFiles"
+        :key="category.value"
+        :value="category.value"
+      >
+        {{ category.name }}
+      </option>
+    </select>
+    <input
+      type="file"
+      accept=".csv,text/csv"
+      class="block text-sm text-gray-800 file:mr-3 file:rounded file:border-0 file:bg-blue-600 file:px-3 file:py-1 file:text-white hover:file:bg-blue-700"
+      @change="handleInputCsvSelect"
+    />
+    <button
+      class="rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
+      :disabled="!uploadInputFile || uploadingInputCsv"
+      @click="uploadCsvToInputFolder"
+    >
+      {{ uploadingInputCsv ? "Uploading..." : "Upload CSV" }}
+    </button>
+    <span class="text-xs text-gray-500">Format: time,value</span>
   </div>
 </template>

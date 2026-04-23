@@ -2,6 +2,7 @@ import { dataEditorLogicTests } from "./__tests__/dataEditorLogic.spec.js";
 import { dataEditorHistoryTests } from "./__tests__/dataEditorHistory.spec.js";
 import { dataEditorDocumentTests } from "./__tests__/dataEditorDocument.spec.js";
 import { fileDataStoreTests } from "./__tests__/fileDataStore.spec.js";
+import { inputCsvUploadTests } from "./__tests__/inputCsvUpload.spec.js";
 import { sheetStoreTests } from "./__tests__/sheetStore.spec.js";
 
 const suites = [
@@ -20,6 +21,10 @@ const suites = [
   {
     name: "File Data Store",
     tests: fileDataStoreTests,
+  },
+  {
+    name: "Input CSV Upload",
+    tests: inputCsvUploadTests,
   },
   {
     name: "Sheet Store Contract",
