@@ -412,10 +412,11 @@ def _validate_time_value_csv_bytes(content):
     return {"success": True}
 
 
+@login_required
 @csrf_protect
 def upload_input_csv(request):
     """Adds a time,value CSV file to a project's current_input folder."""
-    client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
+    client_id = request.user.username
     file_data = request.FILES.get("file")
     project_name = request.POST.get("project_name")
     category = request.POST.get("category", "")
