@@ -6,5 +6,9 @@ export const useScenarioStore = defineStore('scenarioData', () => {
   const loadingScenarios = false
   const scenarios = ref([])
 
-  return { loadingScenarios, scenarios }
+  function reset() {
+    scenarios.value = []
+  }
+
+  return { loadingScenarios, scenarios, reset }
 })

@@ -38,6 +38,12 @@ export const useSheetStore = defineStore('sheetStore', () => {
   const activeSheet = ref(null)  // string or null
   const sheetDataUpdated = ref(false)
 
+  function reset() {
+    sheetsByName.value = {}
+    activeSheet.value = null
+    sheetDataUpdated.value = false
+  }
+
   function toggleSheetDataUpdated() {
     sheetDataUpdated.value = !sheetDataUpdated.value
   }
@@ -131,6 +137,7 @@ export const useSheetStore = defineStore('sheetStore', () => {
     sheetsByName,
     activeSheet,
     sheetDataUpdated,
+    reset,
     toggleSheetDataUpdated,
     setActiveSheet,
     getSheet,

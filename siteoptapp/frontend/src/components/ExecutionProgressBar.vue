@@ -50,6 +50,7 @@ watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
 <template>
   <div class="w-full space-y-2 font-sans pb-5">
 
+    <div class="border-1 rounded-md border-gray-300 p-2">
     <!-- Labels -->
     <div class="space-y-1">
       <div v-if="hasError" class="text-red-600 font-semibold">
@@ -82,16 +83,32 @@ watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
         Completed ({{ completedSubtasks }}/{{ allSubtasks.length }}) {{ percentage }}%
       </div>
     </div>
+      <div class="flex items-center justify-between">
+        <div v-if="!taskStore.currentTask" class="text-sm text-gray-600">
+          Select a task
+        </div>
+        <div v-else class="text-sm text-gray-600">
+          <div v-if="taskStore.currentTask === 'Prepare input data'">
+            Estimated time: 3-6 minutes
+          </div>
+          <div v-else-if="taskStore.currentTask === 'Optimize full period'">
+            Estimated time: 4+ hours
+          </div>
+          <div v-else-if="taskStore.currentTask === 'Optimize with representative periods'">
+            Estimated time: 8-15 minutes
+          </div>
+        </div>
     <button
-        class="cursor-pointer border rounded-md border-gray-200 bg-black text-white p-1 hover:bg-gray-600"
+        class="my-2 p-1 cursor-pointer border rounded-md border-gray-200 text-white bg-blue-500 hover:bg-blue-700"
         @click="showDetails = !showDetails"
     >
       Details...
     </button>
+      </div>
     <div class="relative">
       <div v-if="showDetails" class="absolute top-0 left-0 w-full z-50 border border-gray-300 rounded p-3 bg-gray-50 shadow-xl">
         <div class="flex items-center justify-between mb-2">
-          <div class="font-semibold text-gray-800">Project items</div>
+          <div class="font-semibold text-gray-800">Subtasks for {{ taskStore.currentTask }}</div>
           <BaseButton variant="ghost" @click="showDetails = false">Close</BaseButton>
         </div>
 
@@ -116,5 +133,7 @@ watch(() => settingStore.activeProjectIndex, async (newVal, oldVal)=> {
         </div>
       </div>
     </div>
+          </div>
+
   </div>
 </template>

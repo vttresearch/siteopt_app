@@ -29,6 +29,21 @@ export function createTableDataStore({
   const gridApi = shallowRef(null);
   const { confirm } = createConfirmPrompt()
 
+  function reset() {
+    daata.value = {}
+    fname.value = ""
+    fpath.value = ""
+    loading.value = false
+    globalDirty.value = false
+    saving.value = false
+    mdDirty.value = false
+    csvDirty.value = false
+    jsonDirty.value = false
+    xlsxDirty.value = false
+    mdText.value = ""
+    jsonEditText.value = ""
+  }
+
   function addData(name, path, data) {
     fname.value = name;
     fpath.value = path;
@@ -206,6 +221,7 @@ export function createTableDataStore({
     mdText,
     jsonEditText,
     gridApi,
+    reset,
     addData,
     setLoading,
     toggleLoading,

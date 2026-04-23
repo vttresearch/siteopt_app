@@ -10,6 +10,7 @@ import ConfirmPrompt from "@/components/ConfirmPrompt.vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
+import { useMetadataStore } from "@/stores/metadatastore.js";
 import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 import {
   checkBackendReady,
@@ -17,11 +18,13 @@ import {
   fetchInputFiles,
   fetchResults,
   fetchScenarios,
+  fetchMetadataBulk,
 } from "@/utils/functions.js";
 
 const settingStore = useSettingStore()
 const dataStore = useTableDataStore()
 const notify = useNotificationStore()
+const metadataStore = useMetadataStore()
 const activeTab = ref("projects")
 const {
     isOpen,
@@ -39,6 +42,7 @@ onMounted(async () => {
       await fetchInputFiles(settingStore.activeProjectName)
       await fetchResults(settingStore.activeProjectName)
       await fetchScenarios(settingStore.activeProjectPath)
+      await fetchMetadataBulk(settingStore.workFolders.map(project => project.path))
     }
     else {
       settingStore.setActiveProject(null)

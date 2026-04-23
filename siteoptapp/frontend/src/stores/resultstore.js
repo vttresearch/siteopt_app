@@ -5,5 +5,9 @@ export const useResultStore = defineStore('resultData', () => {
 
   const runs = ref({})
 
-  return { runs }
+  function reset() {
+    runs.value = {}
+  }
+
+  return { runs, reset }
 })
