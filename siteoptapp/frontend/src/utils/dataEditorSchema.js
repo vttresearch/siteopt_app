@@ -116,6 +116,7 @@ const FILE_SCHEMAS = {
           },
           alternative_name: { type: COLUMN_TYPES.TEXT, required: true },
           node_state_cap: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
+          capacity: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
           max_charging: { type: COLUMN_TYPES.NUMBER },
           max_discharging: { type: COLUMN_TYPES.NUMBER },
           demand: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
