@@ -498,7 +498,6 @@ export function buildValidationIssue({
 export function countValidationIssues(validationIssues = {}) {
   return Object.keys(validationIssues ?? {}).length;
 }
-
 export function normalizeSelectOptions(options = []) {
   const normalized = Array.isArray(options) ? options : [];
   const uniqueOptions = [];
