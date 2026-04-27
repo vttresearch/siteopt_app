@@ -28,6 +28,7 @@ const rowData = ref([]);
 const columnDefs = ref([]);
 const selectedCount = ref(0);
 const historyState = reactive(createHistoryState());
+const showEditorHelp = ref(false);
 
 function getRowId(params) {
   return params.data.__id;
@@ -132,7 +133,17 @@ const isTimeSeriesData = computed(() => {
 </script>
 
 <template>
-  <div class="mb-3 text-lg font-semibold text-gray-800">Data Editor</div>
+  <div class="mb-3 flex items-center justify-between">
+    <div class="text-lg font-semibold text-gray-800">Data Editor</div>
+    <button
+      class="flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-sm font-semibold text-gray-600 hover:bg-gray-100"
+      title="Data editor help"
+      aria-label="Open data editor help"
+      @click="showEditorHelp = true"
+    >
+      ?
+    </button>
+  </div>
   <CategoryToolbar />
 
   <div class="flex items-center justify-between text-gray-600 my-2 mb-2">
@@ -277,6 +288,78 @@ const isTimeSeriesData = computed(() => {
       </div>
       <div v-else class="text-gray-500 p-4">
         No time series data detected (needs time/date column + numeric columns).
+      </div>
+    </div>
+  </div>
+
+  <div
+    v-if="showEditorHelp"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="data-editor-help-title"
+    @click.self="showEditorHelp = false"
+  >
+    <div class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-6 shadow-2xl">
+      <div class="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 id="data-editor-help-title" class="text-lg font-semibold text-gray-900">
+            Data Editor Help
+          </h3>
+          <p class="mt-1 text-sm text-gray-500">
+            Shortcuts and key behaviors for editing tables in the data editor.
+          </p>
+        </div>
+        <button
+          class="rounded-md px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          aria-label="Close data editor help"
+          @click="showEditorHelp = false"
+        >
+          Close
+        </button>
+      </div>
+
+      <div class="space-y-5 text-sm text-gray-700">
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Basics</div>
+          <ul class="space-y-1">
+            <li>Edit text cells by clicking or starting to type.</li>
+            <li>Validated dropdown cells open from a click and can be cleared back to empty with Delete.</li>
+            <li>Numeric fields block invalid characters while typing and accept comma decimals by converting them to dots.</li>
+            <li>A star next to the file name means the current file has unsaved changes.</li>
+          </ul>
+        </section>
+
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Navigation And Editing</div>
+          <ul class="space-y-1">
+            <li><span class="font-medium">Enter</span>: move down in the grid.</li>
+            <li><span class="font-medium">Arrow keys</span>: move between cells.</li>
+            <li><span class="font-medium">Delete</span>: clear the focused cell or all editable cells in the selected row or rows.</li>
+            <li><span class="font-medium">Esc</span>: leave edit mode without keeping the current cell edit.</li>
+          </ul>
+        </section>
+
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Rows</div>
+          <ul class="space-y-1">
+            <li><span class="font-medium">Ctrl+Enter</span>: add a row below the current row or selection.</li>
+            <li><span class="font-medium">Ctrl+Shift+Enter</span>: add a row at the bottom of the sheet.</li>
+            <li><span class="font-medium">Add row button</span>: adds a row below the selection or to the end when nothing is selected.</li>
+            <li><span class="font-medium">Delete selected rows button</span>: removes the selected rows completely.</li>
+          </ul>
+        </section>
+
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Clipboard And History</div>
+          <ul class="space-y-1">
+            <li><span class="font-medium">Ctrl+C</span>: copy the focused editable cell.</li>
+            <li><span class="font-medium">Ctrl+V</span>: paste into the focused editable cell using the same validation rules as manual edits.</li>
+            <li><span class="font-medium">Ctrl+Z</span>: undo.</li>
+            <li><span class="font-medium">Ctrl+Shift+Z</span> or <span class="font-medium">Ctrl+Y</span>: redo.</li>
+            <li><span class="font-medium">Ctrl+S</span>: save the current file.</li>
+          </ul>
+        </section>
       </div>
     </div>
   </div>
