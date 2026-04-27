@@ -92,8 +92,22 @@ export const dataEditorLogicTests = [
       });
 
       assert.equal(config.type, COLUMN_TYPES.SELECT);
-      assert.deepEqual(config.options, ["X"]);
+      assert.deepEqual(config.options, ["", "X"]);
       assert.equal(config.source, "schema");
+    },
+  },
+  {
+    name: "resolveColumnConfig prepends empty option for schema select columns",
+    run() {
+      const config = resolveColumnConfig({
+        columnName: "grid",
+        rows: [],
+        fileName: "connections-input.xlsx",
+        sheetName: "Sheet1",
+      });
+
+      assert.equal(config.type, COLUMN_TYPES.SELECT);
+      assert.deepEqual(config.options, ["", "elec", "heat"]);
     },
   },
   {
@@ -103,16 +117,16 @@ export const dataEditorLogicTests = [
         columnName: "grid",
         config: {
           type: COLUMN_TYPES.SELECT,
-          options: ["elec", "heat"],
+          options: ["", "elec", "heat"],
         },
       });
 
       assert.equal(colDef.cellEditor, "agSelectCellEditor");
       assert.equal(colDef.cellEditorPopup, true);
-      assert.deepEqual(colDef.cellEditorParams, { values: ["elec", "heat"] });
+      assert.deepEqual(colDef.cellEditorParams, { values: ["", "elec", "heat"] });
       assert.deepEqual(getColumnValidationMeta(colDef), {
         type: COLUMN_TYPES.SELECT,
-        options: ["elec", "heat"],
+        options: ["", "elec", "heat"],
         source: undefined,
       });
     },

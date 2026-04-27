@@ -481,6 +481,23 @@ export function validateAndNormalizeCellValue({ value, columnName, type, options
   return { valid: true, normalizedValue: value };
 }
 
+export function normalizeSelectOptions(options = []) {
+  const normalized = Array.isArray(options) ? options : [];
+  const uniqueOptions = [];
+  const seen = new Set();
+
+  for (const option of normalized) {
+    const normalizedOption = option == null ? "" : String(option);
+    if (seen.has(normalizedOption)) continue;
+    seen.add(normalizedOption);
+    uniqueOptions.push(normalizedOption);
+  }
+
+  return uniqueOptions.includes("")
+    ? uniqueOptions
+    : ["", ...uniqueOptions];
+}
+
 export function resolveColumnConfig({
   columnName,
   rows,
@@ -499,13 +516,14 @@ export function resolveColumnConfig({
     : [];
 
   if (schema) {
-    const resolvedOptions =
+    const rawOptions =
       normalizedValidationOptions.length > 0
         ? normalizedValidationOptions
         : schema.options ?? [];
+    const resolvedOptions = normalizeSelectOptions(rawOptions);
 
     const resolvedType =
-      resolvedOptions.length > 0 && schema.type === COLUMN_TYPES.TEXT
+      rawOptions.length > 0 && schema.type === COLUMN_TYPES.TEXT
         ? COLUMN_TYPES.SELECT
         : schema.type;
 
@@ -519,7 +537,7 @@ export function resolveColumnConfig({
   if (normalizedValidationOptions.length > 0) {
     return {
       type: COLUMN_TYPES.SELECT,
-      options: normalizedValidationOptions,
+      options: normalizeSelectOptions(normalizedValidationOptions),
       source: "excel-validation",
     };
   }
