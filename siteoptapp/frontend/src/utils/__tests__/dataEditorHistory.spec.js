@@ -115,6 +115,62 @@ export const dataEditorHistoryTests = [
     },
   },
   {
+    name: "buildClearSelectedRowsEdit clears validated dropdown cells to empty string",
+    run() {
+      const currentRows = [
+        { __id: "row_1", type: "heat", capacity: 10 },
+      ];
+      const api = {
+        forEachNodeAfterFilterAndSort(callback) {
+          callback({
+            data: currentRows[0],
+            isSelected: () => true,
+          });
+        },
+      };
+
+      const result = buildClearSelectedRowsEdit({
+        api,
+        columnDefs: [
+          {
+            field: "type",
+            editable: true,
+            cellEditor: "agSelectCellEditor",
+            context: {
+              validation: {
+                type: "select",
+                options: ["", "elec", "heat"],
+              },
+            },
+          },
+          { field: "capacity", editable: true },
+        ],
+        currentRows,
+      });
+
+      assert.equal(result.changed, true);
+      assert.deepEqual(result.rows[0], {
+        __id: "row_1",
+        type: "",
+        capacity: "",
+      });
+      assert.deepEqual(result.historyEntry.changes, [
+        {
+          rowId: "row_1",
+          field: "type",
+          oldValue: "heat",
+          newValue: "",
+        },
+        {
+          rowId: "row_1",
+          field: "capacity",
+          oldValue: 10,
+          newValue: "",
+        },
+      ]);
+    },
+  },
+  {
     name: "undoHistory and redoHistory move a cell edit backward and forward",
     run() {
       const historyState = createHistoryState();
@@ -324,6 +380,48 @@ export const dataEditorHistoryTests = [
       assert.equal(applied, true);
       assert.deepEqual(rowDataRef.value[0], currentRows[0]);
       assert.equal(markDirtyCalls.length, 1);
+    },
+  },
+  {
+    name: "buildClearFocusedCellEdit clears validated dropdown cell to empty string",
+    run() {
+      const currentRows = [
+        { __id: "row_1", type: "heat", capacity: 10 },
+      ];
+      const api = {
+        getFocusedCell() {
+          return {
+            rowIndex: 0,
+            column: {
+              getColId: () => "type",
+            },
+          };
+        },
+        getDisplayedRowAtIndex() {
+          return {
+            data: currentRows[0],
+          };
+        },
+      };
+
+      const result = buildClearFocusedCellEdit({
+        api,
+        currentRows,
+      });
+
+      assert.equal(result.changed, true);
+      assert.deepEqual(result.rows[0], {
+        __id: "row_1",
+        type: "",
+        capacity: 10,
+      });
+      assert.deepEqual(result.historyEntry, {
+        type: "cell-edit",
+        rowId: "row_1",
+        field: "type",
+        oldValue: "heat",
+        newValue: "",
+      });
     },
   },
 ];

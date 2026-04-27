@@ -44,7 +44,15 @@ export function useDataEditorGrid({
     suppressKeyboardEvent: (params) => {
       const key = params.event?.key?.toLowerCase?.();
       const ctrlOrCmd = params.event?.ctrlKey || params.event?.metaKey;
-      const validationType = getColumnValidationMeta(params.colDef).type;
+      const validationMeta = getColumnValidationMeta(params.colDef);
+      const validationType = validationMeta.type;
+
+      if (key === "delete" && params.editing && validationType === COLUMN_TYPES.SELECT) {
+        params.event.preventDefault?.();
+        params.node?.setDataValue?.(params.colDef?.field, "");
+        params.api?.stopEditing?.();
+        return true;
+      }
 
       if (key === "delete") return true;
       if (key === "enter" && ctrlOrCmd) return true;
