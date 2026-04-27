@@ -57,6 +57,75 @@ services:
       - backend-dev
     profiles: ["dev"]
 
+  backend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend-prod
+    container_name: backend-prod
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_SECRET_KEY: "verysecret"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,backend-prod"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost"
+      PYTHONUNBUFFERED: "1"
+      RUNNING_IN_CONTAINER: "True"
+      JULIA_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      JULIA_JEMALLOC_CONF: "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
+      MALLOC_ARENA_MAX: "2"
+      REDIS_URL: "redis://redis:6379/1"
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - docker_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: >
+      bash -lc "
+        source /opt/venv/bin/activate &&
+        python manage.py migrate &&
+        gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 2
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    profiles: ["prod"]
+
+  frontend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend-prod
+      args:
+        VITE_API_BASE: /
+    container_name: frontend-prod
+    ports:
+      - "127.0.0.1:80:80"
+    networks:
+      - docker_network
+    depends_on:
+      - backend-prod
+    profiles: ["prod"]
+
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379" # Optional
+    networks:
+      - docker_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    profiles: ["prod"]
+
 volumes:
   frontend_node_modules: {}
   siteopt_work: {}
