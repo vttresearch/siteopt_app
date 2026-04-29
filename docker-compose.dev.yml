@@ -1,0 +1,135 @@
+services:
+
+  backend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend-dev
+    container_name: backend-dev
+    working_dir: /app
+    environment:
+      DJANGO_DEBUG: "True"
+      PYTHONUNBUFFERED: "1"
+      RUNNING_IN_CONTAINER: "True"
+      # Julia threading control
+      JULIA_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      "MKL_NUM_THREADS": "1"
+      # Allocator tuning
+      JULIA_JEMALLOC_CONF: "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
+      MALLOC_ARENA_MAX: "2"
+    volumes:
+      - .:/app
+      # Linux-only work directory (Docker named volume)
+      - siteopt_work:/app/work_container
+      # Mask frontend from backend
+      - type: tmpfs
+        target: /app/siteoptapp/frontend
+    ports:
+      - "8000:8000"
+    networks:
+      - docker_network
+    command: >
+      bash -lc "
+        source /opt/venv/bin/activate &&
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    profiles: ["dev"]
+
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend-dev
+    container_name: frontend-dev
+    working_dir: /app
+    volumes:
+      - ./siteoptapp/frontend:/app:rw
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      NPM_CONFIG_CACHE: /root/.npm
+    command: /bin/sh -c "npm install && npm run dev"
+    networks:
+      - docker_network
+    depends_on:
+      - backend-dev
+    profiles: ["dev"]
+
+  backend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend-prod
+    container_name: backend-prod
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_SECRET_KEY: "verysecret"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,backend-prod"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost"
+      PYTHONUNBUFFERED: "1"
+      RUNNING_IN_CONTAINER: "True"
+      JULIA_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      JULIA_JEMALLOC_CONF: "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
+      MALLOC_ARENA_MAX: "2"
+      REDIS_URL: "redis://redis:6379/1"
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - docker_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: >
+      bash -lc "
+        source /opt/venv/bin/activate &&
+        python manage.py migrate &&
+        gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 2
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    profiles: ["prod"]
+
+  frontend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend-prod
+      args:
+        VITE_API_BASE: /
+    container_name: frontend-prod
+    ports:
+      - "127.0.0.1:80:80"
+    networks:
+      - docker_network
+    depends_on:
+      - backend-prod
+    profiles: ["prod"]
+
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379" # Optional
+    networks:
+      - docker_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    profiles: ["prod"]
+
+volumes:
+  frontend_node_modules: {}
+  siteopt_work: {}
+
+networks:
+  docker_network:
+    driver: bridge

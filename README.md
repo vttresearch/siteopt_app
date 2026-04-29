@@ -5,7 +5,108 @@ This web app can be built into a desktop app using [Tauri](https://v2.tauri.app/
 which includes the Django backend and the Vue.js frontend. Older Python and Node.js 
 versions may work but have not been tested.
 
-## Setting up the development environment
+
+## Running the production version
+
+### Prerequisites
+- Docker Desktop
+- User account in registry.elexia.amct.pl
+- Web Browser (Firefox, Chrome, Edge may work as well)
+
+### Login and start web-app
+
+Open Command Prompt and run:
+```
+docker login registry.elexia.amct.pl
+```
+Provide the username and password as requested.
+
+Download `docker-compose.yml` file from the repo and save it to some folder.
+
+cd into the folder with `docker-compose.yml` and pull the images
+
+```commandline
+docker compose pull
+```
+
+Then start the containers
+
+```commandline
+docker compose up
+```
+
+Open browser (Firefox, Chrome) and open URL
+
+`http://localhost`
+
+### To update to a new version (later, when available)
+Get the updated `docker-compose.yml` file or update the tags yourself
+
+Run
+
+```commandline
+docker compose pull
+docker compose up
+```
+
+To start the containers in the background, run `docker compose up -d` instead.
+
+### To stop and remove the containers
+
+```docker compose down```
+
+## Running the development version
+
+The main Docker compose files are:
+
+**docker-compose.dev.yml**  
+- Used by developers  
+- Runs the development or production version of the app  
+- Builds images  
+
+**docker-compose.yml**  
+- Does NOT build  
+- Only pulls images from a registry  
+- Suitable for non‑developer users  
+
+### Prerequisites
+- Git
+- Docker Desktop
+- Web Browser (Firefox, Chrome, Edge may work as well)
+
+### Checkout repo, build and start containers
+1. Pull the main branch of this repo
+2. cd to <repo root>
+3. Start Docker Desktop
+4. Run `docker compose -f docker-compose.dev.yml --profile dev up --build`
+5. Open URL http://localhost:5173 in browser 
+
+Once the development version is built, you can restart by omitting --build
+
+```commandline
+docker compose -f docker-compose.dev.yml --profile dev up
+```
+
+### Building for production and publishing the new images
+
+1. Update `backend-prod` and `frontend-prod` tags in docker-compose.dev.yml
+
+2. Run
+ 
+```docker compose -f docker-compose.dev.yml --profile prod --build```
+
+3. Login to registry.elexia.amct.pl using developer account
+
+```docker login registry.elexia.amct.pl```
+
+4. Push the new images
+
+```
+docker push registry.elexia.amct.pl/site_opt/backend-prod:0.1
+docker push registry.elexia.amct.pl/site_opt/frontend-prod:0.1
+```
+
+## Setting up the development environment [For local use without Docker]
 
 ### Pull Git submodules
 
