@@ -481,6 +481,50 @@ export function validateAndNormalizeCellValue({ value, columnName, type, options
   return { valid: true, normalizedValue: value };
 }
 
+export function makeValidationIssueKey(rowId, field) {
+  return `${rowId}::${field}`;
+}
+
+export function buildValidationIssue({
+  rowId,
+  field,
+  value,
+  columnName,
+  type,
+  options = [],
+}) {
+  const result = validateAndNormalizeCellValue({
+    value,
+    columnName,
+    type,
+    options,
+  });
+
+  if (result.valid) {
+    return {
+      valid: true,
+      normalizedValue: result.normalizedValue,
+      issue: null,
+    };
+  }
+
+  return {
+    valid: false,
+    normalizedValue: value,
+    issue: {
+      key: makeValidationIssueKey(rowId, field),
+      rowId,
+      field,
+      message: result.message,
+      value,
+    },
+  };
+}
+
+export function countValidationIssues(validationIssues = {}) {
+  return Object.keys(validationIssues ?? {}).length;
+}
+
 export function normalizeSelectOptions(options = []) {
   const normalized = Array.isArray(options) ? options : [];
   const uniqueOptions = [];

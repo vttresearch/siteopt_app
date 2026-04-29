@@ -5,6 +5,8 @@ import {
   detectColumnDataType,
   normalizeNumericInput,
   validateAndNormalizeCellValue,
+  buildValidationIssue,
+  countValidationIssues,
   resolveColumnConfig,
   buildEditorColumnDef,
   getColumnValidationMeta,
@@ -63,6 +65,33 @@ export const dataEditorLogicTests = [
 
       assert.equal(result.valid, false);
       assert.match(result.message, /must be a number/);
+    },
+  },
+  {
+    name: "buildValidationIssue keeps invalid numeric text visible and returns issue metadata",
+    run() {
+      const result = buildValidationIssue({
+        rowId: "row_1",
+        field: "capacity",
+        value: "abc",
+        columnName: "capacity",
+        type: COLUMN_TYPES.NUMBER,
+      });
+
+      assert.equal(result.valid, false);
+      assert.equal(result.normalizedValue, "abc");
+      assert.equal(result.issue?.rowId, "row_1");
+      assert.equal(result.issue?.field, "capacity");
+      assert.match(result.issue?.message, /must be a number/);
+    },
+  },
+  {
+    name: "countValidationIssues returns the number of tracked invalid cells",
+    run() {
+      assert.equal(countValidationIssues({
+        "row_1::a": { message: "A must be a number" },
+        "row_2::b": { message: "B must be an integer" },
+      }), 2);
     },
   },
   {

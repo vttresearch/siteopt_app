@@ -64,6 +64,12 @@ const {
   rowSelectionOptions,
   defaultColDef,
   hasSelection,
+  hasValidationIssues,
+  currentValidationIssueCount,
+  clearValidationIssues,
+  getScopeValidationIssueCount,
+  validateWorkbookScopes,
+  refreshCurrentValidationScope,
   updateGridColumns,
   onGridReady,
   onCellValueChanged,
@@ -74,6 +80,7 @@ const {
   dataStore: data_store,
   notify,
   sheetStore,
+  settingStore,
   rowData,
   columnDefs,
   historyState,
@@ -98,9 +105,35 @@ const {
   historyState,
   clearHistory,
   updateTableWithActiveSheet,
+  clearValidationIssues,
+  validateWorkbookScopes,
+  refreshCurrentValidationScope,
 }));
 
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
+const sheetValidationCounts = computed(() => {
+  if (data_store.daata?.filetype !== "xlsx") return {};
+
+  return Object.keys(sheetStore.sheetsByName ?? {}).reduce((acc, sheetName) => {
+    const count = getScopeValidationIssueCount(sheetName);
+    if (count > 0) acc[sheetName] = count;
+    return acc;
+  }, {});
+});
+const workbookValidationIssueCount = computed(() => (
+  Object.values(sheetValidationCounts.value).reduce((sum, count) => sum + count, 0)
+));
+const fileValidationIssueCount = computed(() => (
+  data_store.daata?.filetype === "xlsx"
+    ? workbookValidationIssueCount.value
+    : currentValidationIssueCount.value
+));
+const hasFileValidationIssues = computed(() => fileValidationIssueCount.value > 0);
+const fileValidationTitle = computed(() => (
+  hasFileValidationIssues.value
+    ? `${fileValidationIssueCount.value} invalid cell${fileValidationIssueCount.value === 1 ? "" : "s"} in this file`
+    : null
+));
 
 function looksLikeExcelDateNumber(n) {
   return typeof n === "number" && n > 20000 && n < 80000;
@@ -144,7 +177,7 @@ const isTimeSeriesData = computed(() => {
       ?
     </button>
   </div>
-  <CategoryToolbar />
+  <CategoryToolbar :has-validation-issues="hasFileValidationIssues" />
 
   <div class="flex items-center justify-between text-gray-600 my-2 mb-2">
     <div class="flex justify-start gap-2">
@@ -168,11 +201,16 @@ const isTimeSeriesData = computed(() => {
     </div>
 
     <div class="flex justify-center flex-1 text-center">
-      <div class="truncate">{{ data_store.fname }}
+      <div
+        class="truncate"
+        :class="hasFileValidationIssues ? 'font-semibold text-red-700' : ''"
+        :title="fileValidationTitle"
+      >{{ data_store.fname }}
         <span v-if="data_store.daata?.filetype === 'md' && data_store.mdDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'csv' && data_store.csvDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'json' && data_store.jsonDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'xlsx' && data_store.xlsxDirty">*</span>
+        <span v-if="hasFileValidationIssues" class="ml-1">!</span>
       </div>
     </div>
 
@@ -247,6 +285,9 @@ const isTimeSeriesData = computed(() => {
           <span v-if="selectedCount" class="text-sm text-gray-500">
             {{ selectedCount }} selected
           </span>
+          <span v-if="hasValidationIssues" class="text-sm text-red-700" :title="fileValidationTitle">
+            {{ currentValidationIssueCount }} invalid cell{{ currentValidationIssueCount === 1 ? "" : "s" }} highlighted
+          </span>
         </div>
 
         <div class="flex-1 overflow-auto">
@@ -273,7 +314,10 @@ const isTimeSeriesData = computed(() => {
           />
         </div>
         <div v-if="data_store.daata?.filetype === 'xlsx'">
-          <SelectSheetButtons @update:activeSheet="newSheetSelected($event)" />
+          <SelectSheetButtons
+            :validation-counts="sheetValidationCounts"
+            @update:activeSheet="newSheetSelected($event)"
+          />
         </div>
       </div>
 
@@ -325,7 +369,8 @@ const isTimeSeriesData = computed(() => {
           <ul class="space-y-1">
             <li>Edit text cells by clicking or starting to type.</li>
             <li>Validated dropdown cells open from a click and can be cleared back to empty with Delete.</li>
-            <li>Numeric fields block invalid characters while typing and accept comma decimals by converting them to dots.</li>
+            <li>Invalid values stay visible, are highlighted in the grid, and show the validation message on hover.</li>
+            <li>Numeric fields accept comma decimals by converting them to dots.</li>
             <li>A star next to the file name means the current file has unsaved changes.</li>
           </ul>
         </section>

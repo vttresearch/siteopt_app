@@ -5,6 +5,7 @@ import { useResultStore } from "@/stores/resultstore.js";
 import { useScenarioStore } from "@/stores/scenariostore.js";
 import { useMetadataStore } from "@/stores/metadatastore.js";
 import { API_BASE } from "@/config.js";
+import { summarizeEditorFileValidation } from "./dataEditorValidationSummary.js";
 
 
 /**
@@ -196,6 +197,57 @@ export async function fetchInputFiles(projectName) {
   }
   const contents = response.data
   settingStore.setCurrentInputFiles(contents)
+  await refreshCurrentInputValidation(projectName, contents)
+}
+
+function buildCurrentInputFilePath(projectPath, categoryValue, fileName) {
+  const basePath = `${projectPath}/current_input`
+  return categoryValue
+    ? `${basePath}/${categoryValue}/${fileName}`
+    : `${basePath}/${fileName}`
+}
+
+async function fetchInputFileDataForValidation(fullPath, notify) {
+  const response = await postData("fetch_data", { full_path: fullPath }, notify)
+  if (!response?.success) return null
+  return response.data
+}
+
+async function refreshCurrentInputValidation(projectName, contents) {
+  const settingStore = useSettingStore()
+  const notify = useNotificationStore()
+  const projectPath = settingStore.activeProjectPath
+
+  if (!projectPath || settingStore.activeProjectName !== projectName) {
+    settingStore.setCurrentInputValidationByPath({})
+    return
+  }
+
+  const fileEntries = (contents ?? []).flatMap((category) =>
+    (category.options ?? []).map((option) => ({
+      categoryValue: category.value,
+      fileName: option.value,
+      fullPath: buildCurrentInputFilePath(projectPath, category.value, option.value),
+    })),
+  )
+
+  const results = await Promise.all(fileEntries.map(async (entry) => {
+    const fileData = await fetchInputFileDataForValidation(entry.fullPath, notify)
+    if (!fileData) {
+      return [entry.fullPath, { invalidCount: 0, filetype: null, sheets: {} }]
+    }
+
+    return [entry.fullPath, summarizeEditorFileValidation({
+      fileName: entry.fileName,
+      fileData,
+    })]
+  }))
+
+  if (settingStore.activeProjectName !== projectName) {
+    return
+  }
+
+  settingStore.setCurrentInputValidationByPath(Object.fromEntries(results))
 }
 
 /**

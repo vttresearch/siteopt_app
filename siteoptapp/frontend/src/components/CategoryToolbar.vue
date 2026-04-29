@@ -10,6 +10,12 @@ import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 const settingStore = useSettingStore()
 const dataStore = useTableDataStore()
 const notify = useNotificationStore()
+const props = defineProps({
+  hasValidationIssues: {
+    type: Boolean,
+    default: false,
+  },
+})
 const selected = ref(null);
 const openCategory = ref(null);
 const activeFilePath = ref("")
@@ -26,6 +32,28 @@ const currentInputFilePath = computed(() => {
     return activeFilePath
   }
 })
+
+function getFilePath(categoryValue, fileName) {
+  const basePath = `${settingStore.activeProjectPath}/current_input`
+  return categoryValue
+    ? `${basePath}/${categoryValue}/${fileName}`
+    : `${basePath}/${fileName}`
+}
+
+function getFileInvalidCount(categoryValue, fileName) {
+  const fullPath = getFilePath(categoryValue, fileName)
+  return settingStore.currentInputValidationByPath?.[fullPath]?.invalidCount ?? 0
+}
+
+function getCategoryInvalidCount(categoryValue) {
+  const category = (settingStore.currentInputFiles ?? []).find((entry) => entry.value === categoryValue)
+  if (!category) return 0
+
+  return (category.options ?? []).reduce(
+    (sum, option) => sum + getFileInvalidCount(categoryValue, option.value),
+    0,
+  )
+}
 
 /* Fetches the contents of selected projects current input files */
 watch(() => settingStore.activeProjectIndex, async (newIndex, oldIndex) => {
@@ -110,10 +138,27 @@ async function uploadCsvToInputFolder() {
   await fetchInputFiles(settingStore.activeProjectName);
 }
 
+function getOptionClasses(opt) {
+  const isSelected = selected.value === opt.value
+  const isInvalidCurrentFile = props.hasValidationIssues && isSelected
+  const hasProjectValidationIssues = getFileInvalidCount(openCategory.value, opt.value) > 0
+
+  if (isInvalidCurrentFile || hasProjectValidationIssues) {
+    return "block w-full border-b px-3 py-2 text-left text-sm text-red-800 last:border-0 hover:bg-red-50 data-[active=true]:bg-red-600 data-[active=true]:text-white"
+  }
+
+  return "block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 border-b last:border-0 data-[active=true]:bg-blue-600 data-[active=true]:text-white"
+}
+
 </script>
 
 <template>
-  <p class="text-xs text-gray-500 rounded-md p-2 mb-1 bg-gray-100">{{ currentInputFilePath }}</p>
+  <p
+    class="mb-1 rounded-md p-2 text-xs"
+    :class="props.hasValidationIssues ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500'"
+  >
+    {{ currentInputFilePath }}
+  </p>
 
   <div class="flex gap-4 p-3 bg-gray-100 rounded-md relative">
     <!-- CATEGORIES -->
@@ -124,10 +169,14 @@ async function uploadCsvToInputFolder() {
     >
       <button
         @click="toggle(category.value)"
-        class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm
-               hover:bg-gray-50 text-sm font-medium cursor-pointer"
+        class="px-4 py-2 rounded-md border shadow-sm text-sm font-medium cursor-pointer"
+        :class="getCategoryInvalidCount(category.value) > 0
+          ? 'bg-red-50 border-red-300 text-red-800 hover:bg-red-100'
+          : 'bg-white border-gray-300 hover:bg-gray-50'"
+        :title="getCategoryInvalidCount(category.value) > 0 ? `${getCategoryInvalidCount(category.value)} invalid cell${getCategoryInvalidCount(category.value) === 1 ? '' : 's'} in this category` : null"
       >
         {{ category.name }}
+        <span v-if="getCategoryInvalidCount(category.value) > 0" class="ml-1 font-semibold">!</span>
       </button>
 
       <!-- OPTIONS DROPDOWN -->
@@ -140,13 +189,11 @@ async function uploadCsvToInputFolder() {
           v-for="opt in category.options"
           :key="opt.value"
           @click="confirmAndLoadFile(opt.value, $event.currentTarget)"
-          class="block w-full text-left px-3 py-2 text-sm
-                hover:bg-gray-100 border-b last:border-0
-                data-[active=true]:bg-blue-600
-                data-[active=true]:text-white"
+          :class="getOptionClasses(opt)"
           :data-active="selected === opt.value"
         >
           {{ opt.label }}
+          <span v-if="(props.hasValidationIssues && selected === opt.value) || getFileInvalidCount(openCategory, opt.value) > 0" class="ml-1 font-semibold">!</span>
         </button>
       </div>
     </div>
