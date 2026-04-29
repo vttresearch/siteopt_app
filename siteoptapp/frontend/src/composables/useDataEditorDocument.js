@@ -38,6 +38,7 @@ export function useDataEditorDocument({
     columnDefs.value = [];
     originalText.value = "";
     clearHistory(historyState);
+    clearValidationIssues?.();
     dataStore.fname = "";
     dataStore.fpath = "";
     dataStore.clearDirty();
@@ -154,6 +155,7 @@ export function useDataEditorDocument({
         // Preserve the current view when switching between CSV files.
       }
       else if (fileType === "json") {
+        clearValidationIssues?.();
         rowData.value = [];
         columnDefs.value = [];
         dataStore.mdText = "";
@@ -167,6 +169,7 @@ export function useDataEditorDocument({
         activeView.value = "editor";
       }
       else if (fileType === "md") {
+        clearValidationIssues?.();
         rowData.value = [];
         columnDefs.value = [];
         dataStore.jsonEditText = "";

@@ -70,6 +70,8 @@ const {
   hasValidationIssues,
   currentFileValidationSummary,
   clearValidationIssues,
+  currentValidationIssueCount,
+  getScopeValidationIssueCount,
   validateWorkbookScopes,
   refreshCurrentValidationScope,
   updateGridColumns,
@@ -289,6 +291,7 @@ const isTimeSeriesData = computed(() => {
             {{ selectedCount }} selected
           </span>
           <span v-if="hasValidationIssues" class="text-sm text-red-700" :title="fileValidationTitle">
+            {{ currentViewValidationIssueCount }} invalid cell{{ currentViewValidationIssueCount === 1 ? "" : "s" }} highlighted
             {{ currentViewValidationIssueCount }} invalid cell{{ currentViewValidationIssueCount === 1 ? "" : "s" }} highlighted
           </span>
         </div>
