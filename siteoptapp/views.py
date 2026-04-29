@@ -58,13 +58,13 @@ def get_project_data_path() -> str:
 
 
 def get_config_file_dir(client_id) -> Path:
-    return (CONFIG_ROOT / str(client_id)[0:6]).resolve()
+    return (CONFIG_ROOT / client_id).resolve()
 
 
 def get_client_work_root(client_id: str) -> str:
     """Root directory containing all work folders for this client.
     Must be a path that BOTH backend and spine_engine containers can access."""
-    return str((WORK_ROOT / str(client_id)[0:6]).resolve())
+    return str((WORK_ROOT / client_id).resolve())
 
 
 @csrf_exempt
