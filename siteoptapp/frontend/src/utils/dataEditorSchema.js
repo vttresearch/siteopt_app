@@ -17,7 +17,7 @@ const FILE_SCHEMAS = {
           grid: {
             type: COLUMN_TYPES.SELECT,
             required: true,
-            options: ["elec", "heat"],
+            options: ["elec", "heat", "heat-low-T", "heat-high-T", "cool", "water"],
           },
           alternative_name: { type: COLUMN_TYPES.TEXT },
           connection_flow_cost: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
@@ -50,7 +50,12 @@ const FILE_SCHEMAS = {
           type: {
             type: COLUMN_TYPES.SELECT,
             required: true,
-            options: ["heat", "cool"],
+            options: ["elec", "heat", "heat-low-T", "heat-high-T", "cool", "water"],
+          },
+          sourcegrid: {
+            type: COLUMN_TYPES.SELECT,
+            required: true,
+            options: ["elec", "heat", "heat-low-T", "heat-high-T", "cool", "water"],
           },
           unit_capacity: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
           unit_investment_cost: { type: COLUMN_TYPES.NUMBER },
@@ -71,7 +76,7 @@ const FILE_SCHEMAS = {
           grid: {
             type: COLUMN_TYPES.SELECT,
             required: true,
-            options: ["elec", "heat"],
+            options: ["elec", "heat", "heat-low-T", "heat-high-T", "water"],
           },
           name: { type: COLUMN_TYPES.TEXT, required: true },
           alternative_name: { type: COLUMN_TYPES.TEXT, required: true },
@@ -93,7 +98,7 @@ const FILE_SCHEMAS = {
           node: { type: COLUMN_TYPES.TEXT, required: true },
           grid: {
             type: COLUMN_TYPES.SELECT,
-            options: ["elec", "heat", "cool"],
+            options: ["elec", "heat", "heat-low-T", "heat-high-T", "cool", "water"],
           },
           alternative_name: { type: COLUMN_TYPES.TEXT },
           balance_type: { type: COLUMN_TYPES.TEXT },
@@ -112,7 +117,7 @@ const FILE_SCHEMAS = {
           type: {
             type: COLUMN_TYPES.SELECT,
             required: true,
-            options: ["", "elec", "heat"],
+            options: ["elec", "heat", "heat-low-T", "heat-high-T", "cool", "water"],
           },
           alternative_name: { type: COLUMN_TYPES.TEXT, required: true },
           node_state_cap: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
