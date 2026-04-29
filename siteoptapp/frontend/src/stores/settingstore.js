@@ -12,7 +12,6 @@ export const useSettingStore = defineStore('settingsData', () => {
   const creatingProjectFolder = ref(false);
   const loadingProjects = ref(false);
   const currentInputFiles = ref({})
-  const currentInputValidationByPath = ref({})
   const backendAvailable = ref(false);
   const backendRetryAttempts = ref(0);
   const executionInProgress = ref(false)
@@ -28,7 +27,6 @@ export const useSettingStore = defineStore('settingsData', () => {
     creatingProjectFolder.value = false
     loadingProjects.value = false
     currentInputFiles.value = {}
-    currentInputValidationByPath.value = {}
     backendAvailable.value = false
     backendRetryAttempts.value = 0
     executionInProgress.value = false
@@ -78,18 +76,6 @@ export const useSettingStore = defineStore('settingsData', () => {
     currentInputFiles.value = data
   }
 
-  function setCurrentInputValidationByPath(data) {
-    currentInputValidationByPath.value = data ?? {}
-  }
-
-  function setCurrentInputValidationEntry(path, summary) {
-    if (!path) return
-    currentInputValidationByPath.value = {
-      ...currentInputValidationByPath.value,
-      [path]: summary ?? { invalidCount: 0, filetype: null, sheets: {} },
-    }
-  }
-
   return {
     inputDataPath,
     projectPath,
@@ -101,7 +87,6 @@ export const useSettingStore = defineStore('settingsData', () => {
     creatingProjectFolder,
     loadingProjects,
     currentInputFiles,
-    currentInputValidationByPath,
     backendAvailable,
     backendRetryAttempts,
     executionInProgress,
@@ -114,7 +99,5 @@ export const useSettingStore = defineStore('settingsData', () => {
     setActiveProjectName,
     setActiveProjectPath,
     setCurrentInputFiles,
-    setCurrentInputValidationByPath,
-    setCurrentInputValidationEntry,
   }
 })

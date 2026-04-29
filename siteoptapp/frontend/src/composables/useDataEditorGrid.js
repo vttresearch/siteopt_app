@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted } from "vue";
 
 import { COLUMN_TYPES } from "@/utils/dataEditorSchema.js";
 import { useValidationStore } from "@/stores/validationstore.js";
