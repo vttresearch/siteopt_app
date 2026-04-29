@@ -12,6 +12,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from "@/stores/sheetStore";
+import { useValidationStore } from "@/stores/validationstore.js";
 import { detectTimeSeriesStructure } from "@/utils/chartUtils.js";
 import {
   createHistoryState,
@@ -23,6 +24,7 @@ const data_store = useTableDataStore();
 const notify = useNotificationStore();
 const settingStore = useSettingStore();
 const sheetStore = useSheetStore();
+const validationStore = useValidationStore();
 
 const rowData = ref([]);
 const columnDefs = ref([]);
@@ -65,9 +67,8 @@ const {
   defaultColDef,
   hasSelection,
   hasValidationIssues,
-  currentValidationIssueCount,
+  currentFileValidationSummary,
   clearValidationIssues,
-  getScopeValidationIssueCount,
   validateWorkbookScopes,
   refreshCurrentValidationScope,
   updateGridColumns,
@@ -80,7 +81,6 @@ const {
   dataStore: data_store,
   notify,
   sheetStore,
-  settingStore,
   rowData,
   columnDefs,
   historyState,
@@ -106,34 +106,35 @@ const {
   clearHistory,
   updateTableWithActiveSheet,
   clearValidationIssues,
+  resetValidationStore: validationStore.reset,
   validateWorkbookScopes,
   refreshCurrentValidationScope,
 }));
 
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
 const sheetValidationCounts = computed(() => {
-  if (data_store.daata?.filetype !== "xlsx") return {};
+  const summary = currentFileValidationSummary.value;
+  if (summary.filetype !== "xlsx") return {};
 
-  return Object.keys(sheetStore.sheetsByName ?? {}).reduce((acc, sheetName) => {
-    const count = getScopeValidationIssueCount(sheetName);
+  return Object.entries(summary.sheets ?? {}).reduce((acc, [sheetName, sheetSummary]) => {
+    const count = sheetSummary?.invalidCount ?? 0;
     if (count > 0) acc[sheetName] = count;
     return acc;
   }, {});
 });
-const workbookValidationIssueCount = computed(() => (
-  Object.values(sheetValidationCounts.value).reduce((sum, count) => sum + count, 0)
-));
-const fileValidationIssueCount = computed(() => (
-  data_store.daata?.filetype === "xlsx"
-    ? workbookValidationIssueCount.value
-    : currentValidationIssueCount.value
-));
+const fileValidationIssueCount = computed(() => currentFileValidationSummary.value.invalidCount ?? 0);
 const hasFileValidationIssues = computed(() => fileValidationIssueCount.value > 0);
 const fileValidationTitle = computed(() => (
   hasFileValidationIssues.value
     ? `${fileValidationIssueCount.value} invalid cell${fileValidationIssueCount.value === 1 ? "" : "s"} in this file`
     : null
 ));
+const currentViewValidationIssueCount = computed(() => {
+  if (currentFileValidationSummary.value.filetype === "xlsx") {
+    return currentFileValidationSummary.value.sheets?.[sheetStore.activeSheet]?.invalidCount ?? 0;
+  }
+  return currentFileValidationSummary.value.invalidCount ?? 0;
+});
 
 function looksLikeExcelDateNumber(n) {
   return typeof n === "number" && n > 20000 && n < 80000;
@@ -286,7 +287,7 @@ const isTimeSeriesData = computed(() => {
             {{ selectedCount }} selected
           </span>
           <span v-if="hasValidationIssues" class="text-sm text-red-700" :title="fileValidationTitle">
-            {{ currentValidationIssueCount }} invalid cell{{ currentValidationIssueCount === 1 ? "" : "s" }} highlighted
+            {{ currentViewValidationIssueCount }} invalid cell{{ currentViewValidationIssueCount === 1 ? "" : "s" }} highlighted
           </span>
         </div>
 

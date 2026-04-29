@@ -3,6 +3,7 @@ import { ref, watch, computed } from "vue";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
+import { useValidationStore } from "@/stores/validationstore.js";
 import { fetchInputFiles, fetchFileContents, uploadInputCsv } from "@/utils/functions.js";
 import { validateTimeValueCsvText } from "@/utils/inputCsvUploadUtils.js";
 import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
@@ -10,6 +11,7 @@ import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 const settingStore = useSettingStore()
 const dataStore = useTableDataStore()
 const notify = useNotificationStore()
+const validationStore = useValidationStore()
 const props = defineProps({
   hasValidationIssues: {
     type: Boolean,
@@ -42,7 +44,7 @@ function getFilePath(categoryValue, fileName) {
 
 function getFileInvalidCount(categoryValue, fileName) {
   const fullPath = getFilePath(categoryValue, fileName)
-  return settingStore.currentInputValidationByPath?.[fullPath]?.invalidCount ?? 0
+  return validationStore.getValidationSummary(fullPath).invalidCount
 }
 
 function getCategoryInvalidCount(categoryValue) {

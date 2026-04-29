@@ -1,6 +1,7 @@
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted } from "vue";
 
 import { COLUMN_TYPES } from "@/utils/dataEditorSchema.js";
+import { useValidationStore } from "@/stores/validationstore.js";
 import {
   pushHistory,
   undoHistory,
@@ -23,7 +24,6 @@ export function useDataEditorGrid({
   dataStore,
   notify,
   sheetStore,
-  settingStore,
   rowData,
   columnDefs,
   historyState,
@@ -31,6 +31,7 @@ export function useDataEditorGrid({
   markDirty,
   onSave,
 }) {
+  const validationStore = useValidationStore();
   const rowSelectionOptions = {
     mode: "multiRow",
     enableSelectionWithoutKeys: false,
@@ -38,19 +39,25 @@ export function useDataEditorGrid({
   };
 
   const hasSelection = computed(() => selectedCount.value > 0);
-  const validationIssuesByScope = ref({});
+  const activeValidationPath = computed(() => dataStore.fpath || "");
   const activeValidationScope = computed(() => (
     dataStore.daata?.filetype === "xlsx"
       ? (sheetStore.activeSheet || "__workbook__")
       : "__file__"
   ));
   const currentValidationIssues = computed(
-    () => validationIssuesByScope.value[activeValidationScope.value] ?? {},
+    () => validationStore.getScopeIssues(activeValidationPath.value, activeValidationScope.value),
   );
   const currentValidationIssueCount = computed(
     () => countValidationIssues(currentValidationIssues.value),
   );
   const hasValidationIssues = computed(() => currentValidationIssueCount.value > 0);
+  const currentFileValidationSummary = computed(() => {
+    return validationStore.getValidationSummary(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+    );
+  });
 
   const defaultColDef = {
     editable: true,
@@ -83,72 +90,24 @@ export function useDataEditorGrid({
   }
 
   function setScopeValidationIssues(scopeName, validationIssues = {}) {
-    validationIssuesByScope.value = {
-      ...validationIssuesByScope.value,
-      [scopeName]: validationIssues,
-    };
-  }
-
-  function clearValidationIssues() {
-    validationIssuesByScope.value = {};
-    syncCurrentInputValidationSummary();
-  }
-
-  function getScopeValidationIssueCount(scopeName) {
-    return countValidationIssues(validationIssuesByScope.value[scopeName] ?? {});
-  }
-
-  function getCurrentFileValidationSummary() {
-    if (!dataStore.daata?.filetype) {
-      return { invalidCount: 0, filetype: null, sheets: {} };
-    }
-
-    if (dataStore.daata.filetype === "xlsx") {
-      const sheets = {};
-      let invalidCount = 0;
-
-      for (const sheetName of Object.keys(sheetStore.sheetsByName ?? {})) {
-        const sheetInvalidCount = getScopeValidationIssueCount(sheetName);
-        sheets[sheetName] = { invalidCount: sheetInvalidCount };
-        invalidCount += sheetInvalidCount;
-      }
-
-      return {
-        invalidCount,
-        filetype: "xlsx",
-        sheets,
-      };
-    }
-
-    return {
-      invalidCount: currentValidationIssueCount.value,
-      filetype: dataStore.daata.filetype,
-      sheets: {},
-    };
-  }
-
-  function syncCurrentInputValidationSummary() {
-    const currentFilePath = dataStore.fpath;
-    const projectInputRoot = settingStore?.activeProjectPath
-      ? `${settingStore.activeProjectPath}/current_input`
-      : "";
-
-    if (!settingStore?.setCurrentInputValidationEntry || !currentFilePath || !projectInputRoot) {
-      return;
-    }
-
-    if (!currentFilePath.startsWith(projectInputRoot)) {
-      return;
-    }
-
-    settingStore.setCurrentInputValidationEntry(
-      currentFilePath,
-      getCurrentFileValidationSummary(),
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      scopeName,
+      validationIssues,
     );
   }
 
+  function clearValidationIssues() {
+    validationStore.clearFileIssues(activeValidationPath.value);
+  }
+
+  function getScopeValidationIssueCount(scopeName) {
+    return validationStore.getScopeInvalidCount(activeValidationPath.value, scopeName);
+  }
+
   function getCellValidationIssue(rowId, field, scopeName = activeValidationScope.value) {
-    return validationIssuesByScope.value[scopeName]?.[`${rowId}::${field}`] ?? null;
+    return validationStore.getScopeIssues(activeValidationPath.value, scopeName)?.[`${rowId}::${field}`] ?? null;
   }
 
   function hasCellValidationIssue(rowId, field, scopeName = activeValidationScope.value) {
@@ -209,8 +168,12 @@ export function useDataEditorGrid({
       }
     }
 
-    setScopeValidationIssues(getValidationScopeName(sheetName), validationIssues);
-    syncCurrentInputValidationSummary();
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      getValidationScopeName(sheetName),
+      validationIssues,
+    );
   }
 
   function validateWorkbookScopes(workbookData = {}, fileName = dataStore.fname) {
@@ -247,21 +210,28 @@ export function useDataEditorGrid({
   }
 
   function upsertCellValidationIssue(issue, scopeName = activeValidationScope.value) {
-    const currentScopeIssues = validationIssuesByScope.value[scopeName] ?? {};
-    validationIssuesByScope.value = {
-      ...validationIssuesByScope.value,
-      [scopeName]: {
+    const currentScopeIssues = validationStore.getScopeIssues(activeValidationPath.value, scopeName);
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      scopeName,
+      {
         ...currentScopeIssues,
         [issue.key]: issue,
       },
-    };
+    );
   }
 
   function clearCellValidationIssue(rowId, field, scopeName = activeValidationScope.value) {
-    const currentScopeIssues = validationIssuesByScope.value[scopeName] ?? {};
+    const currentScopeIssues = validationStore.getScopeIssues(activeValidationPath.value, scopeName);
     const nextScopeIssues = { ...currentScopeIssues };
     delete nextScopeIssues[`${rowId}::${field}`];
-    setScopeValidationIssues(scopeName, nextScopeIssues);
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      scopeName,
+      nextScopeIssues,
+    );
   }
 
   function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
@@ -316,6 +286,16 @@ export function useDataEditorGrid({
           rowNodes: params.node ? [params.node] : undefined,
           columns: params.colDef?.field ? [params.colDef.field] : undefined,
           force: true,
+        });
+        nextTick(() => {
+          params.api?.refreshCells?.({
+            rowNodes: params.node ? [params.node] : undefined,
+            columns: params.colDef?.field ? [params.colDef.field] : undefined,
+            force: true,
+          });
+          params.api?.redrawRows?.({
+            rowNodes: params.node ? [params.node] : undefined,
+          });
         });
 
         return true;
@@ -536,6 +516,16 @@ export function useDataEditorGrid({
       columns: field ? [field] : undefined,
       force: true,
     });
+    nextTick(() => {
+      params.api?.refreshCells?.({
+        rowNodes: params.node ? [params.node] : undefined,
+        columns: field ? [field] : undefined,
+        force: true,
+      });
+      params.api?.redrawRows?.({
+        rowNodes: params.node ? [params.node] : undefined,
+      });
+    });
 
     if (dataStore.daata?.filetype === "xlsx") {
       sheetStore.toggleSheetDataUpdated();
@@ -621,13 +611,27 @@ export function useDataEditorGrid({
     });
   }
 
+  function refreshGridValidationStyles() {
+    const api = dataStore.gridApi;
+    if (!api) return;
+
+    api.refreshCells({ force: true });
+    nextTick(() => {
+      api.refreshCells({ force: true });
+      api.redrawRows?.();
+    });
+  }
+
   function undo() {
     const changed = undoHistory({
       historyState,
       rowDataRef: rowData,
       markDirty,
     });
-    if (changed) refreshCurrentValidationScope();
+    if (changed) {
+      refreshCurrentValidationScope();
+      refreshGridValidationStyles();
+    }
   }
 
   function redo() {
@@ -636,7 +640,10 @@ export function useDataEditorGrid({
       rowDataRef: rowData,
       markDirty,
     });
-    if (changed) refreshCurrentValidationScope();
+    if (changed) {
+      refreshCurrentValidationScope();
+      refreshGridValidationStyles();
+    }
   }
 
   function handleUndoRedoShortcut(event) {
@@ -806,7 +813,7 @@ export function useDataEditorGrid({
     hasSelection,
     hasValidationIssues,
     currentValidationIssueCount,
-    validationIssuesByScope,
+    currentFileValidationSummary,
     clearValidationIssues,
     getScopeValidationIssueCount,
     validateWorkbookScopes,

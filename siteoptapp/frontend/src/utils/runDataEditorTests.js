@@ -5,6 +5,7 @@ import { fileDataStoreTests } from "./__tests__/fileDataStore.spec.js";
 import { inputCsvUploadTests } from "./__tests__/inputCsvUpload.spec.js";
 import { sheetStoreTests } from "./__tests__/sheetStore.spec.js";
 import { dataEditorValidationSummaryTests } from "./__tests__/dataEditorValidationSummary.spec.js";
+import { validationStoreTests } from "./__tests__/validationStore.spec.js";
 
 const suites = [
   {
@@ -34,6 +35,10 @@ const suites = [
   {
     name: "Data Editor Validation Summary",
     tests: dataEditorValidationSummaryTests,
+  },
+  {
+    name: "Validation Store",
+    tests: validationStoreTests,
   },
 ];
 

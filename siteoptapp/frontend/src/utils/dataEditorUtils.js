@@ -378,32 +378,6 @@ export function isReferenceValue(value) {
   return typeof value === "string" && value.trim().toLowerCase().startsWith("ts:");
 }
 
-export function isAllowedNumericCharacter(char, type) {
-  if (/^[0-9]$/.test(char)) return true;
-  if (type === COLUMN_TYPES.NUMBER && (char === "." || char === ",")) return true;
-  return false;
-}
-
-export function shouldBlockEditorKey({
-  key,
-  ctrlOrCmd = false,
-  altKey = false,
-  validationType,
-}) {
-  if (
-    validationType !== COLUMN_TYPES.NUMBER &&
-    validationType !== COLUMN_TYPES.INTEGER
-  ) {
-    return false;
-  }
-
-  if (ctrlOrCmd || altKey || typeof key !== "string" || key.length !== 1) {
-    return false;
-  }
-
-  return !isAllowedNumericCharacter(key, validationType);
-}
-
 export function validateAndNormalizeCellValue({ value, columnName, type, options = [] }) {
   if (isEmptyCellValue(value)) {
     return { valid: true, normalizedValue: "" };

@@ -4,6 +4,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useResultStore } from "@/stores/resultstore.js";
 import { useScenarioStore } from "@/stores/scenariostore.js";
 import { useMetadataStore } from "@/stores/metadatastore.js";
+import { useValidationStore } from "@/stores/validationstore.js";
 import { API_BASE } from "@/config.js";
 import { summarizeEditorFileValidation } from "./dataEditorValidationSummary.js";
 
@@ -215,11 +216,12 @@ async function fetchInputFileDataForValidation(fullPath, notify) {
 
 async function refreshCurrentInputValidation(projectName, contents) {
   const settingStore = useSettingStore()
+  const validationStore = useValidationStore()
   const notify = useNotificationStore()
   const projectPath = settingStore.activeProjectPath
 
   if (!projectPath || settingStore.activeProjectName !== projectName) {
-    settingStore.setCurrentInputValidationByPath({})
+    validationStore.setCachedSummariesByPath({})
     return
   }
 
@@ -247,7 +249,7 @@ async function refreshCurrentInputValidation(projectName, contents) {
     return
   }
 
-  settingStore.setCurrentInputValidationByPath(Object.fromEntries(results))
+  validationStore.setCachedSummariesByPath(Object.fromEntries(results))
 }
 
 /**

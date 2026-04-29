@@ -10,7 +10,6 @@ import {
   resolveColumnConfig,
   buildEditorColumnDef,
   getColumnValidationMeta,
-  shouldBlockEditorKey,
   isSelectColumnDef,
 } from "../dataEditorUtils.js";
 
@@ -173,30 +172,6 @@ export const dataEditorLogicTests = [
 
       assert.equal(colDef.cellEditor, "agTextCellEditor");
       assert.equal(colDef.cellDataType, "text");
-    },
-  },
-  {
-    name: "shouldBlockEditorKey blocks letters for integer fields",
-    run() {
-      assert.equal(
-        shouldBlockEditorKey({
-          key: "a",
-          validationType: COLUMN_TYPES.INTEGER,
-        }),
-        true,
-      );
-    },
-  },
-  {
-    name: "shouldBlockEditorKey allows comma for numeric fields",
-    run() {
-      assert.equal(
-        shouldBlockEditorKey({
-          key: ",",
-          validationType: COLUMN_TYPES.NUMBER,
-        }),
-        false,
-      );
     },
   },
   {
