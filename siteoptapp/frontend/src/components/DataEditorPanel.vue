@@ -31,6 +31,7 @@ const columnDefs = ref([]);
 const selectedCount = ref(0);
 const historyState = reactive(createHistoryState());
 const showEditorHelp = ref(false);
+const gridShellRef = ref(null);
 
 function getRowId(params) {
   return params.data.__id;
@@ -81,6 +82,7 @@ const {
   dataStore: data_store,
   notify,
   sheetStore,
+  gridShellRef,
   rowData,
   columnDefs,
   historyState,
@@ -291,7 +293,7 @@ const isTimeSeriesData = computed(() => {
           </span>
         </div>
 
-        <div class="flex-1 overflow-auto">
+        <div ref="gridShellRef" class="flex-1 overflow-auto">
           <AgGridVue
             class="w-full h-full"
             :columnDefs="columnDefs"
@@ -393,6 +395,7 @@ const isTimeSeriesData = computed(() => {
             <li><span class="font-medium">Ctrl+Shift+Enter</span>: add a row at the bottom of the sheet.</li>
             <li><span class="font-medium">Add row button</span>: adds a row below the selection or to the end when nothing is selected.</li>
             <li><span class="font-medium">Delete selected rows button</span>: removes the selected rows completely.</li>
+            <li><span class="font-medium">Esc</span>: unselect selected rows when you are not editing a cell.</li>
           </ul>
         </section>
 

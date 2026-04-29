@@ -24,6 +24,7 @@ export function useDataEditorGrid({
   dataStore,
   notify,
   sheetStore,
+  gridShellRef,
   rowData,
   columnDefs,
   historyState,
@@ -492,6 +493,12 @@ export function useDataEditorGrid({
     return clearFocusedCell(api);
   }
 
+  function clearRowSelection(api = dataStore.gridApi) {
+    if (!api || selectedCount.value <= 0) return false;
+    api.deselectAll?.();
+    return true;
+  }
+
   function onCellValueChanged(params) {
     if (historyState.isApplying) return;
 
@@ -769,6 +776,14 @@ export function useDataEditorGrid({
   function handleGlobalKeydown(e) {
     const key = e.key?.toLowerCase?.();
     const ctrlOrCmd = e.ctrlKey || e.metaKey;
+    const api = dataStore.gridApi;
+
+    if (key === "escape" && api?.getEditingCells?.().length === 0) {
+      if (clearRowSelection(api)) {
+        e.preventDefault();
+      }
+      return;
+    }
 
     if (ctrlOrCmd && key === "s") {
       e.preventDefault();
@@ -798,12 +813,24 @@ export function useDataEditorGrid({
     }
   }
 
+  function handleDocumentMouseDown(e) {
+    const api = dataStore.gridApi;
+    const gridShellEl = gridShellRef?.value;
+
+    if (!api || !gridShellEl || selectedCount.value <= 0) return;
+    if (gridShellEl.contains(e.target)) return;
+
+    clearRowSelection(api);
+  }
+
   onMounted(() => {
     window.addEventListener("keydown", handleGlobalKeydown);
+    document.addEventListener("mousedown", handleDocumentMouseDown);
   });
 
   onUnmounted(() => {
     window.removeEventListener("keydown", handleGlobalKeydown);
+    document.removeEventListener("mousedown", handleDocumentMouseDown);
     dataStore.unregisterGridApi(dataStore.gridApi);
   });
 
