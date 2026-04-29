@@ -83,13 +83,21 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # Database
+if DEBUG:
+    # Development – keep the existing DB exactly as it is
+    DB_NAME = BASE_DIR / "db.sqlite3"
+else:
+    # Production – separate DB file
+    DB_NAME = "/var/lib/siteopt/db/db.sqlite3"
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": DB_NAME,
     }
 }
 
+# Cache
 if DEBUG:
     # Dev: use in-memory cache
     CACHES = {

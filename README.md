@@ -93,7 +93,7 @@ docker compose -f docker-compose.dev.yml --profile dev up
 
 2. Run
  
-```docker compose -f docker-compose.dev.yml --profile prod --build```
+```docker compose -f docker-compose.dev.yml --profile prod build```
 
 3. Login to registry.elexia.amct.pl using developer account
 
