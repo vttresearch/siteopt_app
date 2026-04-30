@@ -1,6 +1,7 @@
 import { computed, nextTick, onMounted, onUnmounted } from "vue";
 
 import { COLUMN_TYPES } from "@/utils/dataEditorSchema.js";
+import { useValidationStore } from "@/stores/validationstore.js";
 import {
   pushHistory,
   undoHistory,
@@ -11,11 +12,11 @@ import {
   buildClearFocusedCellEdit,
   normalizeNumericInput,
   isReferenceValue,
-  validateAndNormalizeCellValue,
+  buildValidationIssue,
   resolveColumnConfig,
   buildEditorColumnDef,
   getColumnValidationMeta,
-  shouldBlockEditorKey,
+  countValidationIssues,
   isSelectColumnDef,
 } from "@/utils/dataEditorUtils.js";
 
@@ -23,6 +24,7 @@ export function useDataEditorGrid({
   dataStore,
   notify,
   sheetStore,
+  gridShellRef,
   rowData,
   columnDefs,
   historyState,
@@ -30,6 +32,7 @@ export function useDataEditorGrid({
   markDirty,
   onSave,
 }) {
+  const validationStore = useValidationStore();
   const rowSelectionOptions = {
     mode: "multiRow",
     enableSelectionWithoutKeys: false,
@@ -37,6 +40,25 @@ export function useDataEditorGrid({
   };
 
   const hasSelection = computed(() => selectedCount.value > 0);
+  const activeValidationPath = computed(() => dataStore.fpath || "");
+  const activeValidationScope = computed(() => (
+    dataStore.daata?.filetype === "xlsx"
+      ? (sheetStore.activeSheet || "__workbook__")
+      : "__file__"
+  ));
+  const currentValidationIssues = computed(
+    () => validationStore.getScopeIssues(activeValidationPath.value, activeValidationScope.value),
+  );
+  const currentValidationIssueCount = computed(
+    () => countValidationIssues(currentValidationIssues.value),
+  );
+  const hasValidationIssues = computed(() => currentValidationIssueCount.value > 0);
+  const currentFileValidationSummary = computed(() => {
+    return validationStore.getValidationSummary(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+    );
+  });
 
   const defaultColDef = {
     editable: true,
@@ -44,31 +66,180 @@ export function useDataEditorGrid({
     suppressKeyboardEvent: (params) => {
       const key = params.event?.key?.toLowerCase?.();
       const ctrlOrCmd = params.event?.ctrlKey || params.event?.metaKey;
-      const validationType = getColumnValidationMeta(params.colDef).type;
+      const validationMeta = getColumnValidationMeta(params.colDef);
+      const validationType = validationMeta.type;
+
+      if (key === "delete" && params.editing && validationType === COLUMN_TYPES.SELECT) {
+        params.event.preventDefault?.();
+        params.node?.setDataValue?.(params.colDef?.field, "");
+        params.api?.stopEditing?.();
+        return true;
+      }
 
       if (key === "delete") return true;
       if (key === "enter" && ctrlOrCmd) return true;
-      if (shouldBlockEditorKey({
-        key: params.event?.key,
-        ctrlOrCmd,
-        altKey: params.event?.altKey,
-        validationType,
-      })) {
-        notify.show(
-          `${params.colDef?.headerName ?? params.colDef?.field ?? "This field"} accepts only ${validationType === COLUMN_TYPES.INTEGER ? "integer" : "numeric"} characters`,
-          2500,
-          "error",
-        );
-        params.event.preventDefault?.();
-        return true;
-      }
 
       return false;
     },
   };
 
+  function getValidationScopeName(sheetName = sheetStore.activeSheet) {
+    if (dataStore.daata?.filetype === "xlsx") {
+      return sheetName || "__workbook__";
+    }
+    return "__file__";
+  }
+
+  function setScopeValidationIssues(scopeName, validationIssues = {}) {
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      scopeName,
+      validationIssues,
+    );
+  }
+
+  function clearValidationIssues() {
+    validationStore.clearFileIssues(activeValidationPath.value);
+  }
+
+  function getScopeValidationIssueCount(scopeName) {
+    return validationStore.getScopeInvalidCount(activeValidationPath.value, scopeName);
+  }
+
+  function getCellValidationIssue(rowId, field, scopeName = activeValidationScope.value) {
+    return validationStore.getScopeIssues(activeValidationPath.value, scopeName)?.[`${rowId}::${field}`] ?? null;
+  }
+
+  function hasCellValidationIssue(rowId, field, scopeName = activeValidationScope.value) {
+    return Boolean(getCellValidationIssue(rowId, field, scopeName));
+  }
+
+  function validateCellValue({
+    rowId,
+    field,
+    value,
+    columnName,
+    type,
+    options = [],
+  }) {
+    return buildValidationIssue({
+      rowId,
+      field,
+      value,
+      columnName,
+      type,
+      options,
+    });
+  }
+
+  function validateRowsForScope({
+    rows,
+    columns,
+    validationsByColumn,
+    fileName,
+    sheetName,
+  }) {
+    const validationIssues = {};
+
+    for (const row of rows ?? []) {
+      const rowId = row?.__id;
+      if (!rowId) continue;
+
+      for (const columnName of columns ?? []) {
+        const config = resolveColumnConfig({
+          columnName,
+          rows,
+          validationOptions: validationsByColumn?.[columnName],
+          fileName,
+          sheetName,
+        });
+        const validation = validateCellValue({
+          rowId,
+          field: columnName,
+          value: row?.[columnName] ?? "",
+          columnName,
+          type: config.type,
+          options: config.options,
+        });
+
+        if (!validation.valid) {
+          validationIssues[validation.issue.key] = validation.issue;
+        }
+      }
+    }
+
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      getValidationScopeName(sheetName),
+      validationIssues,
+    );
+  }
+
+  function validateWorkbookScopes(workbookData = {}, fileName = dataStore.fname) {
+    clearValidationIssues();
+
+    for (const [sheetName, sheetRecord] of Object.entries(workbookData ?? {})) {
+      validateRowsForScope({
+        rows: sheetRecord?.rows ?? [],
+        columns: sheetRecord?.columns ?? [],
+        validationsByColumn: sheetRecord?.validationsByColumn ?? {},
+        fileName,
+        sheetName,
+      });
+    }
+  }
+
+  function refreshCurrentValidationScope() {
+    const sheetRecord = dataStore.daata?.filetype === "xlsx"
+      ? sheetStore.getActiveSheetRecord()
+      : null;
+
+    validateRowsForScope({
+      rows: rowData.value,
+      columns:
+        dataStore.daata?.filetype === "xlsx"
+          ? (sheetRecord?.columns ?? [])
+          : columnDefs.value
+            .filter((column) => column.field && column.field !== "__id")
+            .map((column) => column.field),
+      validationsByColumn: sheetRecord?.validationsByColumn ?? {},
+      fileName: dataStore.fname,
+      sheetName: sheetStore.activeSheet,
+    });
+  }
+
+  function upsertCellValidationIssue(issue, scopeName = activeValidationScope.value) {
+    const currentScopeIssues = validationStore.getScopeIssues(activeValidationPath.value, scopeName);
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      scopeName,
+      {
+        ...currentScopeIssues,
+        [issue.key]: issue,
+      },
+    );
+  }
+
+  function clearCellValidationIssue(rowId, field, scopeName = activeValidationScope.value) {
+    const currentScopeIssues = validationStore.getScopeIssues(activeValidationPath.value, scopeName);
+    const nextScopeIssues = { ...currentScopeIssues };
+    delete nextScopeIssues[`${rowId}::${field}`];
+    validationStore.setScopeIssues(
+      activeValidationPath.value,
+      dataStore.daata?.filetype,
+      scopeName,
+      nextScopeIssues,
+    );
+  }
+
   function withValidatedValueSetter(columnDef, { type, options = [] } = {}) {
     if (!columnDef?.field || columnDef.field === "__id") return columnDef;
+
+    const baseCellClass = columnDef.cellClass;
+    const baseCellStyle = columnDef.cellStyle;
 
     return {
       ...columnDef,
@@ -95,25 +266,90 @@ export function useDataEditorGrid({
         return params.newValue;
       },
       valueSetter: (params) => {
-        const result = validateAndNormalizeCellValue({
+        const result = validateCellValue({
+          rowId: params.data?.__id,
+          field: params.colDef.field,
           value: params.newValue,
           columnName: params.colDef?.headerName ?? params.colDef?.field ?? "Value",
           type,
           options,
         });
 
-        if (!result.valid) {
-          notify.show(result.message, 4000, "error");
-          return false;
+        if (result.valid) {
+          clearCellValidationIssue(params.data?.__id, params.colDef.field);
+          params.data[params.colDef.field] = result.normalizedValue;
+        } else {
+          upsertCellValidationIssue(result.issue);
+          params.data[params.colDef.field] = params.newValue ?? "";
         }
 
-        params.data[params.colDef.field] = result.normalizedValue;
+        params.api?.refreshCells?.({
+          rowNodes: params.node ? [params.node] : undefined,
+          columns: params.colDef?.field ? [params.colDef.field] : undefined,
+          force: true,
+        });
+        nextTick(() => {
+          params.api?.refreshCells?.({
+            rowNodes: params.node ? [params.node] : undefined,
+            columns: params.colDef?.field ? [params.colDef.field] : undefined,
+            force: true,
+          });
+          params.api?.redrawRows?.({
+            rowNodes: params.node ? [params.node] : undefined,
+          });
+        });
+
         return true;
+      },
+      tooltipValueGetter: (params) => {
+        const issue = getCellValidationIssue(params.data?.__id, params.colDef?.field);
+        return issue?.message ?? null;
+      },
+      cellClass: (params) => {
+        const baseClasses =
+          typeof baseCellClass === "function"
+            ? baseCellClass(params)
+            : baseCellClass;
+        const classes = [];
+
+        if (Array.isArray(baseClasses)) classes.push(...baseClasses.filter(Boolean));
+        else if (typeof baseClasses === "string" && baseClasses) classes.push(baseClasses);
+
+        if (hasCellValidationIssue(params.data?.__id, params.colDef?.field)) {
+          classes.push("data-editor-invalid-cell");
+        }
+
+        return classes;
+      },
+      cellStyle: (params) => {
+        const baseStyle =
+          typeof baseCellStyle === "function"
+            ? baseCellStyle(params)
+            : (baseCellStyle ?? null);
+
+        if (!hasCellValidationIssue(params.data?.__id, params.colDef?.field)) {
+          return baseStyle;
+        }
+
+        return {
+          ...(baseStyle ?? {}),
+          backgroundColor: "#fef2f2",
+          color: "#991b1b",
+          boxShadow: "inset 0 0 0 1px #fca5a5",
+        };
       },
     };
   }
 
   function updateGridColumns({ rows, columns, validationsByColumn, fileName, sheetName }) {
+    validateRowsForScope({
+      rows,
+      columns,
+      validationsByColumn,
+      fileName,
+      sheetName,
+    });
+
     columnDefs.value = [
       {
         headerName: "#",
@@ -185,6 +421,7 @@ export function useDataEditorGrid({
     rowData.value = result.rows;
     pushHistory(historyState, result.historyEntry);
     markDirty();
+    refreshCurrentValidationScope();
 
     nextTick(() => {
       const firstEditableField = columnDefs.value.find(
@@ -217,6 +454,7 @@ export function useDataEditorGrid({
     rowData.value = result.rows;
     pushHistory(historyState, result.historyEntry);
     markDirty();
+    refreshCurrentValidationScope();
   }
 
   function clearSelectedRows(api) {
@@ -231,6 +469,7 @@ export function useDataEditorGrid({
     rowData.value = result.rows;
     pushHistory(historyState, result.historyEntry);
     markDirty();
+    refreshCurrentValidationScope();
     return true;
   }
 
@@ -245,12 +484,19 @@ export function useDataEditorGrid({
     rowData.value = result.rows;
     pushHistory(historyState, result.historyEntry);
     markDirty();
+    refreshCurrentValidationScope();
     return true;
   }
 
   function clearSelectionOrFocusedCell(api) {
     if (clearSelectedRows(api)) return true;
     return clearFocusedCell(api);
+  }
+
+  function clearRowSelection(api = dataStore.gridApi) {
+    if (!api || selectedCount.value <= 0) return false;
+    api.deselectAll?.();
+    return true;
   }
 
   function onCellValueChanged(params) {
@@ -271,6 +517,26 @@ export function useDataEditorGrid({
     });
 
     markDirty();
+    refreshCurrentValidationScope();
+    params.api?.refreshCells?.({
+      rowNodes: params.node ? [params.node] : undefined,
+      columns: field ? [field] : undefined,
+      force: true,
+    });
+    nextTick(() => {
+      params.api?.refreshCells?.({
+        rowNodes: params.node ? [params.node] : undefined,
+        columns: field ? [field] : undefined,
+        force: true,
+      });
+      params.api?.redrawRows?.({
+        rowNodes: params.node ? [params.node] : undefined,
+      });
+    });
+
+    if (dataStore.daata?.filetype === "xlsx") {
+      sheetStore.toggleSheetDataUpdated();
+    }
   }
 
   function onCellClicked(params) {
@@ -352,20 +618,39 @@ export function useDataEditorGrid({
     });
   }
 
-  function undo() {
-    undoHistory({
-      historyState,
-      rowDataRef: rowData,
-      markDirty,
+  function refreshGridValidationStyles() {
+    const api = dataStore.gridApi;
+    if (!api) return;
+
+    api.refreshCells({ force: true });
+    nextTick(() => {
+      api.refreshCells({ force: true });
+      api.redrawRows?.();
     });
   }
 
-  function redo() {
-    redoHistory({
+  function undo() {
+    const changed = undoHistory({
       historyState,
       rowDataRef: rowData,
       markDirty,
     });
+    if (changed) {
+      refreshCurrentValidationScope();
+      refreshGridValidationStyles();
+    }
+  }
+
+  function redo() {
+    const changed = redoHistory({
+      historyState,
+      rowDataRef: rowData,
+      markDirty,
+    });
+    if (changed) {
+      refreshCurrentValidationScope();
+      refreshGridValidationStyles();
+    }
   }
 
   function handleUndoRedoShortcut(event) {
@@ -442,20 +727,15 @@ export function useDataEditorGrid({
     try {
       const text = await navigator.clipboard.readText();
       const oldValue = cell.value ?? "";
-      // Reuse cell validation here so paste follows the same schema rules as manual edits.
-      const validationResult = validateAndNormalizeCellValue({
+      const validatedCell = validateCellValue({
+        rowId: cell.rowId,
+        field: cell.field,
         value: text ?? "",
         columnName: cell.field,
         type: cell.validationType,
         options: cell.validationOptions,
       });
-
-      if (!validationResult.valid) {
-        notify.show(validationResult.message, 4000, "error");
-        return false;
-      }
-
-      const newValue = validationResult.normalizedValue;
+      const newValue = validatedCell.normalizedValue;
 
       if (oldValue === newValue) return false;
 
@@ -466,6 +746,12 @@ export function useDataEditorGrid({
       };
       rowData.value = rows;
 
+      if (validatedCell.valid) {
+        clearCellValidationIssue(cell.rowId, cell.field);
+      } else {
+        upsertCellValidationIssue(validatedCell.issue);
+      }
+
       pushHistory(historyState, {
         type: "cell-edit",
         rowId: cell.rowId,
@@ -475,6 +761,10 @@ export function useDataEditorGrid({
       });
 
       markDirty();
+      refreshCurrentValidationScope();
+      if (dataStore.daata?.filetype === "xlsx") {
+        sheetStore.toggleSheetDataUpdated();
+      }
       return true;
     } catch (err) {
       console.error("Paste failed:", err);
@@ -486,6 +776,14 @@ export function useDataEditorGrid({
   function handleGlobalKeydown(e) {
     const key = e.key?.toLowerCase?.();
     const ctrlOrCmd = e.ctrlKey || e.metaKey;
+    const api = dataStore.gridApi;
+
+    if (key === "escape" && api?.getEditingCells?.().length === 0) {
+      if (clearRowSelection(api)) {
+        e.preventDefault();
+      }
+      return;
+    }
 
     if (ctrlOrCmd && key === "s") {
       e.preventDefault();
@@ -515,12 +813,24 @@ export function useDataEditorGrid({
     }
   }
 
+  function handleDocumentMouseDown(e) {
+    const api = dataStore.gridApi;
+    const gridShellEl = gridShellRef?.value;
+
+    if (!api || !gridShellEl || selectedCount.value <= 0) return;
+    if (gridShellEl.contains(e.target)) return;
+
+    clearRowSelection(api);
+  }
+
   onMounted(() => {
     window.addEventListener("keydown", handleGlobalKeydown);
+    document.addEventListener("mousedown", handleDocumentMouseDown);
   });
 
   onUnmounted(() => {
     window.removeEventListener("keydown", handleGlobalKeydown);
+    document.removeEventListener("mousedown", handleDocumentMouseDown);
     dataStore.unregisterGridApi(dataStore.gridApi);
   });
 
@@ -528,6 +838,13 @@ export function useDataEditorGrid({
     rowSelectionOptions,
     defaultColDef,
     hasSelection,
+    hasValidationIssues,
+    currentValidationIssueCount,
+    currentFileValidationSummary,
+    clearValidationIssues,
+    getScopeValidationIssueCount,
+    validateWorkbookScopes,
+    refreshCurrentValidationScope,
     updateGridColumns,
     onGridReady,
     onCellValueChanged,

@@ -1,6 +1,6 @@
 services:
   backend-prod:
-    image: registry.elexia.amct.pl/site_opt/backend-prod:0.2
+    image: registry.elexia.amct.pl/site_opt/backend-prod:0.2.1
     container_name: backend-prod
     environment:
       DJANGO_DEBUG: "False"
@@ -40,7 +40,7 @@ services:
     restart: unless-stopped
 
   frontend-prod:
-    image: registry.elexia.amct.pl/site_opt/frontend-prod:0.2
+    image: registry.elexia.amct.pl/site_opt/frontend-prod:0.2.1
     container_name: frontend-prod
     ports:
       - "127.0.0.1:80:80"

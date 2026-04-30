@@ -22,6 +22,10 @@ export function useDataEditorDocument({
   historyState,
   clearHistory,
   updateTableWithActiveSheet,
+  clearValidationIssues,
+  resetValidationStore,
+  validateWorkbookScopes,
+  refreshCurrentValidationScope,
   uploadFileFn = defaultUploadFile,
   fetchFileContentsFn = defaultFetchFileContents,
 }) {
@@ -111,6 +115,7 @@ export function useDataEditorDocument({
 
   watch(() => settingStore.activeProjectIndex, (newVal, oldVal) => {
     if (newVal !== oldVal) {
+      resetValidationStore?.();
       clearRefs();
       activeView.value = "editor";
     }
@@ -126,7 +131,17 @@ export function useDataEditorDocument({
       const fileData = newItems.data;
       if (fileType === "xlsx") {
         const sheetNames = Object.keys(fileData || {});
-        sheetStore.setWorkbookData(fileData);
+        const normalizedWorkbook = Object.fromEntries(
+          sheetNames.map((sheetName) => {
+            const payload = fileData?.[sheetName] ?? {};
+            return [sheetName, {
+              ...payload,
+              rows: normalizeRows(payload?.rows ?? [], historyState),
+            }];
+          }),
+        );
+        sheetStore.setWorkbookData(normalizedWorkbook);
+        validateWorkbookScopes?.(normalizedWorkbook, dataStore.fname);
         sheetStore.setActiveSheet(sheetNames[0] || "");
         updateTableWithActiveSheet();
         await nextTick();
@@ -134,6 +149,7 @@ export function useDataEditorDocument({
       }
       else if (fileType === "csv") {
         updateTableFromCsv(fileData);
+        refreshCurrentValidationScope?.();
         await nextTick();
         // Preserve the current view when switching between CSV files.
       }

@@ -5,7 +5,6 @@ This web app can be built into a desktop app using [Tauri](https://v2.tauri.app/
 which includes the Django backend and the Vue.js frontend. Older Python and Node.js 
 versions may work but have not been tested.
 
-
 ## Running the production version
 
 ### Prerequisites
@@ -55,6 +54,9 @@ To start the containers in the background, run `docker compose up -d` instead.
 
 ```docker compose down```
 
+> [!WARNING]  
+> Do not run `docker compose down -v` or you will lose all user accounts and projects.
+
 ## Running the development version
 
 The main Docker compose files are:
@@ -102,8 +104,8 @@ docker compose -f docker-compose.dev.yml --profile dev up
 4. Push the new images
 
 ```
-docker push registry.elexia.amct.pl/site_opt/backend-prod:0.1
-docker push registry.elexia.amct.pl/site_opt/frontend-prod:0.1
+docker push registry.elexia.amct.pl/site_opt/backend-prod:<latest_tag>
+docker push registry.elexia.amct.pl/site_opt/frontend-prod:<latest_tag>
 ```
 
 ## Setting up the development environment [For local use without Docker]
