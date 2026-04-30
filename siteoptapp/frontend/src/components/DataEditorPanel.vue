@@ -12,6 +12,7 @@ import { useTableDataStore } from "@/stores/filedatastore.js";
 import { useNotificationStore } from "@/stores/notificationstore.js";
 import { useSettingStore } from "@/stores/settingstore.js";
 import { useSheetStore } from "@/stores/sheetStore";
+import { useValidationStore } from "@/stores/validationstore.js";
 import { detectTimeSeriesStructure } from "@/utils/chartUtils.js";
 import {
   createHistoryState,
@@ -23,11 +24,14 @@ const data_store = useTableDataStore();
 const notify = useNotificationStore();
 const settingStore = useSettingStore();
 const sheetStore = useSheetStore();
+const validationStore = useValidationStore();
 
 const rowData = ref([]);
 const columnDefs = ref([]);
 const selectedCount = ref(0);
 const historyState = reactive(createHistoryState());
+const showEditorHelp = ref(false);
+const gridShellRef = ref(null);
 
 function getRowId(params) {
   return params.data.__id;
@@ -63,6 +67,13 @@ const {
   rowSelectionOptions,
   defaultColDef,
   hasSelection,
+  hasValidationIssues,
+  currentFileValidationSummary,
+  clearValidationIssues,
+  currentValidationIssueCount,
+  getScopeValidationIssueCount,
+  validateWorkbookScopes,
+  refreshCurrentValidationScope,
   updateGridColumns,
   onGridReady,
   onCellValueChanged,
@@ -73,6 +84,7 @@ const {
   dataStore: data_store,
   notify,
   sheetStore,
+  gridShellRef,
   rowData,
   columnDefs,
   historyState,
@@ -97,9 +109,36 @@ const {
   historyState,
   clearHistory,
   updateTableWithActiveSheet,
+  clearValidationIssues,
+  resetValidationStore: validationStore.reset,
+  validateWorkbookScopes,
+  refreshCurrentValidationScope,
 }));
 
 const hasWorkFolders = computed(() => Object.keys(settingStore.workFolders ?? {}).length > 0);
+const sheetValidationCounts = computed(() => {
+  const summary = currentFileValidationSummary.value;
+  if (summary.filetype !== "xlsx") return {};
+
+  return Object.entries(summary.sheets ?? {}).reduce((acc, [sheetName, sheetSummary]) => {
+    const count = sheetSummary?.invalidCount ?? 0;
+    if (count > 0) acc[sheetName] = count;
+    return acc;
+  }, {});
+});
+const fileValidationIssueCount = computed(() => currentFileValidationSummary.value.invalidCount ?? 0);
+const hasFileValidationIssues = computed(() => fileValidationIssueCount.value > 0);
+const fileValidationTitle = computed(() => (
+  hasFileValidationIssues.value
+    ? `${fileValidationIssueCount.value} invalid cell${fileValidationIssueCount.value === 1 ? "" : "s"} in this file`
+    : null
+));
+const currentViewValidationIssueCount = computed(() => {
+  if (currentFileValidationSummary.value.filetype === "xlsx") {
+    return currentFileValidationSummary.value.sheets?.[sheetStore.activeSheet]?.invalidCount ?? 0;
+  }
+  return currentFileValidationSummary.value.invalidCount ?? 0;
+});
 
 function looksLikeExcelDateNumber(n) {
   return typeof n === "number" && n > 20000 && n < 80000;
@@ -132,8 +171,18 @@ const isTimeSeriesData = computed(() => {
 </script>
 
 <template>
-  <div class="mb-3 text-lg font-semibold text-gray-800">Data Editor</div>
-  <CategoryToolbar />
+  <div class="mb-3 flex items-center justify-between">
+    <div class="text-lg font-semibold text-gray-800">Data Editor</div>
+    <button
+      class="flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-sm font-semibold text-gray-600 hover:bg-gray-100"
+      title="Data editor help"
+      aria-label="Open data editor help"
+      @click="showEditorHelp = true"
+    >
+      ?
+    </button>
+  </div>
+  <CategoryToolbar :has-validation-issues="hasFileValidationIssues" />
 
   <div class="flex items-center justify-between text-gray-600 my-2 mb-2">
     <div class="flex justify-start gap-2">
@@ -157,11 +206,16 @@ const isTimeSeriesData = computed(() => {
     </div>
 
     <div class="flex justify-center flex-1 text-center">
-      <div class="truncate">{{ data_store.fname }}
+      <div
+        class="truncate"
+        :class="hasFileValidationIssues ? 'font-semibold text-red-700' : ''"
+        :title="fileValidationTitle"
+      >{{ data_store.fname }}
         <span v-if="data_store.daata?.filetype === 'md' && data_store.mdDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'csv' && data_store.csvDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'json' && data_store.jsonDirty">*</span>
         <span v-else-if="data_store.daata?.filetype === 'xlsx' && data_store.xlsxDirty">*</span>
+        <span v-if="hasFileValidationIssues" class="ml-1">!</span>
       </div>
     </div>
 
@@ -236,9 +290,12 @@ const isTimeSeriesData = computed(() => {
           <span v-if="selectedCount" class="text-sm text-gray-500">
             {{ selectedCount }} selected
           </span>
+          <span v-if="hasValidationIssues" class="text-sm text-red-700" :title="fileValidationTitle">
+            {{ currentViewValidationIssueCount }} invalid cell{{ currentViewValidationIssueCount === 1 ? "" : "s" }} highlighted
+          </span>
         </div>
 
-        <div class="flex-1 overflow-auto">
+        <div ref="gridShellRef" class="flex-1 overflow-auto">
           <AgGridVue
             class="w-full h-full"
             :columnDefs="columnDefs"
@@ -262,7 +319,10 @@ const isTimeSeriesData = computed(() => {
           />
         </div>
         <div v-if="data_store.daata?.filetype === 'xlsx'">
-          <SelectSheetButtons @update:activeSheet="newSheetSelected($event)" />
+          <SelectSheetButtons
+            :validation-counts="sheetValidationCounts"
+            @update:activeSheet="newSheetSelected($event)"
+          />
         </div>
       </div>
 
@@ -277,6 +337,80 @@ const isTimeSeriesData = computed(() => {
       </div>
       <div v-else class="text-gray-500 p-4">
         No time series data detected (needs time/date column + numeric columns).
+      </div>
+    </div>
+  </div>
+
+  <div
+    v-if="showEditorHelp"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="data-editor-help-title"
+    @click.self="showEditorHelp = false"
+  >
+    <div class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-6 shadow-2xl">
+      <div class="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 id="data-editor-help-title" class="text-lg font-semibold text-gray-900">
+            Data Editor Help
+          </h3>
+          <p class="mt-1 text-sm text-gray-500">
+            Shortcuts and key behaviors for editing tables in the data editor.
+          </p>
+        </div>
+        <button
+          class="rounded-md px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          aria-label="Close data editor help"
+          @click="showEditorHelp = false"
+        >
+          Close
+        </button>
+      </div>
+
+      <div class="space-y-5 text-sm text-gray-700">
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Basics</div>
+          <ul class="space-y-1">
+            <li>Edit text cells by clicking or starting to type.</li>
+            <li>Validated dropdown cells open from a click and can be cleared back to empty with Delete.</li>
+            <li>Invalid values stay visible, are highlighted in the grid, and show the validation message on hover.</li>
+            <li>Numeric fields accept comma decimals by converting them to dots.</li>
+            <li>A star next to the file name means the current file has unsaved changes.</li>
+          </ul>
+        </section>
+
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Navigation And Editing</div>
+          <ul class="space-y-1">
+            <li><span class="font-medium">Enter</span>: move down in the grid.</li>
+            <li><span class="font-medium">Arrow keys</span>: move between cells.</li>
+            <li><span class="font-medium">Delete</span>: clear the focused cell or all editable cells in the selected row or rows.</li>
+            <li><span class="font-medium">Esc</span>: leave edit mode without keeping the current cell edit.</li>
+          </ul>
+        </section>
+
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Rows</div>
+          <ul class="space-y-1">
+            <li><span class="font-medium">Ctrl+Enter</span>: add a row below the current row or selection.</li>
+            <li><span class="font-medium">Ctrl+Shift+Enter</span>: add a row at the bottom of the sheet.</li>
+            <li><span class="font-medium">Add row button</span>: adds a row below the selection or to the end when nothing is selected.</li>
+            <li><span class="font-medium">Delete selected rows button</span>: removes the selected rows completely.</li>
+            <li><span class="font-medium">Esc</span>: unselect selected rows when you are not editing a cell.</li>
+          </ul>
+        </section>
+
+        <section>
+          <div class="mb-2 font-semibold text-gray-900">Clipboard And History</div>
+          <ul class="space-y-1">
+            <li><span class="font-medium">Ctrl+C</span>: copy the focused editable cell.</li>
+            <li><span class="font-medium">Ctrl+V</span>: paste into the focused editable cell using the same validation rules as manual edits.</li>
+            <li><span class="font-medium">Ctrl+Z</span>: undo.</li>
+            <li><span class="font-medium">Ctrl+Shift+Z</span> or <span class="font-medium">Ctrl+Y</span>: redo.</li>
+            <li><span class="font-medium">Ctrl+S</span>: save the current file.</li>
+          </ul>
+        </section>
       </div>
     </div>
   </div>

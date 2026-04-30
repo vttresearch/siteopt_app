@@ -5,10 +5,11 @@ import {
   detectColumnDataType,
   normalizeNumericInput,
   validateAndNormalizeCellValue,
+  buildValidationIssue,
+  countValidationIssues,
   resolveColumnConfig,
   buildEditorColumnDef,
   getColumnValidationMeta,
-  shouldBlockEditorKey,
   isSelectColumnDef,
 } from "../dataEditorUtils.js";
 
@@ -66,6 +67,33 @@ export const dataEditorLogicTests = [
     },
   },
   {
+    name: "buildValidationIssue keeps invalid numeric text visible and returns issue metadata",
+    run() {
+      const result = buildValidationIssue({
+        rowId: "row_1",
+        field: "capacity",
+        value: "abc",
+        columnName: "capacity",
+        type: COLUMN_TYPES.NUMBER,
+      });
+
+      assert.equal(result.valid, false);
+      assert.equal(result.normalizedValue, "abc");
+      assert.equal(result.issue?.rowId, "row_1");
+      assert.equal(result.issue?.field, "capacity");
+      assert.match(result.issue?.message, /must be a number/);
+    },
+  },
+  {
+    name: "countValidationIssues returns the number of tracked invalid cells",
+    run() {
+      assert.equal(countValidationIssues({
+        "row_1::a": { message: "A must be a number" },
+        "row_2::b": { message: "B must be an integer" },
+      }), 2);
+    },
+  },
+  {
     name: "resolveColumnConfig uses schema select options for storages type",
     run() {
       const config = resolveColumnConfig({
@@ -92,8 +120,22 @@ export const dataEditorLogicTests = [
       });
 
       assert.equal(config.type, COLUMN_TYPES.SELECT);
-      assert.deepEqual(config.options, ["X"]);
+      assert.deepEqual(config.options, ["", "X"]);
       assert.equal(config.source, "schema");
+    },
+  },
+  {
+    name: "resolveColumnConfig prepends empty option for schema select columns",
+    run() {
+      const config = resolveColumnConfig({
+        columnName: "grid",
+        rows: [],
+        fileName: "connections-input.xlsx",
+        sheetName: "Sheet1",
+      });
+
+      assert.equal(config.type, COLUMN_TYPES.SELECT);
+      assert.deepEqual(config.options, ["", "elec", "heat"]);
     },
   },
   {
@@ -103,16 +145,16 @@ export const dataEditorLogicTests = [
         columnName: "grid",
         config: {
           type: COLUMN_TYPES.SELECT,
-          options: ["elec", "heat"],
+          options: ["", "elec", "heat"],
         },
       });
 
       assert.equal(colDef.cellEditor, "agSelectCellEditor");
       assert.equal(colDef.cellEditorPopup, true);
-      assert.deepEqual(colDef.cellEditorParams, { values: ["elec", "heat"] });
+      assert.deepEqual(colDef.cellEditorParams, { values: ["", "elec", "heat"] });
       assert.deepEqual(getColumnValidationMeta(colDef), {
         type: COLUMN_TYPES.SELECT,
-        options: ["elec", "heat"],
+        options: ["", "elec", "heat"],
         source: undefined,
       });
     },
@@ -130,30 +172,6 @@ export const dataEditorLogicTests = [
 
       assert.equal(colDef.cellEditor, "agTextCellEditor");
       assert.equal(colDef.cellDataType, "text");
-    },
-  },
-  {
-    name: "shouldBlockEditorKey blocks letters for integer fields",
-    run() {
-      assert.equal(
-        shouldBlockEditorKey({
-          key: "a",
-          validationType: COLUMN_TYPES.INTEGER,
-        }),
-        true,
-      );
-    },
-  },
-  {
-    name: "shouldBlockEditorKey allows comma for numeric fields",
-    run() {
-      assert.equal(
-        shouldBlockEditorKey({
-          key: ",",
-          validationType: COLUMN_TYPES.NUMBER,
-        }),
-        false,
-      );
     },
   },
   {

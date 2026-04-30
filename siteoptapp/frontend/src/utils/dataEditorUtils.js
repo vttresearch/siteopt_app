@@ -378,32 +378,6 @@ export function isReferenceValue(value) {
   return typeof value === "string" && value.trim().toLowerCase().startsWith("ts:");
 }
 
-export function isAllowedNumericCharacter(char, type) {
-  if (/^[0-9]$/.test(char)) return true;
-  if (type === COLUMN_TYPES.NUMBER && (char === "." || char === ",")) return true;
-  return false;
-}
-
-export function shouldBlockEditorKey({
-  key,
-  ctrlOrCmd = false,
-  altKey = false,
-  validationType,
-}) {
-  if (
-    validationType !== COLUMN_TYPES.NUMBER &&
-    validationType !== COLUMN_TYPES.INTEGER
-  ) {
-    return false;
-  }
-
-  if (ctrlOrCmd || altKey || typeof key !== "string" || key.length !== 1) {
-    return false;
-  }
-
-  return !isAllowedNumericCharacter(key, validationType);
-}
-
 export function validateAndNormalizeCellValue({ value, columnName, type, options = [] }) {
   if (isEmptyCellValue(value)) {
     return { valid: true, normalizedValue: "" };
@@ -481,6 +455,66 @@ export function validateAndNormalizeCellValue({ value, columnName, type, options
   return { valid: true, normalizedValue: value };
 }
 
+export function makeValidationIssueKey(rowId, field) {
+  return `${rowId}::${field}`;
+}
+
+export function buildValidationIssue({
+  rowId,
+  field,
+  value,
+  columnName,
+  type,
+  options = [],
+}) {
+  const result = validateAndNormalizeCellValue({
+    value,
+    columnName,
+    type,
+    options,
+  });
+
+  if (result.valid) {
+    return {
+      valid: true,
+      normalizedValue: result.normalizedValue,
+      issue: null,
+    };
+  }
+
+  return {
+    valid: false,
+    normalizedValue: value,
+    issue: {
+      key: makeValidationIssueKey(rowId, field),
+      rowId,
+      field,
+      message: result.message,
+      value,
+    },
+  };
+}
+
+export function countValidationIssues(validationIssues = {}) {
+  return Object.keys(validationIssues ?? {}).length;
+}
+export function normalizeSelectOptions(options = []) {
+  const normalized = Array.isArray(options) ? options : [];
+  const uniqueOptions = [];
+  const seen = new Set();
+
+  for (const option of normalized) {
+    const normalizedOption = option == null ? "" : String(option);
+    if (seen.has(normalizedOption)) continue;
+    seen.add(normalizedOption);
+    uniqueOptions.push(normalizedOption);
+  }
+
+  return uniqueOptions.includes("")
+    ? uniqueOptions
+    : ["", ...uniqueOptions];
+}
+
 export function resolveColumnConfig({
   columnName,
   rows,
@@ -499,13 +533,14 @@ export function resolveColumnConfig({
     : [];
 
   if (schema) {
-    const resolvedOptions =
+    const rawOptions =
       normalizedValidationOptions.length > 0
         ? normalizedValidationOptions
         : schema.options ?? [];
+    const resolvedOptions = normalizeSelectOptions(rawOptions);
 
     const resolvedType =
-      resolvedOptions.length > 0 && schema.type === COLUMN_TYPES.TEXT
+      rawOptions.length > 0 && schema.type === COLUMN_TYPES.TEXT
         ? COLUMN_TYPES.SELECT
         : schema.type;
 
@@ -519,7 +554,7 @@ export function resolveColumnConfig({
   if (normalizedValidationOptions.length > 0) {
     return {
       type: COLUMN_TYPES.SELECT,
-      options: normalizedValidationOptions,
+      options: normalizeSelectOptions(normalizedValidationOptions),
       source: "excel-validation",
     };
   }
