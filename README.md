@@ -91,22 +91,24 @@ docker compose -f docker-compose.dev.yml --profile dev up
 
 ### Building for production and publishing the new images
 
-1. Update `backend-prod` and `frontend-prod` tags in docker-compose.dev.yml
+1. Update `backend-prod` and `frontend-prod` tags in `docker-compose.dev.yml`
 
 2. Run
  
-```docker compose -f docker-compose.dev.yml --profile prod build```
+    ```docker compose -f docker-compose.dev.yml --profile prod build```
 
 3. Login to registry.elexia.amct.pl using developer account
 
-```docker login registry.elexia.amct.pl```
+    ```docker login registry.elexia.amct.pl```
 
 4. Push the new images
 
-```
-docker push registry.elexia.amct.pl/site_opt/backend-prod:<latest_tag>
-docker push registry.elexia.amct.pl/site_opt/frontend-prod:<latest_tag>
-```
+    ```
+    docker push registry.elexia.amct.pl/site_opt/backend-prod:<latest_tag>
+    docker push registry.elexia.amct.pl/site_opt/frontend-prod:<latest_tag>
+    ```
+
+5. Update the new tags into `docker-compose.yml` and let users know that a new version is available.
 
 ## Setting up the development environment [For local use without Docker]
 
