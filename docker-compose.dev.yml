@@ -58,7 +58,7 @@ services:
     profiles: ["dev"]
 
   backend-prod:
-    image: registry.elexia.amct.pl/site_opt/backend-prod:0.2.1
+    image: registry.elexia.amct.pl/site_opt/backend-prod:0.2.2
     build:
       context: .
       dockerfile: Dockerfile.backend-prod
@@ -106,7 +106,7 @@ services:
     profiles: ["prod"]
 
   frontend-prod:
-    image: registry.elexia.amct.pl/site_opt/frontend-prod:0.2.1
+    image: registry.elexia.amct.pl/site_opt/frontend-prod:0.2.2
     build:
       context: .
       dockerfile: Dockerfile.frontend-prod
