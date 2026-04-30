@@ -104,8 +104,8 @@ docker compose -f docker-compose.dev.yml --profile dev up
 4. Push the new images
 
 ```
-docker push registry.elexia.amct.pl/site_opt/backend-prod:0.1
-docker push registry.elexia.amct.pl/site_opt/frontend-prod:0.1
+docker push registry.elexia.amct.pl/site_opt/backend-prod:<latest_tag>
+docker push registry.elexia.amct.pl/site_opt/frontend-prod:<latest_tag>
 ```
 
 ## Setting up the development environment [For local use without Docker]
