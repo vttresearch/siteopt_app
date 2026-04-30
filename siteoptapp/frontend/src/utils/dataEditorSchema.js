@@ -17,7 +17,7 @@ const FILE_SCHEMAS = {
           grid: {
             type: COLUMN_TYPES.SELECT,
             required: true,
-            options: ["elec", "heat"],
+            options: ["elec", "heat", "cool"],
           },
           alternative_name: { type: COLUMN_TYPES.TEXT },
           connection_flow_cost: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
