@@ -1,3 +1,0 @@
-spine_engine
-spinedb_api
-spine_items
