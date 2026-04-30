@@ -5,7 +5,6 @@ This web app can be built into a desktop app using [Tauri](https://v2.tauri.app/
 which includes the Django backend and the Vue.js frontend. Older Python and Node.js 
 versions may work but have not been tested.
 
-
 ## Running the production version
 
 ### Prerequisites
@@ -54,6 +53,9 @@ To start the containers in the background, run `docker compose up -d` instead.
 ### To stop and remove the containers
 
 ```docker compose down```
+
+> [!WARNING]  
+> Do not run `docker compose down -v` or you will lose all user accounts and projects.
 
 ## Running the development version
 
