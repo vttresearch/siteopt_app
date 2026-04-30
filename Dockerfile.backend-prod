@@ -25,6 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy project code
 COPY . /app
 
+# Make persistent directory for the db file
+RUN mkdir -p /var/lib/siteopt/db
+
 # Create and use venv
 RUN python -m venv $VENV_PATH
 ENV PATH="$VENV_PATH/bin:$PATH" \

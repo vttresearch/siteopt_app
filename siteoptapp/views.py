@@ -39,6 +39,7 @@ INPUT_DATA_SQLITE_FILE = Path(".spinetoolbox", "items", "input_data", "elexia_in
 OUTPUT_DB_SQLITE_FILE = Path(".spinetoolbox", "items", "output_db", "output db.sqlite")
 _MOD_SCRIPT_NAME = "mod_script.py"
 METADATA_FILENAME = "meta.txt"
+HEARTBEAT_INTERVAL = 15  # seconds (10–15 is ideal)
 
 
 def get_dokken_data_path() -> str:
@@ -58,13 +59,13 @@ def get_project_data_path() -> str:
 
 
 def get_config_file_dir(client_id) -> Path:
-    return (CONFIG_ROOT / str(client_id)[0:6]).resolve()
+    return (CONFIG_ROOT / client_id).resolve()
 
 
 def get_client_work_root(client_id: str) -> str:
     """Root directory containing all work folders for this client.
     Must be a path that BOTH backend and spine_engine containers can access."""
-    return str((WORK_ROOT / str(client_id)[0:6]).resolve())
+    return str((WORK_ROOT / client_id).resolve())
 
 
 @csrf_exempt
@@ -162,8 +163,6 @@ def health_check(request):
 @login_required
 def settings(request):
     client_id = request.user.username
-    # client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
-    print(f"Client {client_id} retrieving settings")
     client_config = get_client_config(client_id)
     work_root = get_client_work_root(client_id)
     active_work_folders = {}
@@ -173,7 +172,7 @@ def settings(request):
         if value.startswith(work_root):
             active_work_folders[key] = value
     client_config["work_folders"] = active_work_folders
-    print(f"client_config work_folders:{client_config['work_folders']}")
+    print(f"[{client_id}] projects:{client_config['work_folders']}")
     response = JsonResponse({"success": True, "data": {"client_id": client_id, "configs": client_config}})
     return response
 
@@ -355,7 +354,6 @@ def fetch_metadata_bulk(client_id, paths):
     d = dict()
     for path in paths:
         d[path] = read_metadata(path)
-    print(f"d:{d}")
     return JsonResponse({"success": True, "data": d})
 
 
@@ -535,7 +533,7 @@ def post(request, action):
         response = fetch_metadata(client_id, data["path"])
         return response
     elif action == "fetch_metadata_bulk":
-        print(f"Fetching all metadata: {data['paths']}")
+        print(f"Fetching metadata from paths: {data['paths']}")
         response = fetch_metadata_bulk(client_id, data["paths"])
         return response
     else:
@@ -565,92 +563,188 @@ def prepare_execution(client_id, data):
 def execute(request, job_id):
 
     def event_stream():
-        timeout = 5
-        start = time.time()
-        job = cache.get(job_id)
-        while not job and time.time() - start < timeout:
-            time.sleep(0.1)
-            job = cache.get(job_id)
-        if not job:
-            cache.delete(job_id)
-            yield f"event: error\ndata: Execution failed. Job {job_id} not ready after {timeout}s.\n\n"
-            return
-        ppath = job["path"]
-        items_to_execute = job["exec_items"]
-        exec_locally = job["local"]
-        project_path = Path(ppath).resolve()
-        scenarios = job["scenarios"]
-        temp_dir, script_path = _make_solve_model_mod_script(scenarios)
-        print(f"Executing project {project_path} with scenarios {scenarios}")
-        # Check that server config file exists if executing remotely.
-        # TODO: These should be included in the execute request
-        if not exec_locally and not SERVER_CONFIG_PATH.exists():
-            cache.delete(job_id)
-            yield (f"event: error\ndata: Execution failed. Config file "
-                   f"(server_config.txt) for remote execution missing: {SERVER_CONFIG_PATH}\n\n")
-            return
-        if exec_locally:
-            args = [
-                PYTHON_EXECUTABLE,
-                "-u", "-m",
-                "spinetoolbox",
-                "--mod-script",
-                str(script_path),
-                "--execute-only",
-                str(project_path),
-            ]
-        else:
-            args = [
-                PYTHON_EXECUTABLE,
-                "-u", "-m",
-                "spinetoolbox",
-                "--execute-only",
-                "--execute-remotely", str(SERVER_CONFIG_PATH),
-                str(project_path),
-            ]
-        item_args = [] if not items_to_execute else ["-s"] + items_to_execute
-        if item_args:
-            args += item_args
+        proc = None
+        last_sent = time.time()
         try:
-            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            for line in iter(proc.stdout.readline, b""):
-                line = line.decode("utf-8", "replace").strip()
-                if line.startswith("Executing") and line.endswith("finished"):
-                    # This intercepts the 'Executing ... finished' output line and sends an event instead
-                    parsed_line = line.removeprefix("Executing").removesuffix("finished").strip()
-                    # Strip project item type
-                    parsed_line = parsed_line.removeprefix("Data Connection ")
-                    parsed_line = parsed_line.removeprefix("Tool ")
-                    parsed_line = parsed_line.removeprefix("Importer ")
-                    parsed_line = parsed_line.removeprefix("Data Store ")
-                    parsed_line = parsed_line.removeprefix("Merger ")
-                    yield f"event: item_finished\ndata: {parsed_line}\n\n"
-                elif line.startswith("Executing") and line.endswith("failed"):
-                    # This intercepts the 'Executing ... failed' output line and sends an event instead
-                    parsed_line = line.removeprefix("Executing").removesuffix("failed").strip()
-                    # Strip project item type
-                    parsed_line = parsed_line.removeprefix("Data Connection ")
-                    parsed_line = parsed_line.removeprefix("Tool ")
-                    parsed_line = parsed_line.removeprefix("Importer ")
-                    parsed_line = parsed_line.removeprefix("Data Store ")
-                    parsed_line = parsed_line.removeprefix("Merger ")
-                    yield f"event: item_failed\ndata: {parsed_line}\n\n"
+            timeout = 5
+            start = time.time()
+            job = cache.get(job_id)
+            while not job and time.time() - start < timeout:
+                time.sleep(0.1)
+                job = cache.get(job_id)
+            if not job:
+                cache.delete(job_id)
+                yield f"event: error\ndata: Job {job_id} not ready after {timeout}s\n\n"
+                return
+            project_path = Path(job["path"]).resolve()
+            scenarios = job["scenarios"]
+            items_to_execute = job["exec_items"]
+            exec_locally = job["local"]
+            temp_dir, script_path = _make_solve_model_mod_script(scenarios)
+            if exec_locally:
+                args = [
+                    PYTHON_EXECUTABLE,
+                    "-u", "-m", "spinetoolbox",
+                    "--mod-script", str(script_path),
+                    "--execute-only", str(project_path),
+                ]
+            else:
+                if not SERVER_CONFIG_PATH.exists():
+                    cache.delete(job_id)
+                    yield f"event: error\ndata: server_config.txt missing\n\n"
+                    return
+                args = [
+                    PYTHON_EXECUTABLE,
+                    "-u", "-m", "spinetoolbox",
+                    "--execute-only",
+                    "--execute-remotely", str(SERVER_CONFIG_PATH),
+                    str(project_path),
+                ]
+            if items_to_execute:
+                args += ["-s"] + items_to_execute
+            proc = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            while True:
+                line = proc.stdout.readline()
+                if line:
+                    line = line.rstrip()
+                    last_sent = time.time()  # Reset heartbeat timer
+                    if line.startswith("Executing") and line.endswith("finished"):
+                        # This intercepts the 'Executing ... finished' output line and sends an event instead
+                        parsed = line.removeprefix("Executing").removesuffix("finished").strip()
+                        for prefix in ("Data Connection ", "Tool ", "Importer ", "Data Store ", "Merger "):
+                            parsed = parsed.removeprefix(prefix)
+                        yield f"event: item_finished\ndata: {parsed}\n\n"
+                    elif line.startswith("Executing") and line.endswith("failed"):
+                        # This intercepts the 'Executing ... failed' output line and sends an event instead
+                        parsed = line.removeprefix("Executing").removesuffix("failed").strip()
+                        for prefix in ("Data Connection ", "Tool ", "Importer ", "Data Store ", "Merger "):
+                            parsed = parsed.removeprefix(prefix)
+                        yield f"event: item_failed\ndata: {parsed}\n\n"
+                    else:
+                        yield f"data: {line}\n\n"
                 else:
-                    yield f"data: {line}\n\n"
-            proc.stdout.close()
-            proc_retval = proc.wait()
+                    # Send heartbeat if silent for too long
+                    now = time.time()
+                    if now - last_sent > HEARTBEAT_INTERVAL:
+                        yield ": heartbeat\n\n"
+                        last_sent = now
+                    if proc.poll() is not None:
+                        break
+                    time.sleep(0.05)
+            returncode = proc.wait()
+            yield f"event: done\ndata: {returncode}\n\n"
+        except GeneratorExit:
+            # Client disconnected
+            if proc and proc.poll() is None:
+                proc.terminate()
+            raise
+        except Exception as e:
+            if proc and proc.poll() is None:
+                proc.terminate()
+            yield f"event: error\ndata: Execution error: {e}\n\n"
+        finally:
             cache.delete(job_id)
-            # Notify frontend that execution is done (send process exit code)
-            print("Execution finished")
-            yield f"event: done\ndata: {proc_retval}\n\n"
-        except OSError as e:
-            cache.delete(job_id)
-            print(f"Execution failed: [OSError]: {e}")
-            yield f"event: error\ndata: Execution error: [OSError]: {e}\n\n"
 
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
     return response
+
+# def execute(request, job_id):
+#
+#     def event_stream():
+#         timeout = 5
+#         start = time.time()
+#         job = cache.get(job_id)
+#         while not job and time.time() - start < timeout:
+#             time.sleep(0.1)
+#             job = cache.get(job_id)
+#         if not job:
+#             cache.delete(job_id)
+#             yield f"event: error\ndata: Execution failed. Job {job_id} not ready after {timeout}s.\n\n"
+#             return
+#         ppath = job["path"]
+#         items_to_execute = job["exec_items"]
+#         exec_locally = job["local"]
+#         project_path = Path(ppath).resolve()
+#         scenarios = job["scenarios"]
+#         temp_dir, script_path = _make_solve_model_mod_script(scenarios)
+#         print(f"Executing project {project_path} with scenarios {scenarios}")
+#         # Check that server config file exists if executing remotely.
+#         # TODO: These should be included in the execute request
+#         if not exec_locally and not SERVER_CONFIG_PATH.exists():
+#             cache.delete(job_id)
+#             yield (f"event: error\ndata: Execution failed. Config file "
+#                    f"(server_config.txt) for remote execution missing: {SERVER_CONFIG_PATH}\n\n")
+#             return
+#         if exec_locally:
+#             args = [
+#                 PYTHON_EXECUTABLE,
+#                 "-u", "-m",
+#                 "spinetoolbox",
+#                 "--mod-script",
+#                 str(script_path),
+#                 "--execute-only",
+#                 str(project_path),
+#             ]
+#         else:
+#             args = [
+#                 PYTHON_EXECUTABLE,
+#                 "-u", "-m",
+#                 "spinetoolbox",
+#                 "--execute-only",
+#                 "--execute-remotely", str(SERVER_CONFIG_PATH),
+#                 str(project_path),
+#             ]
+#         item_args = [] if not items_to_execute else ["-s"] + items_to_execute
+#         if item_args:
+#             args += item_args
+#         try:
+#             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+#             for line in iter(proc.stdout.readline, b""):
+#                 line = line.decode("utf-8", "replace").strip()
+#                 if line.startswith("Executing") and line.endswith("finished"):
+#                     # This intercepts the 'Executing ... finished' output line and sends an event instead
+#                     parsed_line = line.removeprefix("Executing").removesuffix("finished").strip()
+#                     # Strip project item type
+#                     parsed_line = parsed_line.removeprefix("Data Connection ")
+#                     parsed_line = parsed_line.removeprefix("Tool ")
+#                     parsed_line = parsed_line.removeprefix("Importer ")
+#                     parsed_line = parsed_line.removeprefix("Data Store ")
+#                     parsed_line = parsed_line.removeprefix("Merger ")
+#                     yield f"event: item_finished\ndata: {parsed_line}\n\n"
+#                 elif line.startswith("Executing") and line.endswith("failed"):
+#                     # This intercepts the 'Executing ... failed' output line and sends an event instead
+#                     parsed_line = line.removeprefix("Executing").removesuffix("failed").strip()
+#                     # Strip project item type
+#                     parsed_line = parsed_line.removeprefix("Data Connection ")
+#                     parsed_line = parsed_line.removeprefix("Tool ")
+#                     parsed_line = parsed_line.removeprefix("Importer ")
+#                     parsed_line = parsed_line.removeprefix("Data Store ")
+#                     parsed_line = parsed_line.removeprefix("Merger ")
+#                     yield f"event: item_failed\ndata: {parsed_line}\n\n"
+#                 else:
+#                     yield f"data: {line}\n\n"
+#             proc.stdout.close()
+#             proc_retval = proc.wait()
+#             cache.delete(job_id)
+#             # Notify frontend that execution is done (send process exit code)
+#             print("Execution finished")
+#             yield f"event: done\ndata: {proc_retval}\n\n"
+#         except OSError as e:
+#             cache.delete(job_id)
+#             print(f"Execution failed: [OSError]: {e}")
+#             yield f"event: error\ndata: Execution error: [OSError]: {e}\n\n"
+#
+#     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+#     response["Cache-Control"] = "no-cache"
+#     return response
 
 
 def _make_solve_model_mod_script(scenarios):
@@ -775,7 +869,6 @@ def fetch_current_input_folder(request, folder_name):
     The returned list format is such that it can be used directly in a frontend Toolbar template.
     """
     client_id = request.user.username
-    # client_id = request.COOKIES.get("client_id") or request.headers.get("X-Client-ID")
     config_d = get_client_config(client_id)
     work_folders_dict = config_d.get("work_folders", {})
     p = work_folders_dict.get(folder_name)

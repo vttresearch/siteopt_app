@@ -42,7 +42,7 @@ async function logout() {
 
             <template v-if="auth.loaded">
               <template v-if="auth.isAuthenticated">
-                <button @click="logout" class="text-white bg-blue-600 hover:bg-blue-900 rounded-md px-3 py-2">
+                <button @click="logout" class="cursor-pointer text-white bg-blue-600 hover:bg-blue-900 rounded-md px-3 py-2">
                   Logout
                 </button>
                 <span class="text-white text-sm ml-4" title="Active username">{{ auth.user }}</span>

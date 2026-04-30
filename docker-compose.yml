@@ -1,6 +1,6 @@
 services:
   backend-prod:
-    image: registry.elexia.amct.pl/site_opt/backend-prod:0.1
+    image: registry.elexia.amct.pl/site_opt/backend-prod:0.2
     container_name: backend-prod
     environment:
       DJANGO_DEBUG: "False"
@@ -16,6 +16,13 @@ services:
       JULIA_JEMALLOC_CONF: "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
       MALLOC_ARENA_MAX: "2"
       REDIS_URL: "redis://redis:6379/1"
+      DJANGO_SUPERUSER_USERNAME: "admin"
+      DJANGO_SUPERUSER_EMAIL: "admin@example.com"
+      DJANGO_SUPERUSER_PASSWORD: "change-me"
+    volumes:
+      - prod_db:/var/lib/siteopt/db
+      - prod_work:/app/work_container
+      - prod_config:/app/_config
     ports:
       - "127.0.0.1:8000:8000"
     networks:
@@ -27,17 +34,13 @@ services:
       bash -lc "
         source /opt/venv/bin/activate &&
         python manage.py migrate &&
-        gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 2
+        python manage.py create_superuser_if_missing &&
+        gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 1 --timeout 0 --graceful-timeout 0
       "
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
     restart: unless-stopped
 
   frontend-prod:
-    image: registry.elexia.amct.pl/site_opt/frontend-prod:0.1
+    image: registry.elexia.amct.pl/site_opt/frontend-prod:0.2
     container_name: frontend-prod
     ports:
       - "127.0.0.1:80:80"
@@ -60,6 +63,11 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+volumes:
+  prod_db: {}
+  prod_work: {}
+  prod_config: {}
 
 networks:
   docker_network:

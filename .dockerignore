@@ -26,8 +26,11 @@ siteoptapp/frontend/src-tauri
 # Build/artifacts
 staticfiles/
 work/
+_config/
 *.log
 .DS_Store
+db.sqlite3
+**/*.sqlite3
 
 # Editor
 .vscode/

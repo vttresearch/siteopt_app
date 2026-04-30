@@ -18,6 +18,7 @@ Pkg.add("DataFrames")
 Pkg.add("Dates")
 Pkg.add("Infiltrator")
 Pkg.add("JSON")
+Pkg.add("Missings")
 Pkg.add("TimeZones")
 Pkg.add("XLSX")
 
