@@ -36,7 +36,28 @@ export const scenarioComparisonUtilsTests = [
       assert.deepEqual(plot.scenarios, ["base", "peak"]);
       assert.equal(plot.settings.orientation, "horizontal");
       assert.equal(plot.settings.topNValues, 10);
+      assert.equal(plot.isVisible, true);
       assert.deepEqual(plot.option, {});
+    },
+  },
+  {
+    name: "normalizeStoredCustomPlot preserves hidden custom plots",
+    run() {
+      const plot = normalizeStoredCustomPlot(
+        {
+          title: "Hidden Plot",
+          items: ["capacity"],
+          scenarios: ["base"],
+          isVisible: false,
+        },
+        0,
+        {
+          makePlotId: () => "hidden-id",
+          defaultSettings: { orientation: "vertical" },
+        },
+      );
+
+      assert.equal(plot.isVisible, false);
     },
   },
   {
@@ -73,6 +94,7 @@ export const scenarioComparisonUtilsTests = [
           items: ["capacity"],
           scenarios: ["base"],
           settings: { orientation: "vertical" },
+          isVisible: false,
           option: { series: [{ data: [1] }] },
         },
       ]);
@@ -84,6 +106,7 @@ export const scenarioComparisonUtilsTests = [
           items: ["capacity"],
           scenarios: ["base"],
           settings: { orientation: "vertical" },
+          isVisible: false,
         },
       ]);
     },

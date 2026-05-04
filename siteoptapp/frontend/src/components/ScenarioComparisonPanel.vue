@@ -282,6 +282,9 @@ function getSettingsForTarget(target) {
 }
 
 function openChartSettings(target) {
+  if (target?.type === "customPlot" && target.id) {
+    showCustomPlot(target.id)
+  }
   settingsModalTarget.value = target
   modalSettings.value = getSettingsForTarget(target)
   settingsModalOpen.value = true
@@ -472,11 +475,13 @@ function applyCustomPlot() {
       items,
       scenarios,
       settings,
+      isVisible: true,
       option
     }
   } else {
     customPlots.value.push({
       ...plotDraft,
+      isVisible: true,
       option
     })
   }
@@ -485,7 +490,25 @@ function applyCustomPlot() {
   void persistCustomPlots()
 }
 
+function showCustomPlot(plotId) {
+  customPlots.value = customPlots.value.map((plot) => (
+    plot.id === plotId
+      ? { ...plot, isVisible: true }
+      : plot
+  ))
+  void persistCustomPlots()
+}
+
 function closeCustomPlot(plotId) {
+  customPlots.value = customPlots.value.map((plot) => (
+    plot.id === plotId
+      ? { ...plot, isVisible: false }
+      : plot
+  ))
+  void persistCustomPlots()
+}
+
+function deleteCustomPlot(plotId) {
   customPlots.value = customPlots.value.filter((plot) => plot.id !== plotId)
   void persistCustomPlots()
 }
@@ -571,7 +594,7 @@ watch(
               v-for="summary in availableSummaries"
               :key="summary"
               type="button"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-base font-medium rounded-lg border transition-colors"
               :class="isCategorySelected(summary)
                 ? 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100'
                 : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
@@ -588,12 +611,38 @@ watch(
             </p>
             <button
               type="button"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-base font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
               @click="openCustomPlotModal"
             >
-              <span class="text-lg leading-none">📉</span>
-              <span>Custom plot</span>
+              <span class="text-lg leading-none">+</span>
+              <span>Create new</span>
             </button>
+            <div
+              v-for="plot in customPlots"
+              :key="plot.id"
+              class="mt-2"
+            >
+              <button
+                type="button"
+                class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-base font-medium rounded-lg border transition-colors"
+                :class="plot.isVisible
+                  ? 'bg-indigo-100 border-indigo-300 text-indigo-800 hover:bg-indigo-200'
+                  : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
+                @click="showCustomPlot(plot.id)"
+              >
+                <span class="flex items-center gap-2 min-w-0">
+                  <span class="text-lg leading-none shrink-0">📉</span>
+                  <span class="truncate block">{{ plot.title }}</span>
+                </span>
+                <span
+                  class="shrink-0 px-2.5 py-1.5 rounded text-xl font-bold leading-none text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  title="Remove custom plot"
+                  @click.stop="deleteCustomPlot(plot.id)"
+                >
+                  x
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -631,7 +680,7 @@ watch(
         </div>
 
         <div
-          v-for="plot in customPlots"
+          v-for="plot in customPlots.filter((item) => item.isVisible)"
           :key="plot.id"
           class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
         >
@@ -692,3 +741,4 @@ watch(
     />
   </div>
 </template>
+

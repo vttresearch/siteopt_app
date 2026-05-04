@@ -23,6 +23,7 @@ export function normalizeStoredCustomPlot(plotLike, index = 0, {
       ...(defaultSettings || {}),
       ...(plotLike?.settings || {}),
     },
+    isVisible: plotLike?.isVisible !== false,
     option: {},
   }
 }
@@ -34,6 +35,7 @@ export function serializeCustomPlots(plots) {
     items: [...plot.items],
     scenarios: [...plot.scenarios],
     settings: { ...plot.settings },
+    isVisible: plot.isVisible !== false,
   }))
 }
 
