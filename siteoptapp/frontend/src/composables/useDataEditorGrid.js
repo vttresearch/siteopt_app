@@ -18,6 +18,7 @@ import {
   getColumnValidationMeta,
   countValidationIssues,
   isSelectColumnDef,
+  getRowDisplayNumber,
 } from "@/utils/dataEditorUtils.js";
 
 export function useDataEditorGrid({
@@ -353,7 +354,7 @@ export function useDataEditorGrid({
     columnDefs.value = [
       {
         headerName: "#",
-        valueGetter: "node.rowIndex + 1",
+        valueGetter: (params) => getRowDisplayNumber(rowData.value, params.data?.__id),
         width: 60,
         pinned: "left",
         editable: false,

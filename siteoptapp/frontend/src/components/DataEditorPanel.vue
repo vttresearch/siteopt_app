@@ -270,7 +270,7 @@ const isTimeSeriesData = computed(() => {
         class="w-full h-100 overflow-auto bg-gray-50 border rounded p-3 text-xs font-mono whitespace-pre-wrap"
       />
 
-      <div v-else-if="columnDefs.length" class="w-full h-100 flex flex-col">
+      <div v-else-if="columnDefs.length" ref="gridShellRef" class="w-full h-100 flex flex-col">
         <div class="flex items-center gap-2 mt-2 shrink-0">
           <button
             class="px-3 py-1 rounded border border-b-0 border-gray-400 bg-white hover:bg-gray-100"
@@ -295,7 +295,7 @@ const isTimeSeriesData = computed(() => {
           </span>
         </div>
 
-        <div ref="gridShellRef" class="flex-1 overflow-auto">
+        <div class="flex-1 overflow-auto">
           <AgGridVue
             class="w-full h-full"
             :columnDefs="columnDefs"
