@@ -357,6 +357,30 @@ def fetch_metadata_bulk(client_id, paths):
     return JsonResponse({"success": True, "data": d})
 
 
+def save_metadata(client_id, path, metadata):
+    if not path:
+        return {"success": False, "error": "Missing project path."}
+    if not isinstance(metadata, dict):
+        return {"success": False, "error": "Metadata payload must be an object."}
+
+    config_fpath = get_config_file_dir(client_id) / CONFIG_FILE
+    if not is_path_inside_any_work_folder(str(config_fpath), path):
+        return {"success": False, "error": "Refusing to write metadata outside work folders."}
+
+    if not os.path.isdir(path):
+        return {"success": False, "error": f"Project path does not exist: {path}"}
+
+    meta_path = os.path.join(path, METADATA_FILENAME)
+    try:
+        with open(meta_path, "w", encoding="utf-8") as fh:
+            json.dump(metadata, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+    except OSError as e:
+        return {"success": False, "error": f"[OSError] writing metadata file {meta_path}: {e}"}
+
+    return {"success": True, "data": metadata}
+
+
 @login_required
 @csrf_protect
 def upload_and_replace(request):
@@ -536,6 +560,9 @@ def post(request, action):
         print(f"Fetching metadata from paths: {data['paths']}")
         response = fetch_metadata_bulk(client_id, data["paths"])
         return response
+    elif action == "save_metadata":
+        print(f"Saving metadata for project {data['path']}")
+        return JsonResponse(save_metadata(client_id, data["path"], data["metadata"]))
     else:
         print(f"Unknown action: {action}")
         return JsonResponse({"success": False, "error": f"No handler for action {action}"})

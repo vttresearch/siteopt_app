@@ -23,5 +23,13 @@ export const useMetadataStore = defineStore('metadataData', () => {
     metadataByName.value[data.name] = data
   }
 
-  return { metadata, metadataByName, loadingMetadata, reset, setMetadata, cacheMetadata }
+  function updateProjectMetadata(projectName, nextMetadata) {
+    if (!projectName || !nextMetadata) return
+    metadataByName.value[projectName] = nextMetadata
+    if (metadata.value?.name === projectName) {
+      metadata.value = nextMetadata
+    }
+  }
+
+  return { metadata, metadataByName, loadingMetadata, reset, setMetadata, cacheMetadata, updateProjectMetadata }
 })

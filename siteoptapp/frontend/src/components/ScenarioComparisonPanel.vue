@@ -1,11 +1,20 @@
 <script setup>
 import { ref, computed, watch } from "vue"
 import ScenarioComparisonChart from "@/components/ScenarioComparisonChart.vue"
+import { useSettingStore } from "@/stores/settingstore.js"
+import { useMetadataStore } from "@/stores/metadatastore.js"
 import {
   detectScenarioStructure,
   processScenarioComparisonData
 } from "@/utils/chartUtils.js"
 import { CHART_STYLE_THEME } from "@/utils/chartStyleUtils.js"
+import { saveMetadata } from "@/utils/functions.js"
+import {
+  normalizeScenarioComparisonString,
+  normalizeStoredCustomPlot,
+  serializeCustomPlots,
+  hydrateStoredCustomPlots,
+} from "@/utils/scenarioComparisonUtils.js"
 import ChartSettingsModal from "@/components/ChartSettingsModal.vue"
 import CustomPlotModal from "@/components/CustomPlotModal.vue"
 
@@ -17,9 +26,15 @@ const props = defineProps({
   fileName: {
     type: String,
     default: "Results"
+  },
+  storageKey: {
+    type: String,
+    default: ""
   }
 })
 
+const settingStore = useSettingStore()
+const metadataStore = useMetadataStore()
 const chartHeight = ref(400)
 
 const selectedCategories = ref([])
@@ -34,6 +49,7 @@ const customPlotHideZeroValues = ref(false)
 const customPlotOrientation = ref("vertical")
 const customPlotTitle = ref("")
 const customPlots = ref([])
+const CUSTOM_PLOTS_METADATA_KEY = "resultsCustomPlots"
 
 const DEFAULT_CHART_SETTINGS = () => ({
   yAxisScale: "linear",
@@ -55,7 +71,57 @@ const hasSummaries = computed(() => scenarioStructure.value?.hasSummaries || fal
 const availableSummaries = computed(() => scenarioStructure.value?.summaries || [])
 
 function normalizeString(value) {
-  return String(value || "").trim()
+  return normalizeScenarioComparisonString(value)
+}
+
+function getStoredCustomPlots() {
+  const projectMetadata = metadataStore.metadataByName[settingStore.activeProjectName]
+  const plotsByStorageKey = projectMetadata?.[CUSTOM_PLOTS_METADATA_KEY]
+  const storedPlots = props.storageKey ? plotsByStorageKey?.[props.storageKey] : null
+
+  if (!Array.isArray(storedPlots)) return []
+
+  return storedPlots
+    .map((plot, index) => normalizeStoredCustomPlot(plot, index, {
+      makePlotId,
+      defaultSettings: DEFAULT_CHART_SETTINGS(),
+    }))
+    .filter((plot) => plot.items.length && plot.scenarios.length)
+}
+
+function hydrateCustomPlots(plots) {
+  return hydrateStoredCustomPlots(
+    plots,
+    scenarioStructure.value ? buildCustomPlotOption : null,
+  )
+}
+
+async function persistCustomPlots() {
+  const projectName = settingStore.activeProjectName
+  const projectPath = settingStore.activeProjectPath
+  if (!projectName || !projectPath || !props.storageKey) return
+
+  const currentMetadata = metadataStore.metadataByName[projectName] || {
+    name: projectName,
+    path: projectPath
+  }
+
+  const nextMetadata = {
+    ...currentMetadata,
+    name: currentMetadata.name || projectName,
+    path: currentMetadata.path || projectPath,
+    [CUSTOM_PLOTS_METADATA_KEY]: {
+      ...(currentMetadata[CUSTOM_PLOTS_METADATA_KEY] || {}),
+      [props.storageKey]: serializeCustomPlots(customPlots.value)
+    }
+  }
+
+  metadataStore.updateProjectMetadata(projectName, nextMetadata)
+  await saveMetadata(projectPath, nextMetadata, { quiet: true })
+}
+
+function loadStoredCustomPlots() {
+  customPlots.value = hydrateCustomPlots(getStoredCustomPlots())
 }
 
 function makePlotId() {
@@ -342,6 +408,7 @@ function applyChartSettings(settings) {
   }
 
   closeChartSettings()
+  void persistCustomPlots()
 }
 
 function openCustomPlotModal() {
@@ -415,10 +482,12 @@ function applyCustomPlot() {
   }
 
   closeCustomPlotModal()
+  void persistCustomPlots()
 }
 
 function closeCustomPlot(plotId) {
   customPlots.value = customPlots.value.filter((plot) => plot.id !== plotId)
+  void persistCustomPlots()
 }
 
 function initializeChart() {
@@ -473,6 +542,14 @@ watch(
     })
   },
   { deep: true }
+)
+
+watch(
+  () => [settingStore.activeProjectName, props.storageKey, metadataStore.metadataByName[settingStore.activeProjectName]],
+  () => {
+    loadStoredCustomPlots()
+  },
+  { immediate: true, deep: true }
 )
 </script>
 

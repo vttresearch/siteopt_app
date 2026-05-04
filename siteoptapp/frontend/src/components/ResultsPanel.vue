@@ -230,6 +230,7 @@ async function openResultsForRun() {
             :fileName="settingStore.activeProjectName && selectedRun
             ? `${settingStore.activeProjectName} – ${selectedRun}`
             : 'results'"
+            :storageKey="selectedRun || ''"
           />
         </DashboardPanel>
       </div>
