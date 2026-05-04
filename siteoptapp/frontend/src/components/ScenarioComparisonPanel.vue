@@ -558,10 +558,7 @@ watch(
           :key="plot.id"
           class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
         >
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-gray-800">
-              {{ plot.title }}
-            </h4>
+          <div class="flex justify-end mb-3">
             <div class="flex gap-2">
               <button
                 type="button"
