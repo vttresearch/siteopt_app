@@ -48,6 +48,7 @@ const customPlotSelectedScenarios = ref([])
 const customPlotHideZeroValues = ref(false)
 const customPlotOrientation = ref("vertical")
 const customPlotTitle = ref("")
+const customPlotTitleError = ref("")
 const customPlots = ref([])
 const CUSTOM_PLOTS_METADATA_KEY = "resultsCustomPlots"
 
@@ -72,6 +73,10 @@ const availableSummaries = computed(() => scenarioStructure.value?.summaries || 
 
 function normalizeString(value) {
   return normalizeScenarioComparisonString(value)
+}
+
+function normalizeCustomPlotTitle(value) {
+  return normalizeString(value).toLowerCase()
 }
 
 function getStoredCustomPlots() {
@@ -422,11 +427,13 @@ function openCustomPlotModal() {
   customPlotHideZeroValues.value = false
   customPlotOrientation.value = "vertical"
   customPlotTitle.value = ""
+  customPlotTitleError.value = ""
   customPlotModalOpen.value = true
 }
 
 function closeCustomPlotModal() {
   customPlotModalOpen.value = false
+  customPlotTitleError.value = ""
 }
 
 function getCustomPlotItemsList() {
@@ -440,6 +447,15 @@ function applyCustomPlot() {
 
   if (!items.length || !scenarios.length) {
     closeCustomPlotModal()
+    return
+  }
+
+  const existingTitle = customPlots.value.some(
+    (plot) => normalizeCustomPlotTitle(plot.title) === normalizeCustomPlotTitle(title)
+  )
+
+  if (existingTitle) {
+    customPlotTitleError.value = "A custom plot with this title already exists."
     return
   }
 
@@ -463,32 +479,21 @@ function applyCustomPlot() {
     return
   }
 
-  const existingIndex = customPlots.value.findIndex(
-    (plot) => normalizeString(plot.title) === normalizeString(title)
-  )
-
-  if (existingIndex >= 0) {
-    const existing = customPlots.value[existingIndex]
-    customPlots.value[existingIndex] = {
-      ...existing,
-      title,
-      items,
-      scenarios,
-      settings,
-      isVisible: true,
-      option
-    }
-  } else {
-    customPlots.value.push({
-      ...plotDraft,
-      isVisible: true,
-      option
-    })
-  }
+  customPlots.value.push({
+    ...plotDraft,
+    isVisible: true,
+    option
+  })
 
   closeCustomPlotModal()
   void persistCustomPlots()
 }
+
+watch(customPlotTitle, () => {
+  if (customPlotTitleError.value) {
+    customPlotTitleError.value = ""
+  }
+})
 
 function showCustomPlot(plotId) {
   customPlots.value = customPlots.value.map((plot) => (
@@ -724,6 +729,7 @@ watch(
       :hideZeroValues="customPlotHideZeroValues"
       :orientation="customPlotOrientation"
       :title="customPlotTitle"
+      :titleError="customPlotTitleError"
       @close="closeCustomPlotModal"
       @apply="applyCustomPlot"
       @update:selectedItems="customPlotSelectedItems = $event"
