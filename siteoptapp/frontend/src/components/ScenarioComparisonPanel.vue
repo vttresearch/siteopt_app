@@ -1,11 +1,20 @@
 <script setup>
 import { ref, computed, watch } from "vue"
 import ScenarioComparisonChart from "@/components/ScenarioComparisonChart.vue"
+import { useSettingStore } from "@/stores/settingstore.js"
+import { useMetadataStore } from "@/stores/metadatastore.js"
 import {
   detectScenarioStructure,
   processScenarioComparisonData
 } from "@/utils/chartUtils.js"
 import { CHART_STYLE_THEME } from "@/utils/chartStyleUtils.js"
+import { saveMetadata } from "@/utils/functions.js"
+import {
+  normalizeScenarioComparisonString,
+  normalizeStoredCustomPlot,
+  serializeCustomPlots,
+  hydrateStoredCustomPlots,
+} from "@/utils/scenarioComparisonUtils.js"
 import ChartSettingsModal from "@/components/ChartSettingsModal.vue"
 import CustomPlotModal from "@/components/CustomPlotModal.vue"
 
@@ -17,9 +26,15 @@ const props = defineProps({
   fileName: {
     type: String,
     default: "Results"
+  },
+  storageKey: {
+    type: String,
+    default: ""
   }
 })
 
+const settingStore = useSettingStore()
+const metadataStore = useMetadataStore()
 const chartHeight = ref(400)
 
 const selectedCategories = ref([])
@@ -33,7 +48,9 @@ const customPlotSelectedScenarios = ref([])
 const customPlotHideZeroValues = ref(false)
 const customPlotOrientation = ref("vertical")
 const customPlotTitle = ref("")
+const customPlotTitleError = ref("")
 const customPlots = ref([])
+const CUSTOM_PLOTS_METADATA_KEY = "resultsCustomPlots"
 
 const DEFAULT_CHART_SETTINGS = () => ({
   yAxisScale: "linear",
@@ -55,7 +72,61 @@ const hasSummaries = computed(() => scenarioStructure.value?.hasSummaries || fal
 const availableSummaries = computed(() => scenarioStructure.value?.summaries || [])
 
 function normalizeString(value) {
-  return String(value || "").trim()
+  return normalizeScenarioComparisonString(value)
+}
+
+function normalizeCustomPlotTitle(value) {
+  return normalizeString(value).toLowerCase()
+}
+
+function getStoredCustomPlots() {
+  const projectMetadata = metadataStore.metadataByName[settingStore.activeProjectName]
+  const plotsByStorageKey = projectMetadata?.[CUSTOM_PLOTS_METADATA_KEY]
+  const storedPlots = props.storageKey ? plotsByStorageKey?.[props.storageKey] : null
+
+  if (!Array.isArray(storedPlots)) return []
+
+  return storedPlots
+    .map((plot, index) => normalizeStoredCustomPlot(plot, index, {
+      makePlotId,
+      defaultSettings: DEFAULT_CHART_SETTINGS(),
+    }))
+    .filter((plot) => plot.items.length && plot.scenarios.length)
+}
+
+function hydrateCustomPlots(plots) {
+  return hydrateStoredCustomPlots(
+    plots,
+    scenarioStructure.value ? buildCustomPlotOption : null,
+  )
+}
+
+async function persistCustomPlots() {
+  const projectName = settingStore.activeProjectName
+  const projectPath = settingStore.activeProjectPath
+  if (!projectName || !projectPath || !props.storageKey) return
+
+  const currentMetadata = metadataStore.metadataByName[projectName] || {
+    name: projectName,
+    path: projectPath
+  }
+
+  const nextMetadata = {
+    ...currentMetadata,
+    name: currentMetadata.name || projectName,
+    path: currentMetadata.path || projectPath,
+    [CUSTOM_PLOTS_METADATA_KEY]: {
+      ...(currentMetadata[CUSTOM_PLOTS_METADATA_KEY] || {}),
+      [props.storageKey]: serializeCustomPlots(customPlots.value)
+    }
+  }
+
+  metadataStore.updateProjectMetadata(projectName, nextMetadata)
+  await saveMetadata(projectPath, nextMetadata, { quiet: true })
+}
+
+function loadStoredCustomPlots() {
+  customPlots.value = hydrateCustomPlots(getStoredCustomPlots())
 }
 
 function makePlotId() {
@@ -216,6 +287,9 @@ function getSettingsForTarget(target) {
 }
 
 function openChartSettings(target) {
+  if (target?.type === "customPlot" && target.id) {
+    showCustomPlot(target.id)
+  }
   settingsModalTarget.value = target
   modalSettings.value = getSettingsForTarget(target)
   settingsModalOpen.value = true
@@ -342,6 +416,7 @@ function applyChartSettings(settings) {
   }
 
   closeChartSettings()
+  void persistCustomPlots()
 }
 
 function openCustomPlotModal() {
@@ -352,11 +427,13 @@ function openCustomPlotModal() {
   customPlotHideZeroValues.value = false
   customPlotOrientation.value = "vertical"
   customPlotTitle.value = ""
+  customPlotTitleError.value = ""
   customPlotModalOpen.value = true
 }
 
 function closeCustomPlotModal() {
   customPlotModalOpen.value = false
+  customPlotTitleError.value = ""
 }
 
 function getCustomPlotItemsList() {
@@ -370,6 +447,15 @@ function applyCustomPlot() {
 
   if (!items.length || !scenarios.length) {
     closeCustomPlotModal()
+    return
+  }
+
+  const existingTitle = customPlots.value.some(
+    (plot) => normalizeCustomPlotTitle(plot.title) === normalizeCustomPlotTitle(title)
+  )
+
+  if (existingTitle) {
+    customPlotTitleError.value = "A custom plot with this title already exists."
     return
   }
 
@@ -393,32 +479,43 @@ function applyCustomPlot() {
     return
   }
 
-  const existingIndex = customPlots.value.findIndex(
-    (plot) => normalizeString(plot.title) === normalizeString(title)
-  )
-
-  if (existingIndex >= 0) {
-    const existing = customPlots.value[existingIndex]
-    customPlots.value[existingIndex] = {
-      ...existing,
-      title,
-      items,
-      scenarios,
-      settings,
-      option
-    }
-  } else {
-    customPlots.value.push({
-      ...plotDraft,
-      option
-    })
-  }
+  customPlots.value.push({
+    ...plotDraft,
+    isVisible: true,
+    option
+  })
 
   closeCustomPlotModal()
+  void persistCustomPlots()
+}
+
+watch(customPlotTitle, () => {
+  if (customPlotTitleError.value) {
+    customPlotTitleError.value = ""
+  }
+})
+
+function showCustomPlot(plotId) {
+  customPlots.value = customPlots.value.map((plot) => (
+    plot.id === plotId
+      ? { ...plot, isVisible: true }
+      : plot
+  ))
+  void persistCustomPlots()
 }
 
 function closeCustomPlot(plotId) {
+  customPlots.value = customPlots.value.map((plot) => (
+    plot.id === plotId
+      ? { ...plot, isVisible: false }
+      : plot
+  ))
+  void persistCustomPlots()
+}
+
+function deleteCustomPlot(plotId) {
   customPlots.value = customPlots.value.filter((plot) => plot.id !== plotId)
+  void persistCustomPlots()
 }
 
 function initializeChart() {
@@ -474,6 +571,14 @@ watch(
   },
   { deep: true }
 )
+
+watch(
+  () => [settingStore.activeProjectName, props.storageKey, metadataStore.metadataByName[settingStore.activeProjectName]],
+  () => {
+    loadStoredCustomPlots()
+  },
+  { immediate: true, deep: true }
+)
 </script>
 
 <template>
@@ -494,7 +599,7 @@ watch(
               v-for="summary in availableSummaries"
               :key="summary"
               type="button"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-lg border transition-colors"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-base font-medium rounded-lg border transition-colors"
               :class="isCategorySelected(summary)
                 ? 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100'
                 : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
@@ -511,12 +616,38 @@ watch(
             </p>
             <button
               type="button"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
+              class="w-full flex items-center gap-2 px-3 py-2.5 text-left text-base font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
               @click="openCustomPlotModal"
             >
-              <span class="text-lg leading-none">📉</span>
-              <span>Custom plot</span>
+              <span class="text-lg leading-none">+</span>
+              <span>Create new</span>
             </button>
+            <div
+              v-for="plot in customPlots"
+              :key="plot.id"
+              class="mt-2"
+            >
+              <button
+                type="button"
+                class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-base font-medium rounded-lg border transition-colors"
+                :class="plot.isVisible
+                  ? 'bg-indigo-100 border-indigo-300 text-indigo-800 hover:bg-indigo-200'
+                  : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'"
+                @click="showCustomPlot(plot.id)"
+              >
+                <span class="flex items-center gap-2 min-w-0">
+                  <span class="text-lg leading-none shrink-0">📉</span>
+                  <span class="truncate block">{{ plot.title }}</span>
+                </span>
+                <span
+                  class="shrink-0 px-2.5 py-1.5 rounded text-xl font-bold leading-none text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  title="Remove custom plot"
+                  @click.stop="deleteCustomPlot(plot.id)"
+                >
+                  x
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -554,14 +685,11 @@ watch(
         </div>
 
         <div
-          v-for="plot in customPlots"
+          v-for="plot in customPlots.filter((item) => item.isVisible)"
           :key="plot.id"
           class="rounded-lg border border-gray-200 bg-white p-3 mb-4"
         >
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-gray-800">
-              {{ plot.title }}
-            </h4>
+          <div class="flex justify-end mb-3">
             <div class="flex gap-2">
               <button
                 type="button"
@@ -601,6 +729,7 @@ watch(
       :hideZeroValues="customPlotHideZeroValues"
       :orientation="customPlotOrientation"
       :title="customPlotTitle"
+      :titleError="customPlotTitleError"
       @close="closeCustomPlotModal"
       @apply="applyCustomPlot"
       @update:selectedItems="customPlotSelectedItems = $event"
@@ -618,3 +747,4 @@ watch(
     />
   </div>
 </template>
+

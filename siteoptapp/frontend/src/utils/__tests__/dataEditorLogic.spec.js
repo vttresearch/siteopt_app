@@ -135,7 +135,7 @@ export const dataEditorLogicTests = [
       });
 
       assert.equal(config.type, COLUMN_TYPES.SELECT);
-      assert.deepEqual(config.options, ["", "elec", "heat"]);
+      assert.deepEqual(config.options, ["", "elec", "heat", "cool"]);
     },
   },
   {

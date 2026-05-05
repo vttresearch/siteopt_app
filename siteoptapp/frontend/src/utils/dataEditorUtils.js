@@ -72,6 +72,11 @@ export function findRowIndexById(rows, rowId) {
   return (rows ?? []).findIndex((row) => row.__id === rowId);
 }
 
+export function getRowDisplayNumber(rows, rowId) {
+  const rowIndex = findRowIndexById(rows, rowId);
+  return rowIndex === -1 ? "" : rowIndex + 1;
+}
+
 export function applyHistoryEntry({
     entry,
     direction,

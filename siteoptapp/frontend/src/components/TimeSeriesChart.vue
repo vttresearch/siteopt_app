@@ -237,13 +237,6 @@ function updateChart() {
       const colors = generateColorPalette(selectedColumns.value.length);
       config.color = colors;
       
-      // Add title
-      config.title = {
-        text: `Time Series: ${props.fileName}`,
-        left: 'center',
-        textStyle: { fontSize: 16 }
-      };
-      
       chartOption.value = config;
     }
   } catch (error) {

@@ -12,6 +12,7 @@ import {
   buildClearSelectedRowsEdit,
   buildClearFocusedCellEdit,
   applyHistoryEntry,
+  getRowDisplayNumber,
 } from "../dataEditorUtils.js";
 
 export const dataEditorHistoryTests = [
@@ -244,6 +245,125 @@ export const dataEditorHistoryTests = [
         markDirty: () => markDirtyCalls.push("dirty"),
       }), true);
       assert.deepEqual(rowDataRef.value, [{ __id: "row_2", name: "second" }]);
+      assert.equal(markDirtyCalls.length, 2);
+    },
+  },
+  {
+    name: "getRowDisplayNumber follows rowData order after delete and undo",
+    run() {
+      const currentRows = [
+        { __id: "row_1", name: "first" },
+        { __id: "row_2", name: "second" },
+        { __id: "row_3", name: "third" },
+      ];
+      const deletedRows = [
+        { __id: "row_1", name: "first" },
+        { __id: "row_3", name: "third" },
+      ];
+
+      assert.equal(getRowDisplayNumber(currentRows, "row_1"), 1);
+      assert.equal(getRowDisplayNumber(currentRows, "row_2"), 2);
+      assert.equal(getRowDisplayNumber(currentRows, "row_3"), 3);
+
+      assert.equal(getRowDisplayNumber(deletedRows, "row_1"), 1);
+      assert.equal(getRowDisplayNumber(deletedRows, "row_3"), 2);
+
+      assert.equal(getRowDisplayNumber(currentRows, "row_3"), 3);
+    },
+  },
+  {
+    name: "buildDeleteSelectedRowsEdit removes multiple selected rows and keeps their original indexes for undo",
+    run() {
+      const currentRows = [
+        { __id: "row_1", name: "first" },
+        { __id: "row_2", name: "second" },
+        { __id: "row_3", name: "third" },
+        { __id: "row_4", name: "fourth" },
+      ];
+      const api = {
+        forEachNodeAfterFilterAndSort(callback) {
+          currentRows.forEach((row, rowIndex) => callback({
+            data: row,
+            rowIndex,
+            isSelected: () => row.__id === "row_2" || row.__id === "row_4",
+          }));
+        },
+      };
+
+      const result = buildDeleteSelectedRowsEdit({
+        api,
+        currentRows,
+      });
+
+      assert.equal(result.changed, true);
+      assert.deepEqual(result.rows, [
+        { __id: "row_1", name: "first" },
+        { __id: "row_3", name: "third" },
+      ]);
+      assert.deepEqual(result.historyEntry, {
+        type: "delete-rows",
+        rows: [
+          {
+            row: { __id: "row_2", name: "second" },
+            index: 1,
+          },
+          {
+            row: { __id: "row_4", name: "fourth" },
+            index: 3,
+          },
+        ],
+      });
+    },
+  },
+  {
+    name: "Ctrl+Z-equivalent undo restores rows after deleting multiple selected rows",
+    run() {
+      const historyState = createHistoryState();
+      const markDirtyCalls = [];
+      const currentRows = [
+        { __id: "row_1", name: "first" },
+        { __id: "row_2", name: "second" },
+        { __id: "row_3", name: "third" },
+        { __id: "row_4", name: "fourth" },
+      ];
+      const api = {
+        forEachNodeAfterFilterAndSort(callback) {
+          currentRows.forEach((row, rowIndex) => callback({
+            data: row,
+            rowIndex,
+            isSelected: () => row.__id === "row_2" || row.__id === "row_4",
+          }));
+        },
+      };
+
+      const result = buildDeleteSelectedRowsEdit({
+        api,
+        currentRows,
+      });
+      const rowDataRef = { value: result.rows };
+      pushHistory(historyState, result.historyEntry);
+
+      assert.deepEqual(rowDataRef.value, [
+        { __id: "row_1", name: "first" },
+        { __id: "row_3", name: "third" },
+      ]);
+
+      assert.equal(undoHistory({
+        historyState,
+        rowDataRef,
+        markDirty: () => markDirtyCalls.push("dirty"),
+      }), true);
+      assert.deepEqual(rowDataRef.value, currentRows);
+
+      assert.equal(redoHistory({
+        historyState,
+        rowDataRef,
+        markDirty: () => markDirtyCalls.push("dirty"),
+      }), true);
+      assert.deepEqual(rowDataRef.value, [
+        { __id: "row_1", name: "first" },
+        { __id: "row_3", name: "third" },
+      ]);
       assert.equal(markDirtyCalls.length, 2);
     },
   },

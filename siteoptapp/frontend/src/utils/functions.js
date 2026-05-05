@@ -334,6 +334,33 @@ export async function fetchMetadata(projectPath, { cacheOnly = false } = {}) {
   return true
 }
 
+export async function saveMetadata(projectPath, metadata, { quiet = false } = {}) {
+  const metadataStore = useMetadataStore()
+  const notify = useNotificationStore()
+  const response = await postData(
+    "save_metadata",
+    { path: projectPath, metadata },
+    notify
+  )
+
+  if (!response?.success) {
+    if (!quiet) {
+      notify.show("Saving project metadata failed.", 5000, "error")
+    }
+    return false
+  }
+
+  const savedMetadata = response.data && Object.keys(response.data).length ? response.data : null
+  if (savedMetadata?.name) {
+    metadataStore.cacheMetadata(savedMetadata)
+    if (metadataStore.metadata?.name === savedMetadata.name) {
+      metadataStore.setMetadata(savedMetadata)
+    }
+  }
+
+  return true
+}
+
 
 /**
  * Fetches metadata for all projects in tabs.

@@ -45,6 +45,10 @@ const props = defineProps({
   title: {
     type: String,
     default: ""
+  },
+  titleError: {
+    type: String,
+    default: ""
   }
 })
 
@@ -175,9 +179,18 @@ function handleApply() {
               :value="title"
               type="text"
               placeholder="Enter custom plot title"
-              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              class="w-full rounded-md border px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2"
+              :class="titleError
+                ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-200'"
               @input="$emit('update:title', $event.target.value)"
             />
+            <p
+              v-if="titleError"
+              class="mt-1 text-sm text-red-600"
+            >
+              {{ titleError }}
+            </p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
