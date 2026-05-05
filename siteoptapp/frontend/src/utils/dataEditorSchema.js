@@ -86,7 +86,10 @@ const FILE_SCHEMAS = {
           emissionnode: { type: COLUMN_TYPES.TEXT },
           investment_emission: { type: COLUMN_TYPES.NUMBER },
           emission_cost: { type: COLUMN_TYPES.NUMBER },
-          representative_unit: { type: COLUMN_TYPES.TEXT },
+          representative_unit: {
+            type: COLUMN_TYPES.SELECT,
+            options: ["X"],
+          },
         },
       },
     },
@@ -104,7 +107,10 @@ const FILE_SCHEMAS = {
           balance_type: { type: COLUMN_TYPES.TEXT },
           free_node: { type: COLUMN_TYPES.TEXT },
           demand: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
-          representative_node: { type: COLUMN_TYPES.TEXT },
+          representative_node: {
+            type: COLUMN_TYPES.SELECT,
+            options: ["X"],
+          },
         },
       },
     },
@@ -196,18 +202,42 @@ const FILE_SCHEMAS = {
       },
       params_1d_datetimes: {
         columns: {
-          objectclass: { type: COLUMN_TYPES.TEXT, required: true },
-          object: { type: COLUMN_TYPES.TEXT, required: true },
-          parameter_name: { type: COLUMN_TYPES.TEXT, required: true },
+          objectclass: {
+            type: COLUMN_TYPES.SELECT,
+            required: true,
+            options: ["model"],
+          },
+          object: {
+            type: COLUMN_TYPES.SELECT,
+            required: true,
+            options: ["mymodel"],
+          },
+          parameter_name: {
+            type: COLUMN_TYPES.SELECT,
+            required: true,
+            options: ["model_start", "model_end"],
+          },
           alternative_name: { type: COLUMN_TYPES.TEXT },
           parameter_value: { type: COLUMN_TYPES.TEXT },
         },
       },
       params_1d_durations: {
         columns: {
-          objectclass: { type: COLUMN_TYPES.TEXT, required: true },
-          object: { type: COLUMN_TYPES.TEXT, required: true },
-          "parameter name": { type: COLUMN_TYPES.TEXT, required: true },
+          objectclass: {
+            type: COLUMN_TYPES.SELECT,
+            required: true,
+            options: ["temporal_block"],
+          },
+          object: {
+            type: COLUMN_TYPES.SELECT,
+            required: true,
+            options: ["myblock", "myinvestmentblock"],
+          },
+          "parameter name": {
+            type: COLUMN_TYPES.SELECT,
+            required: true,
+            options: ["resolution"],
+          },
           "alternative name": { type: COLUMN_TYPES.TEXT },
           "parameter value": { type: COLUMN_TYPES.TEXT },
         },
