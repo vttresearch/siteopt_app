@@ -1,16 +1,20 @@
 # SiteOpt Web Interface
 
-This package contains the web interface for Spine Toolbox [Siteopt](https://extgit.vtt.fi/siteopt/siteopt_toolbox) project. 
-This web app can be built into a desktop app using [Tauri](https://v2.tauri.app/), 
-which includes the Django backend and the Vue.js frontend. Older Python and Node.js 
-versions may work but have not been tested.
+This package contains the web interface for Spine Toolbox [Siteopt](https://extgit.vtt.fi/siteopt/siteopt_toolbox) project. See documentation on the Siteopt page.
 
-## Running the production version
+## Running the production version (recommended for most users)
 
 ### Prerequisites
 - Docker Desktop
 - User account in registry.elexia.amct.pl
 - Web Browser (Firefox, Chrome, Edge may work as well)
+
+Install Docker Desktop from [Docker](https://www.docker.com/products/docker-desktop/). Notice that you need administrator rights for this. If you install for Windows, open command prompt or Windows Powershell and install Windows Subsystem for Linux by command
+```
+wsl --update
+```
+
+Now start Docker Desktop from start menu.
 
 ### Login and start web-app
 
@@ -235,6 +239,10 @@ subprocess, and the Tauri app in a separate window (not browser).
 
 
 ## Build a full-stack desktop application using Tauri
+
+This web app can be built into a desktop app using [Tauri](https://v2.tauri.app/), 
+which includes the Django backend and the Vue.js frontend. Older Python and Node.js 
+versions may work but have not been tested. 
 
 Install [tauri](https://v2.tauri.app/) into your npm env if not present.
 
