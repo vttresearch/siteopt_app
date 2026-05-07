@@ -21,6 +21,9 @@
       <li>Tomasz Wolski,
         <a class="font-bold underline decoration-sky-500" href="https://amctech.com//">AMC Tech</a>
       </li>
+      <li>Jussi Ikäheimo,
+        <a class="font-bold underline decoration-sky-500" href="https://www.vttresearch.com/">VTT</a>
+      </li>
     </ul>
   </div>
 </template>

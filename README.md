@@ -1,6 +1,6 @@
 # SiteOpt Web Interface
 
-This package contains the web interface for Spine Toolbox [Siteopt](https://extgit.vtt.fi/siteopt/siteopt_toolbox) project. See documentation on the Siteopt page.
+This package contains the web interface for Spine Toolbox [Siteopt](https://github.com/vttresearch/siteopt_toolbox) project. Below you can find instructions for how to install and start the program. Documentation of the software can be found on the Siteopt page.
 
 ## Running the production version (recommended for most users)
 
@@ -9,7 +9,7 @@ This package contains the web interface for Spine Toolbox [Siteopt](https://extg
 - User account in registry.elexia.amct.pl
 - Web Browser (Firefox, Chrome, Edge may work as well)
 
-Install Docker Desktop from [Docker](https://www.docker.com/products/docker-desktop/). Notice that you need administrator rights for this. If you install for Windows, open command prompt or Windows Powershell and install Windows Subsystem for Linux by command
+Install Docker Desktop from [Docker](https://www.docker.com/products/docker-desktop/) or Microsoft Store on Windows. Notice that you need administrator rights for this. If you install for Windows, open command prompt or Windows Powershell and install Windows Subsystem for Linux by command
 ```
 wsl --update
 ```
