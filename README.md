@@ -1,15 +1,20 @@
 # SiteOpt Web Interface
 
-This package contains the web interface for Spine Toolbox [Siteopt](https://github.com/vttresearch/siteopt_toolbox) project. Below you can find instructions for how to install and start the program. Documentation of the software can be found on the Siteopt page.
+This repository contains the web interface for Spine Toolbox [Siteopt](https://github.com/vttresearch/siteopt_toolbox) project. Below you can find 
+instructions for how to install and start the program. Documentation of the software can be 
+found on the Siteopt page.
 
 ## Running the production version (recommended for most users)
 
 ### Prerequisites
 - Docker Desktop
-- User account in registry.elexia.amct.pl
+- User account in https://registry.elexia.amct.pl
 - Web Browser (Firefox, Chrome, Edge may work as well)
 
-Install Docker Desktop from [Docker](https://www.docker.com/products/docker-desktop/) or Microsoft Store on Windows. Notice that you need administrator rights for this. If you install for Windows, open command prompt or Windows Powershell and install Windows Subsystem for Linux by command
+Install Docker Desktop from [Docker](https://www.docker.com/products/docker-desktop/) or Microsoft Store on Windows. Notice that you need administrator 
+rights for this. If you install for Windows, open command prompt or Windows Powershell and install Windows Subsystem 
+for Linux by command
+
 ```
 wsl --update
 ```
@@ -17,16 +22,17 @@ wsl --update
 Now start Docker Desktop from start menu.
 
 ### Login and start web-app
+Open Command Prompt (cmd.exe) and run
 
-Open Command Prompt and run:
 ```
 docker login registry.elexia.amct.pl
 ```
-Provide the username and password as requested.
+
+Provide the username and password as requested.  
 
 Download `docker-compose.yml` file from the repo and save it to some folder.
 
-cd into the folder with `docker-compose.yml` and pull the images
+cd into the folder with `docker-compose.yml` and pull (download) the images
 
 ```commandline
 docker compose pull
@@ -38,32 +44,38 @@ Then start the containers
 docker compose up
 ```
 
-Open browser (Firefox, Chrome) and open URL
+Open browser (Firefox, Chrome) and go to URL
 
-`http://localhost`
+```
+http://localhost
+```
 
-### To update to a new version (later, when available)
-Get the updated `docker-compose.yml` file or update the tags yourself
-
-Run
+### To upgrade to a new version (later, when available)
+Get the updated `docker-compose.yml` file and run
 
 ```commandline
 docker compose pull
 docker compose up
 ```
 
-To start the containers in the background, run `docker compose up -d` instead.
+To run the containers in the background, run `docker compose up -d` instead.
 
 ### To stop and remove the containers
-
-```docker compose down```
+```commandline
+docker compose down
+```
 
 > [!WARNING]  
 > Do not run `docker compose down -v` or you will lose all user accounts and projects.
 
 ## Running the development version
+### Prerequisites
+- Git
+- Docker Desktop
+- Web Browser (Firefox, Chrome, Edge may work as well)
 
-The main Docker compose files are:
+### About Docker compose files
+The main compose files are
 
 **docker-compose.dev.yml**  
 - Used by developers  
@@ -75,33 +87,55 @@ The main Docker compose files are:
 - Only pulls images from a registry  
 - Suitable for non‑developer users  
 
-### Prerequisites
-- Git
-- Docker Desktop
-- Web Browser (Firefox, Chrome, Edge may work as well)
-
-### Checkout repo, build and start containers
-1. Pull the main branch of this repo
+### Checkout repo, pull submodules, build and start containers
+1. Clone repo and checkout **main** branch
 2. cd to <repo root>
-3. Start Docker Desktop
-4. Run `docker compose -f docker-compose.dev.yml --profile dev up --build`
-5. Open URL http://localhost:5173 in browser 
+3. Pull submodules `git submodule update --init --recursive`
+4. Start Docker Desktop
+5. Run `docker compose -f docker-compose.dev.yml --profile dev up --build`
+6. Open URL http://localhost:5173
 
-Once the development version is built, you can restart by omitting --build
+Next time when you want to start the app, you can omit the `--build` flag and run
 
 ```commandline
 docker compose -f docker-compose.dev.yml --profile dev up
 ```
 
-### Building for production and publishing the new images
+You need to rebuild the app only if the dependencies have changed. 
 
+### Stopping the development containers
+```commandline
+docker compose -f docker-compose.dev.yml --profile dev down
+```
+
+### Getting the latest changes from Git
+In <repo_root>, run
+
+```commandline
+git pull
+```
+
+If the submodules (*<repo_root>/siteopt_data* and *<repo_root>/siteopt_toolbox*) have been 
+updated, run
+
+```commandline
+git pull --recurse-submodules
+```
+
+Then start the containers again
+
+```commandline
+docker compose -f docker-compose.dev.yml --profile dev up
+```
+
+### Building for production and publishing new images
 1. Update `backend-prod` and `frontend-prod` tags in `docker-compose.dev.yml`
 
 2. Run
  
     ```docker compose -f docker-compose.dev.yml --profile prod build```
 
-3. Login to registry.elexia.amct.pl using developer account
+3. Login to https://registry.elexia.amct.pl using developer account
 
     ```docker login registry.elexia.amct.pl```
 
@@ -114,11 +148,11 @@ docker compose -f docker-compose.dev.yml --profile dev up
 
 5. Update the new tags into `docker-compose.yml` and let users know that a new version is available.
 
-## Setting up the development environment [For local use without Docker]
 
+## Setting up the development environment without Docker
 ### Pull Git submodules
-
-Siteopt_data and siteopt_toolbox repositories are under siteopt-web-interface as git submodules. After cloning the repository, pull the submodules:
+siteopt_data and siteopt_toolbox repositories are under siteopt-opt as git submodules. After cloning 
+the repository, pull the submodules:
 
 ```commandline
 git submodule update --init --recursive
@@ -131,7 +165,6 @@ git pull --recurse-submodules
 ```
 
 ### Install Python Packages (requires Python 3.11+)
-
 Make Python virtual environment. Open Command prompt and type
 
 ```commandline
@@ -161,9 +194,7 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 
-
 ### Install JavaScript Packages (requires Node.js 22.15+)
-
 Cd to frontend
 
 ```commandline
@@ -183,9 +214,7 @@ cd ..
 cd ..
 ```
 
-
 ### Start Development Servers
-
 Activate venv, if not already active
 
 ```commandline
@@ -193,7 +222,6 @@ Activate venv, if not already active
 ```
 
 **Start Django server**
-
 ```commandline
 python manage.py runserver
 ```
@@ -207,130 +235,12 @@ cd siteoptapp\frontend
 ```
 
 **Start Vite server**
-
 ```commandline
 npm run dev
 ```
 
 Open browser and go to url
 
+```
 http://localhost:5173
-
-
-## Run Tauri app (without bundling)
-
-Cd to <repo-root>
-
-````commandline
-cd siteoptapp/frontend
-````
-
-Run tauri in dev mode
-
-```commandline
-npx tauri dev
 ```
-
-This will open the Django backend in a subprocess, the Vite Dev server in another
-subprocess, and the Tauri app in a separate window (not browser).
-
-**This only works on Windows** for now because `npx tauri dev` runs
-`start-backend.bat` to start the backend automatically. See `tauri.conf.json`.
-
-
-## Build a full-stack desktop application using Tauri
-
-This web app can be built into a desktop app using [Tauri](https://v2.tauri.app/), 
-which includes the Django backend and the Vue.js frontend. Older Python and Node.js 
-versions may work but have not been tested. 
-
-Install [tauri](https://v2.tauri.app/) into your npm env if not present.
-
-On Windows run
-
-```commandline
-build_tauri.bat
-```
-
-If you want to build it manually or for other OS's, this is what the batch file does:
-
-1. Builds Django backend into an executable using PyInstaller `pyinstaller --onefile run_django.py`
-2. Moves resulting `run_django.exe` into `<repo-root>/siteoptapp/frontend/src-tauri/backend`
-3. Builds the Tauri desktop app with `npx tauri build`
-
-This builds an .msi Windows installer into 
-`<repo-root>/siteoptapp/frontend/src-tauri/target/release/bundle/msi`.
-Running the installer installs the app on your desktop.
-
-## Test Production Mode (Possibly outdated)
-
-Prerequisites: 
-1. Make a Python venv and install requirements with `pip install -r requirements.txt` 
-2. Install the Node packages for Vue.js frontend with `npm install` 
-
-Cd to repo root
-
-Build Vue.js app
-
-```commandline
-cd siteoptapp\frontend
-```
-
-```commandline
-npm run build
-```
-
-cd back to folder containing `manage.py`
-
-```commandline
-cd ..
-cd ..
-```
-
-Activate venv, if not already active
-
-```commandline
-.venv\Scripts\activate
-```
-
-Collect static files
-
-```commandline
-python manage.py collectstatic
-```
-
-cd back to repo root and edit `settings.py`. Set dev_mode in **DJANGO_VITE** settings 
-to **False**.
-
-```
-"dev_mode": False
-```
-
-Start server
-
-```commandline
-python manage.py runserver
-```
-
-Open browser and go to url
-
-http://localhost:5173
-
-
-### Run in Production Mode
-
-Set DEBUG to False in settings.py
-
-```
-DEBUG = False
-```
-
-Set list of hosts to ALLOWED_HOSTS
-
-```
-ALLOWED_HOSTS = []
-```
-
-Remove Django Browser Reload from **INSTALLED_APPS** and **MIDDLEWARE**.
-
-In addition, follow the instructions here https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
