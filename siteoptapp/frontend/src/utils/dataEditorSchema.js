@@ -82,7 +82,7 @@ const FILE_SCHEMAS = {
           alternative_name: { type: COLUMN_TYPES.TEXT, required: true },
           unit_capacity: { type: COLUMN_TYPES.NUMBER_OR_REFERENCE },
           unit_investment_cost: { type: COLUMN_TYPES.NUMBER },
-          candidate_units: { type: COLUMN_TYPES.INTEGER },
+          candidate_units: { type: COLUMN_TYPES.NUMBER },
           emissionnode: { type: COLUMN_TYPES.TEXT },
           investment_emission: { type: COLUMN_TYPES.NUMBER },
           emission_cost: { type: COLUMN_TYPES.NUMBER },
