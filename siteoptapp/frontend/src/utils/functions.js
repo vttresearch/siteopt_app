@@ -169,7 +169,7 @@ export async function fetchFileContents(fname, fpath) {
   const dataStore = useTableDataStore()
   dataStore.clear()
   dataStore.toggleLoading()
-  const response = await postData("fetch_data", {full_path: fpath}, notify)
+  const response = await postData("fetch_data", { full_path: fpath }, notify)
   if (!response.success) {
     dataStore.toggleLoading()
     return
@@ -191,14 +191,17 @@ export async function fetchInputFiles(projectName) {
     notify.show("[FIXME] Fetching current input files failed. Project name missing.")
     return
   }
+  settingStore.validationInProgress = true
   const response = await getData(`fetch_current_input_folder/${projectName}`, notify)
   if (!response.success) {
     notify.show(`${response.error}`)
+    settingStore.validationInProgress = false
     return
   }
   const contents = response.data
   settingStore.setCurrentInputFiles(contents)
   await refreshCurrentInputValidation(projectName, contents)
+  settingStore.validationInProgress = false
 }
 
 function buildCurrentInputFilePath(projectPath, categoryValue, fileName) {

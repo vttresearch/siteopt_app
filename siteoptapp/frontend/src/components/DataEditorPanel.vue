@@ -172,7 +172,10 @@ const isTimeSeriesData = computed(() => {
 
 <template>
   <div class="mb-3 flex items-center justify-between">
-    <div class="text-lg font-semibold text-gray-800">Data Editor</div>
+    <div class="flex items-center gap-4">
+      <div class="text-lg font-semibold text-gray-800">Data Editor</div>
+      <i v-if="settingStore.validationInProgress" class="w-5 h-5 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></i>
+    </div>
     <button
       class="flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-sm font-semibold text-gray-600 hover:bg-gray-100"
       title="Data editor help"
