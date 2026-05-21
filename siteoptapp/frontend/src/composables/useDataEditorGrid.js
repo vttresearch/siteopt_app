@@ -334,7 +334,6 @@ export function useDataEditorGrid({
 
         return {
           ...(baseStyle ?? {}),
-          backgroundColor: "#fef2f2",
           color: "#991b1b",
           boxShadow: "inset 0 0 0 1px #fca5a5",
         };
