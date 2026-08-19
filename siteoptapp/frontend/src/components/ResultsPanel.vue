@@ -3,6 +3,7 @@ import { computed, watch, ref, onMounted } from "vue"
 import { useSettingStore } from "@/stores/settingstore.js"
 import { useNotificationStore } from "@/stores/notificationstore.js"
 import { useResultStore } from "@/stores/resultstore.js";
+import { useConfirmPrompt } from "@/composables/useConfirmPrompt.js";
 import { postData, fetchResults } from "@/utils/functions.js"
 import DashboardPanel from "@/components/DashboardPanel.vue"
 import ResultsTable from "@/components/ResultsTable.vue"
@@ -26,6 +27,7 @@ const activeTab = ref("plots")
 const controlClass = computed(() => getDashboardControlClass())
 const loadingCardClass = computed(() => getDashboardLoadingCardClass())
 const pageEmptyClass = computed(() => getDashboardPageEmptyClass())
+const { confirm } = useConfirmPrompt()
 
 onMounted(async () => {
   // Should handle case when switching between Data & Execution and Results tabs
@@ -156,6 +158,34 @@ async function openResultsForRun() {
     loadingResults.value = false
   }
 }
+
+async function confirmDeleteResultFolder(c) {
+  const ok = await confirm({
+    title: `Delete selected results?`,
+    message: `Are you sure you want to delete the results for run ${c}?` +
+        " This operation cannot be undone.",
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    variant: "danger",
+  })
+  if (ok) {
+    console.log("Deleting run: {c}")
+    await deleteResultFolder(c)
+  }
+}
+
+async function deleteResultFolder(c) {
+  const response = await postData(
+      "delete_result_folder",
+      {"path": settingStore.activeProjectPath, "run": c },
+      notify
+  )
+  if (response.success) {
+    notify.show(`Results for run ${c} have been removed`)
+    await fetchResultsList()
+  }
+}
+
 </script>
 
 <template>
@@ -175,18 +205,25 @@ async function openResultsForRun() {
           <label class="block text-sm font-medium text-gray-700 mb-1">
             Run
           </label>
-          <select
-            v-model="selectedRun"
-            :class="controlClass"
-          >
-            <option
-              v-for="runName in Object.keys(resultStore.runs)"
-              :key="runName"
-              :value="runName"
+          <div class="flex gap-4">
+            <select
+              v-model="selectedRun"
+              :class="controlClass"
             >
-              {{ runName }}
-            </option>
-          </select>
+              <option
+                v-for="runName in Object.keys(resultStore.runs)"
+                :key="runName"
+                :value="runName"
+              >
+                {{ runName }}
+              </option>
+            </select>
+            <button
+              class="px-2 py-1 text-white rounded bg-red-500 hover:bg-red-700"
+              @click="confirmDeleteResultFolder(selectedRun)">
+                <i class="fa-regular fa-trash-can"></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>

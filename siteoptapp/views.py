@@ -328,6 +328,19 @@ def delete_project(client_id, path):
     return JsonResponse({"success": True, "data": {}})
 
 
+def delete_result_folder(client_id, project_path, run):
+    """Removes given result run folder and it's contents."""
+    p = Path(project_path) / ".spinetoolbox" / "items" / "extract_results" / "output" / Path(run)
+    print(f"Removing path: {p}")
+    if not p.exists():
+        return JsonResponse({"success": False, "error": f"Removing results failed. Path {p} doesn't exist"})
+    try:
+        shutil.rmtree(p)
+    except OSError as e:
+        return JsonResponse({"success": False, "error": f"Deleting result folder {p} failed. [OSError]: {e}"})
+    return JsonResponse({"success": True, "data": {}})
+
+
 def read_metadata(path):
     mp = os.path.join(path, METADATA_FILENAME)
     if not os.path.isfile(mp):
@@ -547,6 +560,9 @@ def post(request, action):
     elif action == "delete_project":
         print(f"Deleting project {data['name']} path {data['path']}")
         response = delete_project(client_id, data["path"])
+        return response
+    elif action == "delete_result_folder":
+        response = delete_result_folder(client_id, data["path"], data["run"])
         return response
     elif action == "purge_output_db":
         print(f"Purging output db for project {data['path']}")
