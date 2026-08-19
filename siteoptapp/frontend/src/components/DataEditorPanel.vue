@@ -319,6 +319,7 @@ const isTimeSeriesData = computed(() => {
             :enterNavigatesVertically="true"
             :enterNavigatesVerticallyAfterEdit="true"
             :getRowId="getRowId"
+            :suppressFieldDotNotation="true"
           />
         </div>
         <div v-if="data_store.daata?.filetype === 'xlsx'">
