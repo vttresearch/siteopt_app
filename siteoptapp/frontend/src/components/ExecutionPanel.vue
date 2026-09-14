@@ -23,7 +23,7 @@ const executionFinished = ref(false)
 const converter = new AnsiToHtml();
 const outputEl = ref(null)
 const selectedScenarios = ref([])
-const showAddScenarioPrompt = ref(false)
+const showAddScenarioPrompt = ref(false)  // Unused
 const itemToRemove = ref(null)
 const showLog = ref(true)
 let eventSource = null
@@ -98,7 +98,11 @@ function newScenarioNameIsValid(name) {
   return true
 }
 
+/*
+[Unreachable]. confirmAddScenario has been disabled until further development.
+*/
 async function confirmAddScenario(data) {
+  /*[Unreachable]. This operation has been disabled until further development.*/
   showAddScenarioPrompt.value = false
   let name = data.name.trim()
   if (!newScenarioNameIsValid(name)) {
@@ -115,10 +119,16 @@ async function confirmAddScenario(data) {
   await fetchScenarios(settingStore.activeProjectPath)
 }
 
+/*
+[Unreachable]. cancelAddScenario has been disabled until further development.
+*/
 function cancelAddScenario() {
   showAddScenarioPrompt.value = false
 }
 
+/*
+[Unreachable]. confirmRemoveScenario has been disabled until further development.
+*/
 async function confirmRemoveScenario(scenario, triggerEl) {
   const ok = await confirm({
     title: "Remove scenario?",
@@ -134,6 +144,9 @@ async function confirmRemoveScenario(scenario, triggerEl) {
   }
 }
 
+/*
+[Unreachable]. removeScenario has been disabled until further development.
+*/
 async function removeScenario() {
   selectedScenarios.value = selectedScenarios.value.filter(s => s !== itemToRemove.value)
   scenarioStore.loadingScenarios = true
@@ -325,7 +338,7 @@ function stopTimer() {
 
   <div>
     <!-- Task selection buttons -->
-    <span class="text-gray-800 italic">Task to execute</span>
+    <span class="text-gray-800 italic">Select a task to execute</span>
     <div class="flex flex-wrap justify-start items-center gap-4 p-4">
       <BaseButton
           v-for="task in taskStore.tasks"
@@ -340,16 +353,7 @@ function stopTimer() {
     <!-- Scenarios -->
     <div>
       <div class="flex justify-start items-center gap-8">
-        <span class="pr-4 text-gray-800 italic">Scenarios</span>
-        <button
-            class="cursor-pointer flex items-center gap-1 justify-center text-white bg-blue-500 hover:bg-blue-700 rounded-md px-3 py-2 disabled:opacity-50"
-            type="button"
-            :disabled="scenarioStore.loadingScenarios || settingStore.executionInProgress"
-            @click="showAddScenarioPrompt = true">
-          <i v-if="scenarioStore.loadingScenarios" class="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></i>
-          <i v-else class="fa-solid fa-square-plus"></i>
-          <span>Add Scenario</span>
-        </button>
+        <span class="pr-4 text-gray-800 italic">Select scenario(s)</span>
       </div>
 
       <div class="flex flex-wrap justify-start items-center gap-4 p-4">
@@ -357,7 +361,7 @@ function stopTimer() {
           <div>Loading scenarios...</div>
         </template>
         <template v-else-if="scenarioStore.scenarios.length === 0">
-          <span>No scenarios found. Load default scenarios by running <i>Prepare input data</i>.</span>
+          <span>No scenarios found. Load available scenarios by running <i>Prepare input data</i>.</span>
         </template>
         <template v-else>
             <div v-for="(scenario, i) in scenarioStore.scenarios"
@@ -370,14 +374,6 @@ function stopTimer() {
                   :value="scenario"
                   v-model="selectedScenarios" />
               <label class=px-2 :for="`scenario-${i}`">{{ scenario }}</label>
-              <button
-                  v-if="scenario.toLowerCase()!=='base'"
-                  type="button"
-                  class="text-gray-400 hover:text-gray-700"
-                  :disabled="settingStore.executionInProgress"
-                  @click="confirmRemoveScenario(scenario, $event.currentTarget)">
-                <i class="fa-regular fa-trash-can"></i>
-              </button>
             </div>
         </template>
       </div>
